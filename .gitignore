@@ -2,3 +2,4 @@
 .agents/.10x*
 .10x*
 .agents/prompts/skill-explainer.md
+**/__pycache__/
