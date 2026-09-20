@@ -1,3 +1,4 @@
 .agents/*/10x*
 .agents/.10x*
 .10x*
+.agents/prompts/skill-explainer.md
