@@ -2,7 +2,7 @@
 project: FamilyNotes
 context_type: greenfield
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-20
 product_type: web-app
 target_scale:
   users: small
@@ -23,7 +23,7 @@ checkpoint:
     - topic: primary pain
       decision: scattered information and difficult data entry; prioritization is not a problem
     - topic: authentication
-      decision: each family member signs in with their own Google account
+      decision: each family member signs in with their own external identity account
     - topic: family administration
       decision: family members and roles are preconfigured; in-app administration is deferred beyond the MVP
     - topic: child visibility
@@ -64,9 +64,9 @@ A family application that gathers events, notes, and todos from scattered source
 
 ## Vision & Problem Statement
 
-Family tasks, events, and notes are scattered across a physical notebook and calendar, Google Calendar, Todoist, and information kept in memory. Both parents have to check multiple places, while adding information to existing tools requires too many actions.
+Family tasks, events, and notes are scattered across a physical notebook and calendar, external calendar and task tools, and information kept in memory. Both parents have to check multiple places, while adding information to existing tools requires too many actions.
 
-The product provides one family space whose primary input is a single, easily accessible text field. A parent may type or use the phone keyboard's dictation capability without completing a multi-field form. The submitted text is classified as a todo, calendar event, or note, including its date and affected family member. Prioritization is not part of the problem. Future integrations may bring in data from Todoist, Google Calendar, and other sources.
+The product provides one family space whose primary input is a single, easily accessible text field. A parent may type or use the phone keyboard's dictation capability without completing a multi-field form. The submitted text is classified as a todo, calendar event, or note, including its date and affected family member. Prioritization is not part of the problem. Future integrations may bring in data from external calendar, task, and other sources.
 
 ## User & Persona
 
@@ -114,7 +114,7 @@ Children read family information relevant to them but do not create, edit, or de
 
 ### Accounts and family
 
-- FR-001: A family member can sign in with a Google account. Priority: must-have
+- FR-001: A family member can sign in with an external identity account. Priority: must-have
   > Socrates: Counter-argument considered: authentication increases the MVP scope. Resolution: kept because user identification is required for privacy.
 - FR-002: A family member can use a preassigned parent or child role in the single configured family. Priority: must-have
   > Socrates: Counter-argument considered: building family and role administration expands the MVP. Resolution: revised; the family and roles are preconfigured, and in-app administration is deferred.
@@ -154,7 +154,7 @@ If no entry type or relevant detail can be recognized, the text is treated as a 
 
 ## Access Control
 
-Each member of the single preconfigured family signs in using their own Google account. Parent and child roles are assigned before the MVP is used; the MVP has no interface for managing members or roles.
+Each member of the single preconfigured family signs in using their own external identity account. Parent and child roles are assigned before the MVP is used; the MVP has no interface for managing members or roles.
 
 - Parent: can create, read, update, and delete all entries belonging to the family.
 - Child: can read only entries assigned to that child and cannot create, update, or delete entries.
@@ -163,7 +163,7 @@ Each member of the single preconfigured family signs in using their own Google a
 ## Non-Goals
 
 - No custom audio recording or speech-to-text conversion in the MVP; users may type or use the phone keyboard's dictation capability.
-- No integrations with Todoist, Google Calendar, or other external sources in the MVP; these are post-MVP extensions.
+- No integrations with external calendar, task, or other sources in the MVP; these are post-MVP extensions.
 - No read-only kiosk view or token authentication in the MVP; this is a post-MVP extension.
 - No in-app family or role management and no support for multiple families in the MVP; one five-person family is preconfigured.
 - No accessibility target beyond default browser behavior in the MVP; explicit accessibility requirements are deferred.
@@ -188,6 +188,11 @@ Each member of the single preconfigured family signs in using their own Google a
 - Automatic confirmation after five seconds.
 - Re-dictation from the confirmation screen.
 - Read-only kiosk access by token.
-- Integrations with Todoist, Google Calendar, and other external sources.
+- Integrations with external calendar, task, and other sources.
 - In-app family member and role administration.
 - Automatic tag assignment.
+
+## Forward: Tech Stack / Integration Preferences
+
+- Preferred identity provider: Google accounts.
+- Candidate future integration sources: Google Calendar, Todoist, and other external sources.
