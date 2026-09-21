@@ -1,5 +1,10 @@
 from django.db import DatabaseError, connection
 from django.http import JsonResponse
+from django.shortcuts import render
+
+
+def home(request):
+    return render(request, 'family_notes/home.html')
 
 
 def healthz(request):

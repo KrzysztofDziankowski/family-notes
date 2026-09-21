@@ -44,10 +44,10 @@ uv run python manage.py migrate
 Start the development server:
 
 ```bash
-uv run python manage.py runserver
+uv run python manage.py runserver '[::]:20121'
 ```
 
-Open <http://127.0.0.1:8000/> in your browser. The project is currently a Django scaffold, so the default Django startup page is expected.
+Open <http://[::1]:20121/> in your browser. The project is currently a Django scaffold, so the default Django startup page is expected.
 
 ## Verify the project
 

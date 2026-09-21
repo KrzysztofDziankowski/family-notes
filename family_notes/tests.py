@@ -5,6 +5,15 @@ from django.test import TestCase
 from django.urls import reverse
 
 
+class RootRouteTests(TestCase):
+    def test_root_renders_homepage(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Hello, FamilyNotes!')
+        self.assertTemplateUsed(response, 'family_notes/home.html')
+
+
 class HealthCheckTests(TestCase):
     def test_health_check_succeeds_when_database_is_available(self):
         response = self.client.get(reverse('healthz'))

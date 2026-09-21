@@ -41,7 +41,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-local-development-o
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', default=True)
 
-ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,::1')
 CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 
 if not DEBUG and 'DJANGO_SECRET_KEY' not in os.environ:
@@ -80,7 +80,7 @@ ROOT_URLCONF = 'family_notes.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'family_notes' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
