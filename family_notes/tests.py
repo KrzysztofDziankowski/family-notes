@@ -13,6 +13,11 @@ class RootRouteTests(TestCase):
         self.assertContains(response, 'Hello, FamilyNotes!')
         self.assertTemplateUsed(response, 'family_notes/home.html')
 
+    def test_admin_endpoint_is_not_exposed(self):
+        response = self.client.get('/admin/')
+
+        self.assertEqual(response.status_code, 404)
+
 
 class HealthCheckTests(TestCase):
     def test_health_check_succeeds_when_database_is_available(self):

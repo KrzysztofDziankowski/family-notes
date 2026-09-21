@@ -481,12 +481,12 @@ From the development machine:
 
 ```bash
 curl -fsS https://<PUBLIC_HOST>/healthz/
-curl -I https://<PUBLIC_HOST>/admin/login/
+curl -I https://<PUBLIC_HOST>/
 ```
 
-Then verify in a browser that `https://<PUBLIC_HOST>/admin/login/` has no TLS
-warning and loads its CSS. Review logs for secrets or database passwords before
-creating real family data.
+Then verify in a browser that `https://<PUBLIC_HOST>/` has no TLS warning and
+loads its CSS. Confirm that `https://<PUBLIC_HOST>/admin/` returns 404. Review
+logs for secrets or database passwords before creating real family data.
 
 Finally, reboot once and repeat the checks:
 

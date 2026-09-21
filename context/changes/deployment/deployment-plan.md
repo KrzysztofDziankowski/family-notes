@@ -107,7 +107,7 @@ Production acceptance criteria:
 - `manage.py check --deploy` reports no unresolved production-critical findings.
 - Local and public `/healthz/` checks return success while the database is available and fail without disclosing details when it is unavailable.
 - The Mikrus HTTPS URL loads without certificate warnings, redirects or treats HTTP securely as supported by the Mikrus subdomain layer, and Django recognizes proxied requests as secure.
-- Static assets load through nginx and `/admin/` renders correctly.
+- The homepage renders correctly through nginx, and `/admin/` returns 404 because the Django administration endpoint is intentionally disabled.
 - The service survives a process restart and VPS reboot.
 - A database dump can be restored into a disposable database and pass a basic integrity check.
 - Switching to the previous application release restores service without changing the database.
