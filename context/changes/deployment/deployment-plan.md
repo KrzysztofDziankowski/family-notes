@@ -2,7 +2,7 @@
 
 ## Summary
 
-Deploy FamilyNotes to Mikr.us 3.0 using its shared PostgreSQL service and a Mikrus-managed HTTPS subdomain. Production releases are human-approved and performed over SSH from the `main` branch; no external CI/CD system receives production credentials. The runtime consists of Django served by Gunicorn under systemd, with nginx serving static files and proxying application traffic.
+Deploy FamilyNotes to Mikr.us 3.0 using a separately purchased dedicated Mikrus PostgreSQL service and a Mikrus-managed HTTPS subdomain. Production releases are human-approved and performed over SSH from the `main` branch; no external CI/CD system receives production credentials. The runtime consists of Django served by Gunicorn under systemd, with nginx serving static files and proxying application traffic.
 
 The first release is a single-instance MVP. It does not introduce background workers, high availability, or production database access through MCP.
 
@@ -19,7 +19,9 @@ The first release is a single-instance MVP. It does not introduce background wor
 The following steps require the account owner and must complete before the first release:
 
 - Provision a Mikr.us 3.0 VPS and record its SSH hostname, assigned SSH port, public IPv6 address, and exposed HTTP port mapping.
-- Provision a Mikr.us shared PostgreSQL database and record its host, port, database name, username, and password outside the repository.
+- Open the purchased dedicated Mikrus PostgreSQL service and record its host, port, TLS mode, capacity, administrative credentials, and backup capabilities in a password manager.
+- Create a dedicated `family_notes` database owned by a restricted `family_notes_app` login. The application login must not have superuser, database-creation, role-creation, or replication privileges.
+- Restrict database network access to the application VPS when the service supports source allow-listing. Never expose PostgreSQL for routine developer access.
 - Reserve the final Mikrus subdomain and map it to the application's exposed HTTP port. Use the Mikrus HTTPS layer for the public endpoint; do not install Certbot for this initial setup.
 - Enable Mikr.us backup space if available and choose a separate destination for encrypted off-provider database copies.
 - Add the operator's SSH public key before disabling password-based SSH access. Preserve provider console access as the recovery path.
@@ -42,6 +44,7 @@ DJANGO_ALLOWED_HOSTS
 DJANGO_CSRF_TRUSTED_ORIGINS
 DB_HOST
 DB_PORT
+DB_SSLMODE
 DB_NAME
 DB_USER
 DB_PASSWORD
@@ -50,7 +53,7 @@ AUTH_PROVIDER_CLIENT_SECRET
 AI_PROVIDER_API_KEY
 ```
 
-Use the exact authentication and AI-provider variable names introduced by their implementations if they differ. Keep placeholders out of the live environment: an integration that is not yet implemented remains disabled until its real credentials and callback URL are known.
+Use the exact authentication and AI-provider variable names introduced by their implementations if they differ. Keep placeholders out of the live environment: an integration that is not yet implemented remains disabled until its real credentials and callback URL are known. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
 
 ## Release Procedure
 
@@ -73,19 +76,20 @@ Do not automatically deploy on a push to `main`. Automated CI may run checks wit
 
 - **SSH connection failure:** verify the Mikr.us-assigned port, use an SSH host entry with the expected identity and `IdentitiesOnly yes`, then use the provider console if firewall or key changes locked out the operator.
 - **Public subdomain failure:** confirm nginx listens on the address family required by Mikrus, the application port matches the provider mapping, DNS/subdomain activation has completed, and plain HTTP works internally before investigating the managed HTTPS layer.
-- **Database connection failure:** test with `psql` from the VPS using the same host and port. Check provider allow-listing, credentials, PostgreSQL SSL requirements, and database quota without exposing the password in shell history or logs.
+- **Database connection failure:** test with `psql` from the VPS using the same host, port, database, application login, and TLS mode. Check the dedicated service status, source allow-list, credentials, certificate/TLS requirements, connection limit, and storage capacity without exposing passwords in shell history or logs.
 - **Failed migration:** stop before switching the active release. Fix forward with a new migration when possible. Never reverse or restore a production database automatically.
 - **Failed application start:** inspect `systemctl status`, journald, the environment-file permissions, Gunicorn import errors, and nginx upstream errors. Keep the previous release active until the new health check succeeds.
 - **Post-release regression:** atomically repoint `current` to the previous release and restart the service. If the release applied a backward-incompatible schema change, roll forward with a corrective release; database restore requires human approval and a confirmed recovery point.
 - **Memory pressure or OOM:** keep worker count low, inspect process RSS and kernel OOM logs, temporarily reduce concurrency, and isolate AI classification into a worker only when observed load justifies it.
-- **Database growth:** review shared-database usage weekly, alert at 60 MB, and start migration planning at 80 MB or the equivalent provider thresholds if the current service limit differs.
+- **Database growth:** review dedicated-service storage and connection usage weekly. Alert at 70% of purchased storage or connection capacity and start a capacity increase or cleanup plan at 85%.
 
 ## Backups, Monitoring, and Operations
 
-- Run a daily PostgreSQL custom-format dump with timestamped filenames, retention, encryption for off-provider copies, and failure reporting.
+- Confirm the dedicated service's provider-managed backup schedule and retention in the Mikrus panel. Treat it as one recovery layer, not the only backup.
+- Run a daily PostgreSQL custom-format dump using the restricted application login where permissions allow, with timestamped filenames, retention, encryption for off-provider copies, and failure reporting.
 - Perform and document a restore drill into a disposable database before the first production data is trusted, then repeat quarterly and after material schema changes.
 - Use systemd and journald for process state and application logs, nginx access/error logs for edge diagnosis, and `/healthz/` for an external uptime check.
-- Alert on health-check failure, repeated service restart, disk pressure, backup failure, database quota thresholds, and sustained memory pressure.
+- Alert on health-check failure, repeated service restart, VPS disk pressure, backup failure, dedicated PostgreSQL availability, 70%/85% database capacity thresholds, connection saturation, and sustained memory pressure.
 - Ensure logs contain no secrets, authorization headers, family-entry text, authentication tokens, or AI-provider payloads.
 - Reboot the VPS once during acceptance testing to confirm nginx, PostgreSQL connectivity, and the application service recover automatically.
 
@@ -112,8 +116,9 @@ Production acceptance criteria:
 ## Assumptions and Decisions
 
 - `context/foundation/infrastructure.md` supersedes the older Railway deployment hint in `context/foundation/tech-stack.md`.
-- Mikr.us 3.0, shared PostgreSQL, manual SSH releases, a Mikrus subdomain, and full MVP secret planning are approved choices.
+- Mikr.us 3.0, separately purchased dedicated Mikrus PostgreSQL, manual SSH releases, a Mikrus subdomain, and full MVP secret planning are approved choices.
 - The app uses one production instance and one production database for the MVP.
+- PostgreSQL runs as a dedicated Mikrus service, not on the application VPS. Its administrative credentials are never loaded by Django or stored on the VPS unless a root-only recovery procedure temporarily requires them.
 - Destructive operations, secret rotation, database restoration, DNS changes, and account/billing changes always require direct human approval.
 - Provider-specific ports, hostnames, quotas, and subdomain behavior must be confirmed in the Mikr.us panel during setup because they are assigned externally and may change.
 
@@ -121,7 +126,6 @@ Production acceptance criteria:
 
 - [Mikr.us: Django with PostgreSQL](https://wiki.mikr.us/django_postgresql/)
 - [Mikr.us: free VPS subdomain](https://wiki.mikr.us/darmowa_subdomena_dla_vps/)
-- [Mikr.us: shared databases](https://wiki.mikr.us/wspoldzielone_bazy_danych/)
 - [Mikr.us: exposed ports](https://wiki.mikr.us/udostepnione_porty/)
 - [Mikr.us: backups](https://wiki.mikr.us/strych_backupy/)
 - [Django 5.2 deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)

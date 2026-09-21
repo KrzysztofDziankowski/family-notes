@@ -47,6 +47,12 @@ CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS')
 if not DEBUG and 'DJANGO_SECRET_KEY' not in os.environ:
     raise ImproperlyConfigured('DJANGO_SECRET_KEY is required when DJANGO_DEBUG is false.')
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = env_bool('DJANGO_SECURE_SSL_REDIRECT', default=not DEBUG)
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '3600' if not DEBUG else '0'))
+
 
 # Application definition
 
@@ -120,6 +126,8 @@ elif DB_ENGINE in {'postgres', 'postgresql'}:
             'CONN_MAX_AGE': 60,
         }
     }
+    if db_sslmode := os.getenv('DB_SSLMODE'):
+        DATABASES['default']['OPTIONS'] = {'sslmode': db_sslmode}
 else:
     raise ImproperlyConfigured(
         f'Unsupported DB_ENGINE {DB_ENGINE!r}; use sqlite or postgresql.'
@@ -161,6 +169,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = Path(os.getenv('DJANGO_STATIC_ROOT', BASE_DIR / 'staticfiles'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

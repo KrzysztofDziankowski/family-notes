@@ -8,19 +8,36 @@ The initial public URL uses Mikrus's automatic `wykr.es` subdomain. It terminate
 HTTPS for the user and forwards plain HTTP to nginx on one of the VPS's assigned
 ports. Do not install Certbot for this setup.
 
-## 0. Do Not Start Until the Application Is Ready
+## Deployment Progress
 
-The following items from the deployment plan are not implemented in the current
-application yet:
+Updated 2026-09-21:
 
-- `STATIC_ROOT` for `collectstatic`
-- proxy-aware HTTPS and production cookie settings
-- the database-backed `/healthz/` endpoint
-- a configured Git remote from which Mikrus can clone the repository
+- [x] Application pre-deployment readiness implemented locally
+- [x] Steps 1-6 completed on Mikrus (reported by the operator)
+- [ ] Step 7: create and validate the first versioned release
+- [ ] Step 8: configure and start the systemd service
+- [ ] Step 9: configure nginx and public routing
+- [ ] Step 10: complete production verification and reboot test
 
-Implement and test these before the first production release. The remaining
-steps may be used to prepare the account and VPS, but do not expose the app
-publicly until `uv run python manage.py check --deploy` has been reviewed.
+## 0. Application Readiness
+
+The application now provides:
+
+- `STATIC_ROOT` controlled by `DJANGO_STATIC_ROOT`
+- proxy-aware HTTPS, secure production cookies, SSL redirect, and HSTS settings
+- a database-backed `/healthz/` endpoint with detail-free failure responses
+- the Git `origin` remote used to publish commits for the Mikrus repository mirror
+
+Before step 7, commit and push these deployment changes, then use that exact full
+commit SHA as `<RELEASE_COMMIT>`. Review the output of
+`uv run python manage.py check --deploy` under production settings before exposing
+the app publicly.
+
+With the initial `wykr.es` host, Django's deployment check is expected to warn
+about `SECURE_HSTS_INCLUDE_SUBDOMAINS` and `SECURE_HSTS_PRELOAD`. Leave both off:
+the parent domain is shared with other Mikrus users and is not controlled by
+FamilyNotes. The application still sends HSTS for its own host through
+`SECURE_HSTS_SECONDS`.
 
 ## 1. Record Values from the Mikrus Panel
 
@@ -34,18 +51,22 @@ Create a private password-manager entry, not a repository file, with:
 | `<SSH_PORT>` | normally `10000 + SERVER_ID` |
 | `<APP_PORT>` | choose an assigned general-purpose port, normally `20000 + SERVER_ID` or `30000 + SERVER_ID` |
 | `<PUBLIC_HOST>` | `<SERVER_NAME>-<APP_PORT>.wykr.es` |
-| `<DB_HOST>` | shared PostgreSQL `Server` value |
-| `<DB_PORT>` | `5432`, unless the panel says otherwise |
-| `<DB_NAME>` | shared PostgreSQL `Baza` value |
-| `<DB_USER>` | shared PostgreSQL `login` value |
-| `<DB_PASSWORD>` | shared PostgreSQL `Haslo` value |
+| `<DB_HOST>` | dedicated PostgreSQL hostname |
+| `<DB_PORT>` | dedicated PostgreSQL port, commonly `5432` |
+| `<DB_SSLMODE>` | TLS mode required by Mikrus, preferably `require` |
+| `<DB_ADMIN_USER>` | administrative login supplied with the service |
+| `<DB_NAME>` | `family_notes` unless Mikrus pre-created a fixed database |
+| `<DB_USER>` | `family_notes_app` unless Mikrus pre-created a fixed login |
+| `<DB_PASSWORD>` | new password for the application login |
 | `<REPOSITORY_URL>` | HTTPS or SSH Git clone URL |
 | `<RELEASE_COMMIT>` | full Git commit SHA approved for release |
 
 In the Mikrus panel:
 
-1. Open `https://mikr.us/panel/?a=postgres`, request PostgreSQL access, and copy
-   the resulting values from the database logs into the password manager.
+1. Open the purchased dedicated PostgreSQL service in the Mikrus panel. Copy its
+   hostname, port, TLS requirement, administrative login, and administrative
+   password into the password manager. Do not save admin credentials in Django's
+   environment file.
 2. Confirm `<APP_PORT>` is in the assigned port pool. Additional TCP ports can
    be requested in the panel if both general-purpose ports are occupied.
 3. Open `https://<PUBLIC_HOST>/` only after nginx is configured. The dynamic
@@ -166,31 +187,110 @@ cat ~/.ssh/familynotes_repo.pub
 Add a host entry selecting that key in `/home/deploy/.ssh/config`; do not copy a
 developer's personal Git key onto the server.
 
-## 5. Verify Shared PostgreSQL Before Saving Secrets
+## 5. Configure Dedicated Mikrus PostgreSQL
 
-From the VPS, run:
+The selected database is the separately purchased dedicated PostgreSQL service,
+not Mikrus shared PostgreSQL and not PostgreSQL installed on the application VPS.
+Do not install the `postgresql` server package on the VPS. The
+`postgresql-client` package installed in step 3 is sufficient.
+
+### Confirm access from the VPS
+
+Connect using the administrative details delivered with the purchased service:
 
 ```bash
-psql 'host=<DB_HOST> port=<DB_PORT> dbname=<DB_NAME> user=<DB_USER>'
+psql 'host=<DB_HOST> port=<DB_PORT> dbname=postgres user=<DB_ADMIN_USER> sslmode=<DB_SSLMODE>'
 ```
 
-Enter `<DB_PASSWORD>` at the prompt, then verify connectivity:
+Enter the administrative password at the prompt. Do not place it in the command
+or `/etc/family-notes/env`. In `psql`, inspect the server and current privileges:
 
 ```sql
-SELECT current_database(), current_user;
-SELECT pg_size_pretty(pg_database_size(current_database()));
+SELECT version();
+SELECT current_user, current_database();
+SELECT rolcreatedb, rolcreaterole
+FROM pg_roles
+WHERE rolname = current_user;
+```
+
+If `rolcreatedb` and `rolcreaterole` are both `true`, create the dedicated
+FamilyNotes role and database below. If either required privilege is `false`,
+use the Mikrus panel to create them or ask Mikrus support to provision database
+`family_notes` owned by login `family_notes_app`; do not grant the application
+administrative privileges as a workaround.
+
+### Create the application role and database
+
+Still in the administrative `psql` session, create a login without database or
+role administration privileges:
+
+```sql
+CREATE ROLE family_notes_app
+    WITH LOGIN
+    NOSUPERUSER
+    NOCREATEDB
+    NOCREATEROLE
+    NOINHERIT
+    NOREPLICATION;
+\password family_notes_app
+```
+
+At the password prompts, enter a new random password generated in your password
+manager. The `\password` command avoids putting the plaintext password in SQL
+history. Save it as `<DB_PASSWORD>` in the password manager.
+
+Create a UTF-8 database owned by that role and remove default public access:
+
+```sql
+CREATE DATABASE family_notes
+    WITH OWNER family_notes_app
+    ENCODING 'UTF8'
+    TEMPLATE template0;
+REVOKE ALL ON DATABASE family_notes FROM PUBLIC;
+GRANT CONNECT, TEMPORARY ON DATABASE family_notes TO family_notes_app;
 \q
 ```
 
-If it fails, copy the host and login exactly from the Mikrus database logs and
-confirm port `5432`. Do not add the password to the command line.
+If Mikrus supplied a fixed database or application login with the dedicated
+service, do not try to recreate it. Record those supplied values as `<DB_NAME>`
+and `<DB_USER>`, confirm that the login is not an administrator, and continue
+with the verification below.
+
+### Verify the application login
+
+Connect from the VPS as the application user. The password is entered
+interactively:
+
+```bash
+psql 'host=<DB_HOST> port=<DB_PORT> dbname=<DB_NAME> user=<DB_USER> sslmode=<DB_SSLMODE>'
+```
+
+Verify identity, privileges, storage visibility, and object creation:
+
+```sql
+SELECT current_user, current_database();
+SELECT rolsuper, rolcreatedb, rolcreaterole
+FROM pg_roles
+WHERE rolname = current_user;
+SELECT pg_size_pretty(pg_database_size(current_database()));
+CREATE TABLE deployment_permission_test (id integer PRIMARY KEY);
+DROP TABLE deployment_permission_test;
+\q
+```
+
+The three role flags must all be `false`, and both table statements must succeed.
+If the connection fails, verify the dedicated service's host, port, TLS mode, and
+network allow-list in the Mikrus panel. Allow only the application VPS where the
+service supports source restrictions; do not expose PostgreSQL publicly for
+developer access.
 
 ## 6. Create the Production Environment File
 
-Generate a secret locally, not in chat or a committed file:
+Generate a secret on the VPS using Python's standard library. This command does
+not require Django or an initialized project environment:
 
 ```bash
-uv run python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
 On the VPS, open the environment file as root:
@@ -211,6 +311,7 @@ DJANGO_STATIC_ROOT=/var/www/family-notes/static
 DB_ENGINE=postgresql
 DB_HOST=<DB_HOST>
 DB_PORT=<DB_PORT>
+DB_SSLMODE=<DB_SSLMODE>
 DB_NAME=<DB_NAME>
 DB_USER=<DB_USER>
 DB_PASSWORD=<DB_PASSWORD>
@@ -437,5 +538,4 @@ separate, human-approved incident procedure.
 - [Mikrus Django and PostgreSQL guide](https://wiki.mikr.us/django_postgresql/)
 - [Mikrus automatic and dedicated subdomains](https://wiki.mikr.us/darmowa_subdomena_dla_vps/)
 - [Mikrus assigned ports](https://wiki.mikr.us/udostepnione_porty/)
-- [Mikrus shared database](https://wiki.mikr.us/wspoldzielone_bazy_danych/)
 - [Mikrus Strych backups](https://wiki.mikr.us/strych_backupy/)
