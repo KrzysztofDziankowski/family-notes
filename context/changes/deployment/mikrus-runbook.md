@@ -14,10 +14,29 @@ Updated 2026-09-21:
 
 - [x] Application pre-deployment readiness implemented locally
 - [x] Steps 1-6 completed on Mikrus (reported by the operator)
-- [ ] Step 7: create and validate the first versioned release
-- [ ] Step 8: configure and start the systemd service
-- [ ] Step 9: configure nginx and public routing
-- [ ] Step 10: complete production verification and reboot test
+- [x] Step 7: first versioned release created and validated
+- [x] Step 8: systemd service configured and running
+- [x] Step 9: nginx serving HTTP on port `20121` behind Mikrus HTTPS
+- [x] Step 10: production deployment verified (reported by the operator)
+
+### First Deployment Record
+
+The operator confirmed a successful production deployment on 2026-09-21:
+
+| Item | Deployed value |
+| --- | --- |
+| Public URL | `https://ula121-20121.wykr.es/` |
+| VPS | `ula121` |
+| Internal nginx listener | HTTP on `[::]:20121` |
+| Release | `20260921T203945Z-ea1ff26284aa` |
+| Application service | `family-notes.service` using Gunicorn 26.2.0 |
+| Application socket | `/run/family-notes/gunicorn.sock` |
+| Database | Dedicated Mikrus PostgreSQL with restricted application credentials |
+| TLS | Terminated by the Mikrus `wykr.es` frontend |
+
+The final deployment required `--no-control-socket` for Gunicorn and explicit
+nginx proxy headers to avoid contradictory HTTP/HTTPS scheme values. Those fixes
+are incorporated in this runbook for subsequent releases.
 
 ## 0. Application Readiness
 
@@ -49,8 +68,8 @@ Create a private password-manager entry, not a repository file, with:
 | `<SERVER_ID>` | numeric VPS ID |
 | `<SSH_HOST>` | SSH hostname shown in the panel |
 | `<SSH_PORT>` | normally `10000 + SERVER_ID` |
-| `<APP_PORT>` | choose an assigned general-purpose port, normally `20000 + SERVER_ID` or `30000 + SERVER_ID` |
-| `<PUBLIC_HOST>` | `<SERVER_NAME>-<APP_PORT>.wykr.es` |
+| `<APP_PORT>` | `20121` |
+| `<PUBLIC_HOST>` | `<SERVER_NAME>-20121.wykr.es` |
 | `<DB_HOST>` | dedicated PostgreSQL hostname |
 | `<DB_PORT>` | dedicated PostgreSQL port, commonly `5432` |
 | `<DB_SSLMODE>` | TLS mode required by Mikrus, preferably `require` |
@@ -67,7 +86,7 @@ In the Mikrus panel:
    hostname, port, TLS requirement, administrative login, and administrative
    password into the password manager. Do not save admin credentials in Django's
    environment file.
-2. Confirm `<APP_PORT>` is in the assigned port pool. Additional TCP ports can
+2. Confirm port `20121` is in the assigned port pool. Additional TCP ports can
    be requested in the panel if both general-purpose ports are occupied.
 3. Open `https://<PUBLIC_HOST>/` only after nginx is configured. The dynamic
    `wykr.es` name needs no separate DNS or subdomain setup.
@@ -389,7 +408,7 @@ WorkingDirectory=/srv/family-notes/current
 EnvironmentFile=/etc/family-notes/env
 RuntimeDirectory=family-notes
 RuntimeDirectoryMode=0755
-ExecStart=/srv/family-notes/current/.venv/bin/gunicorn family_notes.wsgi:application --workers 2 --timeout 45 --bind unix:/run/family-notes/gunicorn.sock --access-logfile - --error-logfile -
+ExecStart=/srv/family-notes/current/.venv/bin/gunicorn family_notes.wsgi:application --workers 2 --timeout 45 --bind unix:/run/family-notes/gunicorn.sock --no-control-socket --access-logfile - --error-logfile -
 Restart=on-failure
 RestartSec=5
 PrivateTmp=true
@@ -430,7 +449,7 @@ Still as root, create `/etc/nginx/sites-available/family-notes`:
 
 ```nginx
 server {
-    listen [::]:<APP_PORT> ipv6only=off;
+    listen [::]:20121 ipv6only=off;
     server_name <PUBLIC_HOST>;
 
     client_max_body_size 2m;
@@ -442,7 +461,9 @@ server {
     }
 
     location / {
-        include proxy_params;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_pass http://unix:/run/family-notes/gunicorn.sock;
         proxy_connect_timeout 5s;
@@ -461,10 +482,11 @@ sudo systemctl enable nginx
 sudo systemctl reload nginx
 ```
 
-The `listen [::]:<APP_PORT> ipv6only=off` form accepts both IPv6 and IPv4 traffic.
-For `wykr.es`, `<APP_PORT>` must be one of the assigned IPv4-forwarded ports. For
-a later dedicated Mikrus subdomain, select this same port and plain HTTP in the
-panel; Mikrus still presents HTTPS externally.
+The `listen [::]:20121 ipv6only=off` directive accepts both IPv6 and IPv4 traffic.
+This nginx server is HTTP-only: do not add `ssl`, certificate paths, a port `443`
+listener, or Certbot. Mikrus accepts public HTTPS for `<PUBLIC_HOST>` and forwards
+plain HTTP to port `20121`. For a later dedicated Mikrus subdomain, select port
+`20121` and plain HTTP in the panel.
 
 ## 10. Verify Before Calling the Deployment Complete
 
@@ -473,8 +495,11 @@ On the VPS:
 ```bash
 sudo systemctl is-active family-notes nginx
 sudo journalctl -u family-notes -n 100 --no-pager
-curl --unix-socket /run/family-notes/gunicorn.sock http://localhost/healthz/
-curl -I "http://[::1]:<APP_PORT>/healthz/" -H 'Host: <PUBLIC_HOST>'
+curl --unix-socket /run/family-notes/gunicorn.sock \
+  -H 'Host: <PUBLIC_HOST>' \
+  -H 'X-Forwarded-Proto: https' \
+  http://localhost/healthz/
+curl -I "http://[::1]:20121/healthz/" -H 'Host: <PUBLIC_HOST>'
 ```
 
 From the development machine:
@@ -522,15 +547,23 @@ separate, human-approved incident procedure.
   with `ssh -vvv familynotes-mikrus`, and use the Mikrus console for recovery.
 - **502 Bad Gateway:** inspect `systemctl status family-notes`, confirm
   `/run/family-notes/gunicorn.sock` exists, and inspect journald before nginx.
+- **Gunicorn control server permission error:** add `--no-control-socket` to the
+  systemd `ExecStart` command. FamilyNotes does not use `gunicornc`; disabling
+  its separate management socket does not affect the application socket.
+- **Contradictory scheme headers:** remove `include proxy_params` from the nginx
+  location and set the four proxy headers shown in step 9 explicitly. Debian's
+  default include derives `X-Forwarded-Proto` as internal HTTP, conflicting with
+  the required external `https` value.
 - **400 Bad Request:** `<PUBLIC_HOST>` is missing or misspelled in
-  `DJANGO_ALLOWED_HOSTS`.
+  `DJANGO_ALLOWED_HOSTS`. Direct Gunicorn socket checks must also send
+  `Host: <PUBLIC_HOST>` instead of the URL's `localhost` host.
 - **403 CSRF failure:** confirm the public origin is exactly
   `https://<PUBLIC_HOST>` in `DJANGO_CSRF_TRUSTED_ORIGINS`.
 - **Static CSS is missing:** run `collectstatic`, verify `STATIC_ROOT` targets
   `/var/www/family-notes/static`, and check nginx file permissions.
 - **Database fails:** use interactive `psql`, confirm the Mikrus panel values,
   and check that all `DB_*` variables exist without printing their contents.
-- **Public URL times out:** verify nginx listens on `<APP_PORT>`, that the port is
+- **Public URL times out:** verify nginx listens on port `20121`, that the port is
   assigned in the panel, and that `curl` works locally over IPv6.
 
 ## References

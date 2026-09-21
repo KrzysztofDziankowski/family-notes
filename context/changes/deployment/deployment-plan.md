@@ -1,5 +1,14 @@
 # FamilyNotes Mikr.us Integration and Deployment Plan
 
+## Deployment Outcome
+
+Successfully deployed on 2026-09-21 at
+`https://ula121-20121.wykr.es/` using release
+`20260921T203945Z-ea1ff26284aa`. The live stack is nginx on HTTP port `20121`,
+Gunicorn under `family-notes.service`, a Unix application socket, Mikrus-managed
+public HTTPS, and dedicated Mikrus PostgreSQL. The detailed deployment record and
+reusable operational procedure are in `mikrus-runbook.md`.
+
 ## Summary
 
 Deploy FamilyNotes to Mikr.us 3.0 using a separately purchased dedicated Mikrus PostgreSQL service and a Mikrus-managed HTTPS subdomain. Production releases are human-approved and performed over SSH from the `main` branch; no external CI/CD system receives production credentials. The runtime consists of Django served by Gunicorn under systemd, with nginx serving static files and proxying application traffic.
@@ -32,7 +41,7 @@ The following steps require the account owner and must complete before the first
 - Install Git, curl, nginx, Python build headers, PostgreSQL client and development libraries, and `uv` from its documented installer.
 - Create `/srv/family-notes/releases`, `/srv/family-notes/shared`, and `/var/www/family-notes/static`. Point `/srv/family-notes/current` at the active versioned release.
 - Store production configuration in a root-owned, mode `0600` environment file such as `/etc/family-notes/env`. Never commit or print its values.
-- Configure a systemd service that runs Gunicorn as `familynotes`, reads the environment file, starts from `/srv/family-notes/current`, restarts on failure, and logs to journald.
+- Configure a systemd service that runs Gunicorn as `familynotes`, reads the environment file, starts from `/srv/family-notes/current`, disables the unused Gunicorn control socket, restarts on failure, and logs to journald.
 - Configure nginx to serve `/static/`, proxy all other requests to Gunicorn on a loopback socket or port, forward the original host and protocol headers, and expose `/healthz/` through the same application path.
 
 Required production configuration:
