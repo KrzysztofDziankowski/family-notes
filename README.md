@@ -74,3 +74,9 @@ Audit the locked dependencies:
 ```bash
 uv run --locked pip-audit
 ```
+
+## Deploy to Mikr.us
+
+Follow the [first-deployment runbook](context/changes/deployment/mikrus-runbook.md)
+after completing its application-readiness checklist. It separates values copied
+from the Mikrus panel, commands run locally, and commands run on the VPS.
