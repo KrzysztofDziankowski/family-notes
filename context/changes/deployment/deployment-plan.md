@@ -4,16 +4,26 @@
 
 Successfully deployed the latest release on 2026-09-22 at
 `https://inodzik.bieda.it/` using commit
-`a572ad5f69349e8ee2c0fa21caae642c32afb038` and release
-`20260922T055509Z-a572ad5f6934`. The live stack is nginx on HTTP port `20121`,
+`786d1c8f236bfd1193f8d0360e93c1116a53831f` and release
+`20260922T062505Z-786d1c8f236b`. The live stack is nginx on HTTP port `20121`,
 Gunicorn under `family-notes.service`, a Unix application socket, Mikrus-managed
 public HTTPS, and dedicated Mikrus PostgreSQL. The detailed deployment record and
 reusable operational procedure are in `mikrus-runbook.md`.
 
 The active release path is
-`/srv/family-notes/releases/20260922T055509Z-a572ad5f6934`. Before activation, a
+`/srv/family-notes/releases/20260922T062505Z-786d1c8f236b`. The deployment helper,
+service status, exact checked-out commit, internal health endpoint, and public
+health endpoint were verified after activation. Before the preceding release, a
 verified non-empty database dump was saved as
 `/var/backups/family-notes/pre-release-20260922T055509Z-a572ad5f6934.dump`.
+
+Direct root SSH access from the development machine is blocked. Root login rejects
+the available SSH identity, so the agent and the `deploy` account cannot install or
+repair `/usr/local/sbin/family-notes-deploy`, change sudoers, or modify root-owned
+service configuration. These exceptional tasks require the account owner to use
+the Mikrus provider console or another explicitly authorized root-capable access
+path. Routine releases do not require root login once the root-owned helper and its
+narrow sudo rule are installed.
 
 Application serving is complete. Recurring backups, off-provider retention,
 external uptime monitoring, alerting, a restore drill, and a tested rollback are
@@ -44,6 +54,7 @@ The following steps require the account owner and must complete before the first
 - Use `inodzik.bieda.it`, the hostname configured in `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS`, backed by nginx listening on plain HTTP at `[::]:20121`. Mikrus terminates public HTTPS; do not install Certbot or configure nginx TLS. The older automatic hostname `ula121-20121.wykr.es` is not an accepted application host and returns HTTP 400.
 - Enable Mikr.us backup space if available and choose a separate destination for encrypted off-provider database copies.
 - Add the operator's SSH public key before disabling password-based SSH access. Preserve provider console access as the recovery path.
+- Treat direct root SSH from the development machine as unavailable. Perform privileged bootstrap and exceptional repair through the Mikrus provider console or another owner-authorized root-capable path; do not broaden the `deploy` account's sudo permissions as a workaround.
 
 ## Server Bootstrap
 
@@ -93,6 +104,7 @@ Do not automatically deploy on a push to `master`. Automated CI may run checks w
 ## Failure Support and Rollback
 
 - **SSH connection failure:** verify the Mikr.us-assigned port, use an SSH host entry with the expected identity and `IdentitiesOnly yes`, then use the provider console if firewall or key changes locked out the operator.
+- **Root access required:** direct root SSH from the development machine is blocked. Ask the account owner to run the documented root-only command through the Mikrus provider console or another authorized root-capable session. Do not copy secrets to the `deploy` account or grant unrestricted sudo.
 - **Public subdomain failure:** confirm nginx listens on the address family required by Mikrus, the application port matches the provider mapping, DNS/subdomain activation has completed, and plain HTTP works internally before investigating the managed HTTPS layer.
 - **Database connection failure:** test with `psql` from the VPS using the same host, port, database, application login, and TLS mode. Check the dedicated service status, source allow-list, credentials, certificate/TLS requirements, connection limit, and storage capacity without exposing passwords in shell history or logs.
 - **Failed migration:** stop before switching the active release. Fix forward with a new migration when possible. Never reverse or restore a production database automatically.
@@ -136,7 +148,7 @@ Production acceptance criteria:
 
 Current acceptance status:
 
-- Confirmed for release `20260922T055509Z-a572ad5f6934`: local Django checks, migration check, and all four tests; production deployment check with only the accepted shared-domain HSTS warnings (`security.W005` and `security.W021`); non-empty pre-release database dump; no pending migrations; static collection; active `family-notes` and `nginx` services; Unix-socket, nginx, and public `/healthz/` responses; homepage HTTP 200 with `Hello, FamilyNotes!`; and disabled `/admin/` route returning HTTP 404.
+- Confirmed for release `20260922T062505Z-786d1c8f236b`: exact commit `786d1c8f236bfd1193f8d0360e93c1116a53831f`; local Django checks, migration check, and all four tests; active `family-notes` service with two Gunicorn workers; successful deployment-helper health check; successful internal and public `/healthz/` responses; and homepage HTTP 200 after activation. The preceding release `20260922T055509Z-a572ad5f6934` additionally established the production deployment check, verified non-empty database dump, no pending migrations, static collection, active nginx service, and disabled `/admin/` route returning HTTP 404.
 - Not yet evidenced in the repository: reboot survival, scheduled backup execution, off-provider backup copy, disposable restore drill, external uptime alerting, capacity alerts, and rollback rehearsal.
 
 ## Assumptions and Decisions
@@ -146,7 +158,7 @@ Current acceptance status:
 - The app uses one production instance and one production database for the MVP.
 - PostgreSQL runs as a dedicated Mikrus service, not on the application VPS. Its administrative credentials are never loaded by Django or stored on the VPS unless a root-only recovery procedure temporarily requires them.
 - Destructive operations, secret rotation, database restoration, DNS changes, and account/billing changes always require direct human approval.
-- Root SSH access is required only for initial server configuration or exceptional maintenance. Routine deployment and application rollback are performed from the `deploy` account through the root-owned, narrowly scoped deployment helper.
+- Direct root SSH access from the development machine is blocked. Initial server configuration and exceptional maintenance therefore require the account owner to use the Mikrus provider console or another explicitly authorized root-capable path. Routine deployment and application rollback are performed from the `deploy` account through the root-owned, narrowly scoped deployment helper and do not require direct root login.
 - Provider-specific ports, hostnames, quotas, and subdomain behavior must be confirmed in the Mikr.us panel during setup because they are assigned externally and may change.
 
 ## References
