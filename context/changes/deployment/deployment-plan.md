@@ -4,18 +4,18 @@
 
 Successfully deployed the latest release on 2026-09-22 at
 `https://inodzik.bieda.it/` using commit
-`786d1c8f236bfd1193f8d0360e93c1116a53831f` and release
-`20260922T062505Z-786d1c8f236b`. The live stack is nginx on HTTP port `20121`,
+`513f9854b2d28489abb48873c23e24259f491d25` and release
+`20260922T063107Z-513f9854b2d2`. The live stack is nginx on HTTP port `20121`,
 Gunicorn under `family-notes.service`, a Unix application socket, Mikrus-managed
 public HTTPS, and dedicated Mikrus PostgreSQL. The detailed deployment record and
 reusable operational procedure are in `mikrus-runbook.md`.
 
 The active release path is
-`/srv/family-notes/releases/20260922T062505Z-786d1c8f236b`. The deployment helper,
+`/srv/family-notes/releases/20260922T063107Z-513f9854b2d2`. The deployment helper,
 service status, exact checked-out commit, internal health endpoint, and public
 health endpoint were verified after activation. Before the preceding release, a
 verified non-empty database dump was saved as
-`/var/backups/family-notes/pre-release-20260922T055509Z-a572ad5f6934.dump`.
+`/var/backups/family-notes/pre-release-20260922T063107Z-513f9854b2d2.dump`.
 
 Direct root SSH access from the development machine is blocked. Root login rejects
 the available SSH identity, so the agent and the `deploy` account cannot install or
@@ -148,7 +148,7 @@ Production acceptance criteria:
 
 Current acceptance status:
 
-- Confirmed for release `20260922T062505Z-786d1c8f236b`: exact commit `786d1c8f236bfd1193f8d0360e93c1116a53831f`; local Django checks, migration check, and all four tests; active `family-notes` service with two Gunicorn workers; successful deployment-helper health check; successful internal and public `/healthz/` responses; and homepage HTTP 200 after activation. The preceding release `20260922T055509Z-a572ad5f6934` additionally established the production deployment check, verified non-empty database dump, no pending migrations, static collection, active nginx service, and disabled `/admin/` route returning HTTP 404.
+- Confirmed for release `20260922T063107Z-513f9854b2d2`: exact commit `513f9854b2d28489abb48873c23e24259f491d25`; local Django checks, migration check, and all four tests; production deployment check with only the expected HSTS subdomain/preload warnings; verified non-empty database dump; no pending migrations; static collection; active `family-notes` service with two Gunicorn workers; successful deployment-helper health check after service startup; successful internal and public `/healthz/` responses; homepage HTTP 200 over HTTPS after activation; and disabled `/admin/` route returning HTTP 404 over HTTPS.
 - Not yet evidenced in the repository: reboot survival, scheduled backup execution, off-provider backup copy, disposable restore drill, external uptime alerting, capacity alerts, and rollback rehearsal.
 
 ## Assumptions and Decisions
