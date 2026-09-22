@@ -9,6 +9,10 @@ Gunicorn under `family-notes.service`, a Unix application socket, Mikrus-managed
 public HTTPS, and dedicated Mikrus PostgreSQL. The detailed deployment record and
 reusable operational procedure are in `mikrus-runbook.md`.
 
+Application serving is complete. Recurring backups, off-provider retention,
+external uptime monitoring, alerting, a restore drill, and a tested rollback are
+operational follow-ups until separately recorded as complete.
+
 ## Summary
 
 Deploy FamilyNotes to Mikr.us 3.0 using a separately purchased dedicated Mikrus PostgreSQL service and a Mikrus-managed HTTPS subdomain. Production releases are human-approved and performed over SSH from the `main` branch; no external CI/CD system receives production credentials. The runtime consists of Django served by Gunicorn under systemd, with nginx serving static files and proxying application traffic.
@@ -31,7 +35,7 @@ The following steps require the account owner and must complete before the first
 - Open the purchased dedicated Mikrus PostgreSQL service and record its host, port, TLS mode, capacity, administrative credentials, and backup capabilities in a password manager.
 - Create a dedicated `family_notes` database owned by a restricted `family_notes_app` login. The application login must not have superuser, database-creation, role-creation, or replication privileges.
 - Restrict database network access to the application VPS when the service supports source allow-listing. Never expose PostgreSQL for routine developer access.
-- Reserve the final Mikrus subdomain and map it to the application's exposed HTTP port. Use the Mikrus HTTPS layer for the public endpoint; do not install Certbot for this initial setup.
+- Use the automatic `ula121-20121.wykr.es` hostname backed by nginx listening on plain HTTP at `[::]:20121`. Mikrus terminates public HTTPS; do not install Certbot or configure nginx TLS.
 - Enable Mikr.us backup space if available and choose a separate destination for encrypted off-provider database copies.
 - Add the operator's SSH public key before disabling password-based SSH access. Preserve provider console access as the recovery path.
 
@@ -39,10 +43,10 @@ The following steps require the account owner and must complete before the first
 
 - Create a non-login `familynotes` runtime user and a separate `deploy` user with only the permissions needed to manage releases and restart the application service.
 - Install Git, curl, nginx, Python build headers, PostgreSQL client and development libraries, and `uv` from its documented installer.
-- Create `/srv/family-notes/releases`, `/srv/family-notes/shared`, and `/var/www/family-notes/static`. Point `/srv/family-notes/current` at the active versioned release.
+- Create `/srv/family-notes/releases`, the bare repository at `/srv/family-notes/repository/project.git`, and `/var/www/family-notes/static`. Point `/srv/family-notes/current` at the active versioned release.
 - Store production configuration in a root-owned, mode `0600` environment file such as `/etc/family-notes/env`. Never commit or print its values.
 - Configure a systemd service that runs Gunicorn as `familynotes`, reads the environment file, starts from `/srv/family-notes/current`, disables the unused Gunicorn control socket, restarts on failure, and logs to journald.
-- Configure nginx to serve `/static/`, proxy all other requests to Gunicorn on a loopback socket or port, forward the original host and protocol headers, and expose `/healthz/` through the same application path.
+- Configure nginx to serve `/static/` and proxy all other requests to `/run/family-notes/gunicorn.sock`. Set `Host`, `X-Real-IP`, `X-Forwarded-For`, and exactly one `X-Forwarded-Proto: https` header explicitly; do not include Debian's conflicting `proxy_params` file.
 
 Required production configuration:
 
@@ -51,33 +55,31 @@ DJANGO_SECRET_KEY
 DJANGO_DEBUG=False
 DJANGO_ALLOWED_HOSTS
 DJANGO_CSRF_TRUSTED_ORIGINS
+DJANGO_STATIC_ROOT
+DB_ENGINE=postgresql
 DB_HOST
 DB_PORT
 DB_SSLMODE
 DB_NAME
 DB_USER
 DB_PASSWORD
-AUTH_PROVIDER_CLIENT_ID
-AUTH_PROVIDER_CLIENT_SECRET
-AI_PROVIDER_API_KEY
 ```
 
-Use the exact authentication and AI-provider variable names introduced by their implementations if they differ. Keep placeholders out of the live environment: an integration that is not yet implemented remains disabled until its real credentials and callback URL are known. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
+Authentication-provider and AI-provider variables are not required until those integrations are implemented. Add their exact names and real values at that time; never deploy placeholders. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
 
 ## Release Procedure
 
 Every production release is run manually over SSH and records the deployed Git commit:
 
-1. Confirm local tests pass and the intended commit is present on `main`.
-2. On the server, fetch the repository and check out that exact commit into a new timestamped directory under `/srv/family-notes/releases/`.
-3. Run `uv sync --locked` in the new release.
-4. Load the production environment and run `uv run python manage.py check --deploy`.
-5. Run `uv run python manage.py makemigrations --check --dry-run`; abort if model changes lack committed migrations.
-6. Create a timestamped `pg_dump` before applying migrations and verify that the dump is non-empty.
-7. Run `uv run python manage.py migrate --noinput` and `uv run python manage.py collectstatic --noinput`.
-8. Atomically switch `/srv/family-notes/current` to the new release and restart the systemd service.
-9. Verify the local and public health endpoints, inspect recent journald and nginx errors, and complete a browser smoke test.
-10. Retain the current and at least two prior application releases. Remove older releases only after the new version is stable and its backup has been copied off-provider.
+1. Confirm local tests pass and the intended commit is pushed to `main`; record its full SHA.
+2. Fetch the bare server repository and create a detached, timestamped worktree for that exact SHA under `/srv/family-notes/releases/`.
+3. Run `~/.local/bin/uv sync --locked --no-dev` in the new release.
+4. As root, load `/etc/family-notes/env`; then run the new release's `.venv/bin/python manage.py check --deploy` and migration check as `familynotes`.
+5. Create a timestamped `pg_dump` before applying migrations and verify that the dump is non-empty.
+6. Run backward-compatible migrations from the new release as `familynotes`.
+7. Atomically switch `/srv/family-notes/current` to the new release, collect static files, and restart `family-notes.service`.
+8. Verify the Unix-socket and public health endpoints, inspect journald and nginx errors, and complete a browser smoke test.
+9. Retain the current and at least two prior application releases. Remove older releases only after the new version is stable and its backup has been copied off-provider.
 
 Do not automatically deploy on a push to `main`. Automated CI may run checks without production secrets, but production deployment remains the explicit SSH procedure above.
 
@@ -93,6 +95,9 @@ Do not automatically deploy on a push to `main`. Automated CI may run checks wit
 - **Database growth:** review dedicated-service storage and connection usage weekly. Alert at 70% of purchased storage or connection capacity and start a capacity increase or cleanup plan at 85%.
 
 ## Backups, Monitoring, and Operations
+
+The items in this section remain pending unless a later deployment record marks
+them complete:
 
 - Confirm the dedicated service's provider-managed backup schedule and retention in the Mikrus panel. Treat it as one recovery layer, not the only backup.
 - Run a daily PostgreSQL custom-format dump using the restricted application login where permissions allow, with timestamped filenames, retention, encryption for off-provider copies, and failure reporting.
@@ -122,9 +127,14 @@ Production acceptance criteria:
 - Switching to the previous application release restores service without changing the database.
 - Once product views exist, access tests cover parent access, assigned-child access, another child's denial, and unauthenticated denial for every family-data path.
 
+Current acceptance status:
+
+- Confirmed: systemd/Gunicorn startup, nginx proxying on port `20121`, public Mikrus HTTPS, dedicated PostgreSQL connectivity, `/healthz/`, homepage rendering, and disabled `/admin/` route.
+- Not yet evidenced in the repository: reboot survival, scheduled backup execution, off-provider backup copy, disposable restore drill, external uptime alerting, capacity alerts, and rollback rehearsal.
+
 ## Assumptions and Decisions
 
-- `context/foundation/infrastructure.md` supersedes the older Railway deployment hint in `context/foundation/tech-stack.md`.
+- This deployed plan supersedes both the older Railway hint in `context/foundation/tech-stack.md` and the shared-PostgreSQL recommendation in `context/foundation/infrastructure.md`; the later operator decision is dedicated Mikrus PostgreSQL.
 - Mikr.us 3.0, separately purchased dedicated Mikrus PostgreSQL, manual SSH releases, a Mikrus subdomain, and full MVP secret planning are approved choices.
 - The app uses one production instance and one production database for the MVP.
 - PostgreSQL runs as a dedicated Mikrus service, not on the application VPS. Its administrative credentials are never loaded by Django or stored on the VPS unless a root-only recovery procedure temporarily requires them.
