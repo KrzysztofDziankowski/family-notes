@@ -152,7 +152,24 @@ install -d -o root -g root -m 0700 /etc/family-notes
 usermod -aG familynotes deploy
 ```
 
-Allow only controlled service operations from the deployment account:
+Install the repository-owned deployment helper as a root-owned executable. This
+is a one-time root operation; after it is complete, routine deployments do not
+require root SSH access. Run this command from the repository on the development
+machine:
+
+```bash
+ssh -l root familynotes-mikrus \
+  'install -o root -g root -m 0755 /dev/stdin /usr/local/sbin/family-notes-deploy' \
+  < scripts/deployment/family-notes-deploy
+```
+
+Validate the helper syntax before granting access:
+
+```bash
+/bin/sh -n /usr/local/sbin/family-notes-deploy
+```
+
+Allow `deploy` to invoke only this validated helper as root:
 
 ```bash
 visudo -f /etc/sudoers.d/family-notes-deploy
@@ -161,7 +178,14 @@ visudo -f /etc/sudoers.d/family-notes-deploy
 Insert exactly:
 
 ```sudoers
-deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart family-notes, /usr/bin/systemctl status family-notes
+deploy ALL=(root) NOPASSWD: /usr/local/sbin/family-notes-deploy
+```
+
+Validate the sudoers file before ending the root session:
+
+```bash
+chmod 0440 /etc/sudoers.d/family-notes-deploy
+visudo -cf /etc/sudoers.d/family-notes-deploy
 ```
 
 Install the same SSH public key for `deploy`:
@@ -178,12 +202,13 @@ new connection before closing the root session:
 
 ```bash
 ssh familynotes-mikrus
-sudo systemctl status family-notes
+sudo -n /usr/local/sbin/family-notes-deploy status
 ```
 
 The status command may report that the unit does not exist; successful sudo
-authorization is what matters at this point. Do not grant `deploy` unrestricted
-sudo access.
+authorization is what matters at this point. Confirm that unrestricted sudo is
+denied with `sudo -n true`; do not grant `deploy` direct access to the production
+environment file or general root commands.
 
 ## 4. Install uv and Prepare Repository Access
 
@@ -362,31 +387,19 @@ Allow the runtime user to read this release without making it writable:
 chmod -R g+rX "/srv/family-notes/releases/$RELEASE_ID"
 ```
 
-In the still-open root session, load the protected environment and run the
-pre-deploy checks as the runtime user:
+Run the protected pre-deploy checks through the deployment helper:
 
 ```bash
-set -a
-. /etc/family-notes/env
-set +a
-cd /srv/family-notes/releases/<RELEASE_ID>
-runuser -u familynotes -- .venv/bin/python manage.py check --deploy
-runuser -u familynotes -- .venv/bin/python manage.py makemigrations --check --dry-run
+sudo -n /usr/local/sbin/family-notes-deploy check "$RELEASE_ID"
 ```
 
-The root shell passes the loaded environment to the `familynotes` process; the
+The helper passes the protected environment to the `familynotes` process; the
 deployment account never receives direct read access to the secrets file.
 
-Before the first migration, make a database dump in the root session:
+Before the first migration, make and verify a database dump:
 
 ```bash
-set -a
-. /etc/family-notes/env
-set +a
-install -d -m 0700 /var/backups/family-notes
-PGPASSWORD="$DB_PASSWORD" pg_dump -Fc -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAME" \
-  -f "/var/backups/family-notes/pre-first-deploy.dump"
-test -s /var/backups/family-notes/pre-first-deploy.dump
+sudo -n /usr/local/sbin/family-notes-deploy backup "$RELEASE_ID"
 ```
 
 ## 8. Configure systemd
@@ -418,26 +431,20 @@ NoNewPrivileges=true
 WantedBy=multi-user.target
 ```
 
-Activate the release, but run database/static setup before starting web traffic:
+During the one-time bootstrap, enable the service without starting it:
 
 ```bash
-ln -sfn /srv/family-notes/releases/<RELEASE_ID> /srv/family-notes/current
 systemctl daemon-reload
 systemctl enable family-notes
 ```
 
-Load the same protected environment and run management commands as the application
-user:
+Return to the `deploy` session and activate the release. The helper runs
+migrations and static collection as `familynotes`, switches the `current`
+symlink, restarts the service, and verifies that it is active:
 
 ```bash
-set -a
-. /etc/family-notes/env
-set +a
-cd /srv/family-notes/current
-runuser -u familynotes -- .venv/bin/python manage.py migrate --noinput
-runuser -u familynotes -- .venv/bin/python manage.py collectstatic --noinput
-systemctl start family-notes
-systemctl status family-notes --no-pager
+sudo -n /usr/local/sbin/family-notes-deploy activate "$RELEASE_ID"
+sudo -n /usr/local/sbin/family-notes-deploy status
 ```
 
 If `collectstatic` fails because `STATIC_ROOT` is missing, stop and fix the app;
@@ -488,13 +495,41 @@ listener, or Certbot. Mikrus accepts public HTTPS for `<PUBLIC_HOST>` and forwar
 plain HTTP to port `20121`. For a later dedicated Mikrus subdomain, select port
 `20121` and plain HTTP in the panel.
 
+## Automated Subsequent Releases
+
+After the one-time server bootstrap is complete, use the repository-owned release
+script for every deployment. From the development machine, confirm the approved
+commit is pushed, then stream the script to a single SSH session as `deploy`:
+
+```bash
+RELEASE_COMMIT="$(git rev-parse HEAD)"
+git merge-base --is-ancestor "$RELEASE_COMMIT" origin/master
+ssh familynotes-mikrus sh -s -- "$RELEASE_COMMIT" \
+  < scripts/deployment/release.sh
+```
+
+The script requires a full commit SHA and confirms that it is reachable from the
+server's freshly fetched `master`. It creates a timestamped detached worktree,
+installs locked production dependencies, runs deployment and migration checks,
+creates a verified database dump, applies migrations, collects static files,
+switches the active release, restarts the service, and checks the Unix-socket
+health endpoint. Protected operations go through
+`/usr/local/sbin/family-notes-deploy`; the SSH session itself never runs as root
+and cannot read `/etc/family-notes/env`.
+
+If the script fails before activation, it removes the incomplete worktree. Once
+activation starts, it leaves the release and backup in place for diagnosis
+because migrations may already have run. Inspect status and logs before deciding
+whether to roll forward or use the documented application rollback.
+
 ## 10. Verify Before Calling the Deployment Complete
 
 On the VPS:
 
 ```bash
-sudo systemctl is-active family-notes nginx
-sudo journalctl -u family-notes -n 100 --no-pager
+sudo -n /usr/local/sbin/family-notes-deploy status
+systemctl is-active nginx
+sudo -n /usr/local/sbin/family-notes-deploy logs
 curl --unix-socket /run/family-notes/gunicorn.sock \
   -H 'Host: <PUBLIC_HOST>' \
   -H 'X-Forwarded-Proto: https' \
@@ -516,24 +551,23 @@ logs for secrets or database passwords before creating real family data.
 Finally, reboot once and repeat the checks:
 
 ```bash
-sudo reboot
+sudo -n /usr/local/sbin/family-notes-deploy reboot
 ```
 
 ## 11. Roll Back the Application
 
-In a root session, list releases and identify the previous known-good directory:
+As `deploy`, list releases and identify the previous known-good directory:
 
 ```bash
 ls -1dt /srv/family-notes/releases/*
 readlink -f /srv/family-notes/current
 ```
 
-Switch only the application release, then verify:
+Switch only the application release through the restricted helper, then verify:
 
 ```bash
-ln -sfn /srv/family-notes/releases/<PREVIOUS_RELEASE_ID> /srv/family-notes/current
-systemctl restart family-notes
-systemctl status family-notes --no-pager
+sudo -n /usr/local/sbin/family-notes-deploy rollback <PREVIOUS_RELEASE_ID>
+sudo -n /usr/local/sbin/family-notes-deploy status
 curl -fsS https://<PUBLIC_HOST>/healthz/
 ```
 

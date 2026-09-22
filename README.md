@@ -80,3 +80,11 @@ uv run --locked pip-audit
 Follow the [first-deployment runbook](context/changes/deployment/mikrus-runbook.md)
 after completing its application-readiness checklist. It separates values copied
 from the Mikrus panel, commands run locally, and commands run on the VPS.
+
+After the server is bootstrapped, deploy an approved full commit SHA through the
+repository-owned release script:
+
+```bash
+ssh familynotes-mikrus sh -s -- "<FULL_COMMIT_SHA>" \
+  < scripts/deployment/release.sh
+```

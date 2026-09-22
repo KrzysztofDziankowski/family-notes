@@ -1,0 +1,104 @@
+#!/bin/sh
+set -eu
+
+RELEASES=/srv/family-notes/releases
+CURRENT=/srv/family-notes/current
+ENV_FILE=/etc/family-notes/env
+BACKUPS=/var/backups/family-notes
+
+fail() {
+    echo "family-notes-deploy: $*" >&2
+    exit 1
+}
+
+validate_release() {
+    release_id=${1:-}
+    case "$release_id" in
+        [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+        *) fail "invalid release ID: $release_id" ;;
+    esac
+    release_dir="$RELEASES/$release_id"
+    [ -d "$release_dir" ] || fail "release does not exist: $release_id"
+    [ -x "$release_dir/.venv/bin/python" ] || fail "release virtual environment is missing"
+    [ -f "$release_dir/manage.py" ] || fail "manage.py is missing"
+}
+
+load_environment() {
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+}
+
+run_manage() {
+    release_dir=$1
+    shift
+    runuser -u familynotes -- sh -c 'cd "$1" && shift && exec .venv/bin/python manage.py "$@"' sh "$release_dir" "$@"
+}
+
+command=${1:-}
+case "$command" in
+    check)
+        [ "$#" -eq 2 ] || fail "usage: $0 check RELEASE_ID"
+        validate_release "$2"
+        load_environment
+        run_manage "$release_dir" check --deploy
+        run_manage "$release_dir" makemigrations --check --dry-run
+        ;;
+    backup)
+        [ "$#" -eq 2 ] || fail "usage: $0 backup RELEASE_ID"
+        validate_release "$2"
+        load_environment
+        install -d -o root -g root -m 0700 "$BACKUPS"
+        umask 077
+        backup_file="$BACKUPS/pre-release-$2.dump"
+        [ ! -e "$backup_file" ] || fail "backup already exists: $backup_file"
+        PGPASSWORD="$DB_PASSWORD" pg_dump -Fc -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAME" -f "$backup_file"
+        test -s "$backup_file" || fail "backup is empty: $backup_file"
+        echo "$backup_file"
+        ;;
+    activate)
+        [ "$#" -eq 2 ] || fail "usage: $0 activate RELEASE_ID"
+        validate_release "$2"
+        load_environment
+        run_manage "$release_dir" migrate --noinput
+        run_manage "$release_dir" collectstatic --noinput
+        ln -sfn "$release_dir" "$CURRENT"
+        systemctl restart family-notes
+        systemctl is-active --quiet family-notes
+        ;;
+    rollback)
+        [ "$#" -eq 2 ] || fail "usage: $0 rollback RELEASE_ID"
+        validate_release "$2"
+        ln -sfn "$release_dir" "$CURRENT"
+        systemctl restart family-notes
+        systemctl is-active --quiet family-notes
+        ;;
+    status)
+        [ "$#" -eq 1 ] || fail "usage: $0 status"
+        readlink -f "$CURRENT"
+        systemctl status family-notes --no-pager
+        ;;
+    logs)
+        [ "$#" -eq 1 ] || fail "usage: $0 logs"
+        journalctl -u family-notes -n 100 --no-pager
+        ;;
+    health)
+        [ "$#" -eq 1 ] || fail "usage: $0 health"
+        load_environment
+        health_host=${DJANGO_ALLOWED_HOSTS%%,*}
+        [ -n "$health_host" ] || fail "DJANGO_ALLOWED_HOSTS is empty"
+        curl --fail --silent --show-error \
+            --unix-socket /run/family-notes/gunicorn.sock \
+            -H "Host: $health_host" \
+            -H 'X-Forwarded-Proto: https' \
+            http://localhost/healthz/
+        ;;
+    reboot)
+        [ "$#" -eq 1 ] || fail "usage: $0 reboot"
+        systemctl reboot
+        ;;
+    *)
+        fail "usage: $0 {check|backup|activate|rollback|status|logs|health|reboot} [RELEASE_ID]"
+        ;;
+esac
