@@ -58,6 +58,7 @@ SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '3600' if not 
 
 INSTALLED_APPS = [
     'family_notes.apps.FamilyNotesAdminConfig',
+    'family_access.apps.FamilyAccessConfig',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',

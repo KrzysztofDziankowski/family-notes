@@ -309,31 +309,31 @@ This is the first product schema migration. No existing family data needs migrat
 
 #### Automated
 
-- [x] 1.1 `uv sync` completes with the new locked auth dependency.
-- [x] 1.2 `uv run python manage.py check` passes.
-- [x] 1.3 `uv run python manage.py makemigrations --check --dry-run` shows only expected migration state for later phases.
-- [x] 1.4 Existing home and health tests still pass after route changes.
-- [x] 1.5 Admin route tests assert unauthenticated users cannot enter admin and active superusers can reach it.
+- [x] 1.1 `uv sync` completes with the new locked auth dependency. — 41495db
+- [x] 1.2 `uv run python manage.py check` passes. — 41495db
+- [x] 1.3 `uv run python manage.py makemigrations --check --dry-run` shows only expected migration state for later phases. — 41495db
+- [x] 1.4 Existing home and health tests still pass after route changes. — 41495db
+- [x] 1.5 Admin route tests assert unauthenticated users cannot enter admin and active superusers can reach it. — 41495db
 
 #### Manual
 
-- [x] 1.6 Operator can identify the Google OAuth redirect URI needed for provider setup.
-- [x] 1.7 Production documentation no longer claims `/admin/` must return 404.
-- [x] 1.8 No provider secret or real family identity appears in tracked files.
+- [x] 1.6 Operator can identify the Google OAuth redirect URI needed for provider setup. — 41495db
+- [x] 1.7 Production documentation no longer claims `/admin/` must return 404. — 41495db
+- [x] 1.8 No provider secret or real family identity appears in tracked files. — 41495db
 
 ### Phase 2: Family Membership Schema and Admin Setup
 
 #### Automated
 
-- [ ] 2.1 `uv run python manage.py makemigrations --check --dry-run` confirms migrations are present after model creation.
-- [ ] 2.2 `uv run python manage.py test` covers `Family` and `FamilyMember` creation, role choices, string output, active membership uniqueness, and user-to-membership mapping.
-- [ ] 2.3 Tests prove parent and child users do not receive admin access unless separately made superusers.
+- [x] 2.1 `uv run python manage.py makemigrations --check --dry-run` confirms migrations are present after model creation.
+- [x] 2.2 `uv run python manage.py test` covers `Family` and `FamilyMember` creation, role choices, string output, active membership uniqueness, and user-to-membership mapping.
+- [x] 2.3 Tests prove parent and child users do not receive admin access unless separately made superusers.
 
 #### Manual
 
-- [ ] 2.4 Superuser can create the MVP family and assign five users as parent/child members in Django admin.
-- [ ] 2.5 Normal parent/child accounts cannot enter Django admin.
-- [ ] 2.6 Admin setup flow does not require committing family member names or emails.
+- [x] 2.4 Superuser can create the MVP family and assign five users as parent/child members in Django admin.
+- [x] 2.5 Normal parent/child accounts cannot enter Django admin.
+- [x] 2.6 Admin setup flow does not require committing family member names or emails.
 
 ### Phase 3: Access Helpers and Account Status Route
 
