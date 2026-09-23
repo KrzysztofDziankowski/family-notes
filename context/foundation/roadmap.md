@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 1
 status: draft
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-23
 prd_version: 1
 main_goal: speed
 top_blocker: capacity
@@ -39,7 +39,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 
 | ID   | Change ID                            | Outcome (user can ...)                                                    | Prerequisites | PRD refs                         | Status   |
 | ---- | ------------------------------------ | ------------------------------------------------------------------------- | ------------- | -------------------------------- | -------- |
-| F-01 | identity-and-family-access-contract  | (foundation) family identity, roles, and scoped access contract exist      | -             | FR-001, FR-002, FR-008, Access Control, NFR family privacy | ready    |
+| F-01 | identity-and-family-access-contract  | (foundation) family identity, roles, and scoped access contract exist      | -             | FR-001, FR-002, FR-008, Access Control, NFR family privacy | planning |
 | F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | ready    |
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | ready    |
 | S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | proposed |
@@ -82,7 +82,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** Sequenced first because every family-data path depends on identity and scoped access; the risk is overbuilding family administration that the PRD explicitly defers.
-- **Status:** ready
+- **Status:** planning
 
 ### F-02: Classification Privacy Boundary
 
