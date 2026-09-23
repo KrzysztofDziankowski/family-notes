@@ -309,17 +309,17 @@ This is the first product schema migration. No existing family data needs migrat
 
 #### Automated
 
-- [ ] 1.1 `uv sync` completes with the new locked auth dependency.
-- [ ] 1.2 `uv run python manage.py check` passes.
-- [ ] 1.3 `uv run python manage.py makemigrations --check --dry-run` shows only expected migration state for later phases.
-- [ ] 1.4 Existing home and health tests still pass after route changes.
-- [ ] 1.5 Admin route tests assert unauthenticated users cannot enter admin and active superusers can reach it.
+- [x] 1.1 `uv sync` completes with the new locked auth dependency.
+- [x] 1.2 `uv run python manage.py check` passes.
+- [x] 1.3 `uv run python manage.py makemigrations --check --dry-run` shows only expected migration state for later phases.
+- [x] 1.4 Existing home and health tests still pass after route changes.
+- [x] 1.5 Admin route tests assert unauthenticated users cannot enter admin and active superusers can reach it.
 
 #### Manual
 
-- [ ] 1.6 Operator can identify the Google OAuth redirect URI needed for provider setup.
-- [ ] 1.7 Production documentation no longer claims `/admin/` must return 404.
-- [ ] 1.8 No provider secret or real family identity appears in tracked files.
+- [x] 1.6 Operator can identify the Google OAuth redirect URI needed for provider setup.
+- [x] 1.7 Production documentation no longer claims `/admin/` must return 404.
+- [x] 1.8 No provider secret or real family identity appears in tracked files.
 
 ### Phase 2: Family Membership Schema and Admin Setup
 

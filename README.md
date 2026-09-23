@@ -47,7 +47,45 @@ Start the development server:
 uv run python manage.py runserver '[::]:20121'
 ```
 
-Open <http://[::1]:20121/> in your browser. The project is currently a Django scaffold, so the default Django startup page is expected.
+Open <http://[::1]:20121/> in your browser.
+
+## Test authentication locally
+
+In Google Cloud Console, configure the Google Auth Platform consent screen and
+create an OAuth client with the **Web application** type. While the app is in
+testing mode, add each Google account that may sign in as a test user.
+
+Register this authorized redirect URI for the local server:
+
+```text
+http://localhost:20121/accounts/google/login/callback/
+```
+
+The scheme, hostname, port, path, and trailing slash must exactly match the URL
+used in the browser. Add the client credentials to `.env`:
+
+```dotenv
+GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+```
+
+Apply migrations and create a local admin account if needed:
+
+```bash
+uv run python manage.py migrate
+uv run python manage.py createsuperuser
+```
+
+With the local server running, verify these routes:
+
+- <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.
+- <http://localhost:20121/account/> requires authentication and shows the temporary membership status.
+- <http://localhost:20121/admin/> accepts the credentials created by `createsuperuser`; normal staff and family accounts are denied.
+- <http://localhost:20121/healthz/> returns `{"status": "ok"}` while the database is available.
+
+For production, register
+`https://YOUR_DOMAIN/accounts/google/login/callback/` separately and store the
+real credentials only in the protected server environment and password manager.
 
 ## Verify the project
 

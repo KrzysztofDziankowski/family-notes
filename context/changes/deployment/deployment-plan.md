@@ -80,9 +80,11 @@ DB_SSLMODE
 DB_NAME
 DB_USER
 DB_PASSWORD
+GOOGLE_OAUTH_CLIENT_ID
+GOOGLE_OAUTH_CLIENT_SECRET
 ```
 
-Authentication-provider and AI-provider variables are not required until those integrations are implemented. Add their exact names and real values at that time; never deploy placeholders. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
+Google OAuth is configured with the production redirect URI `https://<PUBLIC_HOST>/accounts/google/login/callback/`. Store the OAuth client ID and secret only in the protected production environment file; never deploy placeholders or commit either value. AI-provider variables are not required until that integration is implemented. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
 
 ## Release Procedure
 
@@ -140,7 +142,7 @@ Production acceptance criteria:
 - `manage.py check --deploy` reports no unresolved production-critical findings.
 - Local and public `/healthz/` checks return success while the database is available and fail without disclosing details when it is unavailable.
 - The Mikrus HTTPS URL loads without certificate warnings, redirects or treats HTTP securely as supported by the Mikrus subdomain layer, and Django recognizes proxied requests as secure.
-- The homepage renders correctly through nginx, and `/admin/` returns 404 because the Django administration endpoint is intentionally disabled.
+- The homepage renders correctly through nginx. `/admin/` is intentionally exposed over HTTPS for setup, redirects anonymous users to login, and is accessible only to active superusers; normal family members must not use or enter it.
 - The service survives a process restart and VPS reboot.
 - A database dump can be restored into a disposable database and pass a basic integrity check.
 - Switching to the previous application release restores service without changing the database.
@@ -148,7 +150,7 @@ Production acceptance criteria:
 
 Current acceptance status:
 
-- Confirmed for release `20260922T063107Z-513f9854b2d2`: exact commit `513f9854b2d28489abb48873c23e24259f491d25`; local Django checks, migration check, and all four tests; production deployment check with only the expected HSTS subdomain/preload warnings; verified non-empty database dump; no pending migrations; static collection; active `family-notes` service with two Gunicorn workers; successful deployment-helper health check after service startup; successful internal and public `/healthz/` responses; homepage HTTP 200 over HTTPS after activation; and disabled `/admin/` route returning HTTP 404 over HTTPS.
+- Confirmed for release `20260922T063107Z-513f9854b2d2`: exact commit `513f9854b2d28489abb48873c23e24259f491d25`; local Django checks, migration check, and all four tests; production deployment check with only the expected HSTS subdomain/preload warnings; verified non-empty database dump; no pending migrations; static collection; active `family-notes` service with two Gunicorn workers; successful deployment-helper health check after service startup; successful internal and public `/healthz/` responses; and homepage HTTP 200 over HTTPS after activation. Google OAuth and superuser-only admin acceptance remain to be evidenced after this auth-enabled release is deployed.
 - Not yet evidenced in the repository: reboot survival, scheduled backup execution, off-provider backup copy, disposable restore drill, external uptime alerting, capacity alerts, and rollback rehearsal.
 
 ## Assumptions and Decisions

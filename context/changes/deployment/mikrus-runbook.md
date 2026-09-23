@@ -78,6 +78,8 @@ Create a private password-manager entry, not a repository file, with:
 | `<DB_NAME>` | `family_notes` unless Mikrus pre-created a fixed database |
 | `<DB_USER>` | `family_notes_app` unless Mikrus pre-created a fixed login |
 | `<DB_PASSWORD>` | new password for the application login |
+| `<GOOGLE_OAUTH_CLIENT_ID>` | Google OAuth web client ID for FamilyNotes |
+| `<GOOGLE_OAUTH_CLIENT_SECRET>` | Google OAuth web client secret for FamilyNotes |
 | `<REPOSITORY_URL>` | HTTPS or SSH Git clone URL |
 | `<RELEASE_COMMIT>` | full Git commit SHA approved for release |
 
@@ -362,10 +364,14 @@ DB_SSLMODE=<DB_SSLMODE>
 DB_NAME=<DB_NAME>
 DB_USER=<DB_USER>
 DB_PASSWORD=<DB_PASSWORD>
+GOOGLE_OAUTH_CLIENT_ID=<GOOGLE_OAUTH_CLIENT_ID>
+GOOGLE_OAUTH_CLIENT_SECRET=<GOOGLE_OAUTH_CLIENT_SECRET>
 ```
 
-Do not add placeholder auth or AI values. Add those only when their integrations
-exist. Protect the file:
+Register `https://<PUBLIC_HOST>/accounts/google/login/callback/` as the authorized
+Google OAuth redirect URI. Keep the real client ID and secret only in this
+protected file and the password manager. Do not add placeholder AI values; add
+those only when that integration exists. Protect the file:
 
 ```bash
 sudo chown root:root /etc/family-notes/env
@@ -548,8 +554,11 @@ curl -I https://<PUBLIC_HOST>/
 ```
 
 Then verify in a browser that `https://<PUBLIC_HOST>/` has no TLS warning and
-loads its CSS. Confirm that `https://<PUBLIC_HOST>/admin/` returns 404. Review
-logs for secrets or database passwords before creating real family data.
+loads its CSS. Confirm that `https://<PUBLIC_HOST>/admin/` is served only over
+HTTPS, redirects an anonymous visitor to login, allows an active superuser to
+enter, and denies normal family members. The admin is an operator-only setup
+surface and must not be used by normal family members. Review logs for secrets,
+OAuth tokens, or database passwords before creating real family data.
 
 Finally, reboot once and repeat the checks:
 
