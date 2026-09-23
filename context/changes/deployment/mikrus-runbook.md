@@ -4,13 +4,13 @@ This is the operator checklist for the first production deployment. Run local
 commands on the development machine and server commands after connecting to the
 Mikrus VPS. Replace every value written as `<LIKE_THIS>` before running a command.
 
-The initial public URL uses Mikrus's automatic `wykr.es` subdomain. It terminates
-HTTPS for the user and forwards plain HTTP to nginx on one of the VPS's assigned
-ports. Do not install Certbot for this setup.
+The public URL uses the dedicated Mikrus subdomain `familynotes.mikrus.dev`.
+Mikrus terminates HTTPS for the user and forwards plain HTTP to nginx on one of
+the VPS's assigned ports. Do not install Certbot for this setup.
 
 ## Deployment Progress
 
-Updated 2026-09-21:
+Updated 2026-09-23:
 
 - [x] Application pre-deployment readiness implemented locally
 - [x] Steps 1-6 completed on Mikrus (reported by the operator)
@@ -18,6 +18,7 @@ Updated 2026-09-21:
 - [x] Step 8: systemd service configured and running
 - [x] Step 9: nginx serving HTTP on port `20121` behind Mikrus HTTPS
 - [x] Step 10: production deployment verified (reported by the operator)
+- [x] Dedicated public hostname changed to `familynotes.mikrus.dev`
 
 ### First Deployment Record
 
@@ -25,14 +26,14 @@ The operator confirmed a successful production deployment on 2026-09-21:
 
 | Item | Deployed value |
 | --- | --- |
-| Public URL | `https://ula121-20121.wykr.es/` |
+| Public URL | `https://familynotes.mikrus.dev/` |
 | VPS | `ula121` |
 | Internal nginx listener | HTTP on `[::]:20121` |
 | Release | `20260921T203945Z-ea1ff26284aa` |
 | Application service | `family-notes.service` using Gunicorn 26.2.0 |
 | Application socket | `/run/family-notes/gunicorn.sock` |
 | Database | Dedicated Mikrus PostgreSQL with restricted application credentials |
-| TLS | Terminated by the Mikrus `wykr.es` frontend |
+| TLS | Terminated by the Mikrus subdomain frontend |
 
 The final deployment required `--no-control-socket` for Gunicorn and explicit
 nginx proxy headers to avoid contradictory HTTP/HTTPS scheme values. Those fixes
@@ -52,7 +53,7 @@ commit SHA as `<RELEASE_COMMIT>`. Review the output of
 `uv run python manage.py check --deploy` under production settings before exposing
 the app publicly.
 
-With the initial `wykr.es` host, Django's deployment check is expected to warn
+With the `mikrus.dev` host, Django's deployment check is expected to warn
 about `SECURE_HSTS_INCLUDE_SUBDOMAINS` and `SECURE_HSTS_PRELOAD`. Leave both off:
 the parent domain is shared with other Mikrus users and is not controlled by
 FamilyNotes. The application still sends HSTS for its own host through
@@ -69,7 +70,7 @@ Create a private password-manager entry, not a repository file, with:
 | `<SSH_HOST>` | SSH hostname shown in the panel |
 | `<SSH_PORT>` | normally `10000 + SERVER_ID` |
 | `<APP_PORT>` | `20121` |
-| `<PUBLIC_HOST>` | `<SERVER_NAME>-20121.wykr.es` |
+| `<PUBLIC_HOST>` | `familynotes.mikrus.dev` |
 | `<DB_HOST>` | dedicated PostgreSQL hostname |
 | `<DB_PORT>` | dedicated PostgreSQL port, commonly `5432` |
 | `<DB_SSLMODE>` | TLS mode required by Mikrus, preferably `require` |
@@ -88,8 +89,10 @@ In the Mikrus panel:
    environment file.
 2. Confirm port `20121` is in the assigned port pool. Additional TCP ports can
    be requested in the panel if both general-purpose ports are occupied.
-3. Open `https://<PUBLIC_HOST>/` only after nginx is configured. The dynamic
-   `wykr.es` name needs no separate DNS or subdomain setup.
+3. In the Mikrus subdomain panel, assign `familynotes.mikrus.dev` to this VPS,
+   select port `20121`, and use plain HTTP for the backend protocol. Open
+   `https://<PUBLIC_HOST>/` only after nginx is configured and the subdomain is
+   active.
 4. Request Strych access in the panel's **Backup** section. This provides 200 MB
    of shared backup space; it is not the only backup destination.
 
@@ -492,8 +495,8 @@ sudo systemctl reload nginx
 The `listen [::]:20121 ipv6only=off` directive accepts both IPv6 and IPv4 traffic.
 This nginx server is HTTP-only: do not add `ssl`, certificate paths, a port `443`
 listener, or Certbot. Mikrus accepts public HTTPS for `<PUBLIC_HOST>` and forwards
-plain HTTP to port `20121`. For a later dedicated Mikrus subdomain, select port
-`20121` and plain HTTP in the panel.
+plain HTTP to port `20121`, as configured for `familynotes.mikrus.dev` in the
+subdomain panel.
 
 ## Automated Subsequent Releases
 
