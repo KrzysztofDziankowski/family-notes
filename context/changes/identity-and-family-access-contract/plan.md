@@ -325,15 +325,15 @@ This is the first product schema migration. No existing family data needs migrat
 
 #### Automated
 
-- [x] 2.1 `uv run python manage.py makemigrations --check --dry-run` confirms migrations are present after model creation.
-- [x] 2.2 `uv run python manage.py test` covers `Family` and `FamilyMember` creation, role choices, string output, active membership uniqueness, and user-to-membership mapping.
-- [x] 2.3 Tests prove parent and child users do not receive admin access unless separately made superusers.
+- [x] 2.1 `uv run python manage.py makemigrations --check --dry-run` confirms migrations are present after model creation. — 5878243
+- [x] 2.2 `uv run python manage.py test` covers `Family` and `FamilyMember` creation, role choices, string output, active membership uniqueness, and user-to-membership mapping. — 5878243
+- [x] 2.3 Tests prove parent and child users do not receive admin access unless separately made superusers. — 5878243
 
 #### Manual
 
-- [x] 2.4 Superuser can create the MVP family and assign five users as parent/child members in Django admin.
-- [x] 2.5 Normal parent/child accounts cannot enter Django admin.
-- [x] 2.6 Admin setup flow does not require committing family member names or emails.
+- [x] 2.4 Superuser can create the MVP family and assign five users as parent/child members in Django admin. — 5878243
+- [x] 2.5 Normal parent/child accounts cannot enter Django admin. — 5878243
+- [x] 2.6 Admin setup flow does not require committing family member names or emails. — 5878243
 
 ### Phase 3: Access Helpers and Account Status Route
 
