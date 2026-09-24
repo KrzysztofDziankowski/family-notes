@@ -339,28 +339,28 @@ This is the first product schema migration. No existing family data needs migrat
 
 #### Automated
 
-- [x] 3.1 Unit tests cover helper behavior for parent, assigned child, other child, inactive membership, unknown authenticated user, and unauthenticated request.
-- [x] 3.2 Route tests cover unauthenticated access, configured parent, configured child, and authenticated no-membership states.
-- [x] 3.3 `uv run python manage.py test` passes.
+- [x] 3.1 Unit tests cover helper behavior for parent, assigned child, other child, inactive membership, unknown authenticated user, and unauthenticated request. — 0e6acb6
+- [x] 3.2 Route tests cover unauthenticated access, configured parent, configured child, and authenticated no-membership states. — 0e6acb6
+- [x] 3.3 `uv run python manage.py test` passes. — 0e6acb6
 
 #### Manual
 
-- [x] 3.4 Signing in as a configured parent shows parent status.
-- [x] 3.5 Signing in as a configured child shows child status.
-- [x] 3.6 Signing in with an unconfigured Google account shows no family data.
+- [x] 3.4 Signing in as a configured parent shows parent status. — 0e6acb6
+- [x] 3.5 Signing in as a configured child shows child status. — 0e6acb6
+- [x] 3.6 Signing in with an unconfigured Google account shows no family data. — 0e6acb6
 
 ### Phase 4: Contract Verification and Operational Finish
 
 #### Automated
 
-- [ ] 4.1 `uv run python manage.py check` passes.
-- [ ] 4.2 `uv run python manage.py makemigrations --check --dry-run` passes with committed migrations.
-- [ ] 4.3 `uv run python manage.py test` passes.
-- [ ] 4.4 `uv run --locked pip-audit` passes after the dependency change.
+- [x] 4.1 `uv run python manage.py check` passes.
+- [x] 4.2 `uv run python manage.py makemigrations --check --dry-run` passes with committed migrations.
+- [x] 4.3 `uv run python manage.py test` passes.
+- [x] 4.4 `uv run --locked pip-audit` passes after the dependency change.
 
 #### Manual
 
-- [ ] 4.5 Superuser can complete admin setup for the one MVP family.
-- [ ] 4.6 Configured parent and child accounts reach the account/status page with correct role display.
-- [ ] 4.7 Unknown authenticated account sees only not-configured state.
-- [ ] 4.8 Deployment docs reflect `/admin/` as intentionally enabled, not a 404.
+- [x] 4.5 Superuser can complete admin setup for the one MVP family.
+- [x] 4.6 Configured parent and child accounts reach the account/status page with correct role display.
+- [x] 4.7 Unknown authenticated account sees only not-configured state.
+- [x] 4.8 Deployment docs reflect `/admin/` as intentionally enabled, not a 404.

@@ -76,10 +76,28 @@ uv run python manage.py migrate
 uv run python manage.py createsuperuser
 ```
 
+### Create the initial family
+
+Family setup is intentionally limited to Django admin for the MVP:
+
+1. Have each parent and child sign in with Google once. Until configured, each
+   account can safely reach `/account/` but sees only the not-configured state.
+2. Sign in to `/admin/` with the superuser account created above.
+3. Under **Family access**, create the single active `Family` used by the MVP.
+4. Create one active `Family member` for each Google user. Select the family,
+   set the display name, and assign either the `Parent` or `Child` role.
+5. Open `/account/` as each configured user and confirm that the expected display
+   name and role appear. An authenticated user without an active membership must
+   continue to see only the not-configured state.
+
+Only active superusers may use `/admin/`. Family membership, including the
+`Parent` role, never grants admin access. Keep the operator account and all real
+OAuth credentials out of tracked files.
+
 With the local server running, verify these routes:
 
 - <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.
-- <http://localhost:20121/account/> requires authentication and shows the temporary membership status.
+- <http://localhost:20121/account/> requires authentication and shows the configured display name and role, or a generic not-configured state.
 - <http://localhost:20121/admin/> accepts the credentials created by `createsuperuser`; normal staff and family accounts are denied.
 - <http://localhost:20121/healthz/> returns `{"status": "ok"}` while the database is available.
 

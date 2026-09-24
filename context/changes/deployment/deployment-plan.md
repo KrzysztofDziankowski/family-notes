@@ -86,6 +86,11 @@ GOOGLE_OAUTH_CLIENT_SECRET
 
 Google OAuth is configured with the production redirect URI `https://<PUBLIC_HOST>/accounts/google/login/callback/`. Store the OAuth client ID and secret only in the protected production environment file; never deploy placeholders or commit either value. AI-provider variables are not required until that integration is implemented. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
 
+Before deploying authentication, confirm that `GOOGLE_OAUTH_CLIENT_ID` and
+`GOOGLE_OAUTH_CLIENT_SECRET` are both populated with the production web client
+values and that the exact callback URI above is registered with Google. Do not
+print either variable while checking it.
+
 ## Release Procedure
 
 Every production release is initiated from the development machine with
@@ -143,6 +148,8 @@ Production acceptance criteria:
 - Local and public `/healthz/` checks return success while the database is available and fail without disclosing details when it is unavailable.
 - The Mikrus HTTPS URL loads without certificate warnings, redirects or treats HTTP securely as supported by the Mikrus subdomain layer, and Django recognizes proxied requests as secure.
 - The homepage renders correctly through nginx. `/admin/` is intentionally exposed over HTTPS for setup, redirects anonymous users to login, and is accessible only to active superusers; normal family members must not use or enter it.
+- Google sign-in uses populated production provider variables and the registered HTTPS callback. A configured parent and child each see the correct display name and role at `/account/`; an authenticated account without an active membership sees only the generic not-configured state.
+- Application, nginx, and system logs contain no secrets, OAuth tokens, authorization headers, database passwords, family-entry text, or AI-provider payloads after the authentication and account-status checks.
 - The service survives a process restart and VPS reboot.
 - A database dump can be restored into a disposable database and pass a basic integrity check.
 - Switching to the previous application release restores service without changing the database.

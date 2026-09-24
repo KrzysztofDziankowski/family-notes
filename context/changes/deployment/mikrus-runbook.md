@@ -46,6 +46,9 @@ The application now provides:
 - `STATIC_ROOT` controlled by `DJANGO_STATIC_ROOT`
 - proxy-aware HTTPS, secure production cookies, SSL redirect, and HSTS settings
 - a database-backed `/healthz/` endpoint with detail-free failure responses
+- Google authentication configured through environment variables, with
+  `/account/` as the protected membership-status route
+- `/admin/` as an intentionally enabled, superuser-only setup surface
 - the Git `origin` remote used to publish commits for the Mikrus repository mirror
 
 Before step 7, commit and push these deployment changes, then use that exact full
@@ -371,7 +374,9 @@ GOOGLE_OAUTH_CLIENT_SECRET=<GOOGLE_OAUTH_CLIENT_SECRET>
 Register `https://<PUBLIC_HOST>/accounts/google/login/callback/` as the authorized
 Google OAuth redirect URI. Keep the real client ID and secret only in this
 protected file and the password manager. Do not add placeholder AI values; add
-those only when that integration exists. Protect the file:
+those only when that integration exists. Before deploying authentication, confirm
+that both Google variables are populated with the production web client values
+without printing them. Protect the file:
 
 ```bash
 sudo chown root:root /etc/family-notes/env
@@ -557,8 +562,17 @@ Then verify in a browser that `https://<PUBLIC_HOST>/` has no TLS warning and
 loads its CSS. Confirm that `https://<PUBLIC_HOST>/admin/` is served only over
 HTTPS, redirects an anonymous visitor to login, allows an active superuser to
 enter, and denies normal family members. The admin is an operator-only setup
-surface and must not be used by normal family members. Review logs for secrets,
-OAuth tokens, or database passwords before creating real family data.
+surface and must not be used by normal family members.
+
+Complete the one-family setup in admin, then verify that a configured parent and
+child each see the expected display name and role at
+`https://<PUBLIC_HOST>/account/`. Sign in with an account that has no active
+membership and confirm that it sees only the generic not-configured state and no
+family data.
+
+Review application, nginx, and system logs after these checks. They must contain
+no secrets, OAuth tokens, authorization headers, database passwords, family-entry
+text, or AI-provider payloads.
 
 Finally, reboot once and repeat the checks:
 
