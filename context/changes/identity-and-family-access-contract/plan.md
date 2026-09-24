@@ -353,14 +353,14 @@ This is the first product schema migration. No existing family data needs migrat
 
 #### Automated
 
-- [x] 4.1 `uv run python manage.py check` passes.
-- [x] 4.2 `uv run python manage.py makemigrations --check --dry-run` passes with committed migrations.
-- [x] 4.3 `uv run python manage.py test` passes.
-- [x] 4.4 `uv run --locked pip-audit` passes after the dependency change.
+- [x] 4.1 `uv run python manage.py check` passes. — 7858eb0
+- [x] 4.2 `uv run python manage.py makemigrations --check --dry-run` passes with committed migrations. — 7858eb0
+- [x] 4.3 `uv run python manage.py test` passes. — 7858eb0
+- [x] 4.4 `uv run --locked pip-audit` passes after the dependency change. — 7858eb0
 
 #### Manual
 
-- [x] 4.5 Superuser can complete admin setup for the one MVP family.
-- [x] 4.6 Configured parent and child accounts reach the account/status page with correct role display.
-- [x] 4.7 Unknown authenticated account sees only not-configured state.
-- [x] 4.8 Deployment docs reflect `/admin/` as intentionally enabled, not a 404.
+- [x] 4.5 Superuser can complete admin setup for the one MVP family. — 7858eb0
+- [x] 4.6 Configured parent and child accounts reach the account/status page with correct role display. — 7858eb0
+- [x] 4.7 Unknown authenticated account sees only not-configured state. — 7858eb0
+- [x] 4.8 Deployment docs reflect `/admin/` as intentionally enabled, not a 404. — 7858eb0
