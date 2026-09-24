@@ -1,8 +1,17 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
+from .access import (
+    can_read_assigned_child,
+    get_active_membership,
+    is_parent,
+    require_active_membership,
+    scope_queryset_to_family,
+)
 from .models import Family, FamilyMember
 
 
@@ -121,3 +130,128 @@ class FamilyMemberAdminAccessTests(TestCase):
             response,
             f"{reverse('admin:login')}?next={reverse('admin:index')}",
         )
+
+
+class FamilyAccessHelperTests(TestCase):
+    def setUp(self):
+        self.family = Family.objects.create(name='The Example Family')
+        self.parent = self._create_member('parent', FamilyMember.Role.PARENT)
+        self.child = self._create_member('child', FamilyMember.Role.CHILD)
+        self.other_child = self._create_member(
+            'other-child',
+            FamilyMember.Role.CHILD,
+        )
+
+    def test_parent_membership_is_active_and_can_read_assigned_child(self):
+        membership = get_active_membership(self.parent.user)
+
+        self.assertEqual(membership, self.parent)
+        self.assertTrue(is_parent(membership))
+        self.assertTrue(can_read_assigned_child(membership, self.child))
+
+    def test_assigned_child_can_read_own_assignment(self):
+        self.assertTrue(can_read_assigned_child(self.child, self.child))
+
+    def test_other_child_cannot_read_assignment(self):
+        self.assertFalse(can_read_assigned_child(self.other_child, self.child))
+
+    def test_inactive_membership_is_not_available(self):
+        self.child.is_active = False
+        self.child.save(update_fields=('is_active',))
+
+        self.assertIsNone(get_active_membership(self.child.user))
+        with self.assertRaises(PermissionDenied):
+            require_active_membership(self.child.user)
+
+    def test_unknown_authenticated_user_is_denied(self):
+        user = get_user_model().objects.create_user(username='unknown')
+
+        self.assertIsNone(get_active_membership(user))
+        with self.assertRaises(PermissionDenied):
+            require_active_membership(user)
+
+    def test_unauthenticated_user_is_denied(self):
+        user = AnonymousUser()
+
+        self.assertIsNone(get_active_membership(user))
+        with self.assertRaises(PermissionDenied):
+            require_active_membership(user)
+
+    def test_queryset_is_scoped_to_membership_family(self):
+        another_family = Family.objects.create(name='Another Family')
+        self._create_member(
+            'another-parent',
+            FamilyMember.Role.PARENT,
+            family=another_family,
+        )
+
+        scoped = scope_queryset_to_family(FamilyMember.objects.all(), self.parent)
+
+        self.assertQuerySetEqual(
+            scoped.order_by('pk'),
+            [self.parent, self.child, self.other_child],
+        )
+
+    def _create_member(self, username, role, family=None):
+        user = get_user_model().objects.create_user(
+            username=username,
+            email=f'{username}@example.test',
+        )
+        return FamilyMember.objects.create(
+            user=user,
+            family=family or self.family,
+            role=role,
+            display_name=username.replace('-', ' ').title(),
+        )
+
+
+class AccountStatusRouteTests(TestCase):
+    def setUp(self):
+        self.family = Family.objects.create(name='The Example Family')
+
+    def test_unauthenticated_user_is_redirected_to_login(self):
+        response = self.client.get(reverse('account_status'))
+
+        self.assertRedirects(
+            response,
+            f"{reverse('account_login')}?next={reverse('account_status')}",
+        )
+
+    def test_configured_parent_sees_display_name_and_role(self):
+        user = self._create_member('parent', FamilyMember.Role.PARENT, 'Alex')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('account_status'))
+
+        self.assertContains(response, 'Alex')
+        self.assertContains(response, 'Role: Parent')
+        self.assertTemplateUsed(response, 'family_access/account_status.html')
+
+    def test_configured_child_sees_display_name_and_role(self):
+        user = self._create_member('child', FamilyMember.Role.CHILD, 'Sam')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('account_status'))
+
+        self.assertContains(response, 'Sam')
+        self.assertContains(response, 'Role: Child')
+
+    def test_authenticated_user_without_membership_sees_generic_status(self):
+        user = get_user_model().objects.create_user(username='unconfigured')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('account_status'))
+
+        self.assertContains(response, 'Your family membership is not configured yet.')
+        self.assertNotContains(response, self.family.name)
+        self.assertNotContains(response, 'Role:')
+
+    def _create_member(self, username, role, display_name):
+        user = get_user_model().objects.create_user(username=username)
+        FamilyMember.objects.create(
+            user=user,
+            family=self.family,
+            role=role,
+            display_name=display_name,
+        )
+        return user

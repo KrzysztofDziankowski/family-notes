@@ -17,11 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
-from family_notes.views import account_status, healthz, home
+from family_notes.views import healthz, home
 
 urlpatterns = [
     path('', home, name='home'),
-    path('account/', account_status, name='account_status'),
+    path('account/', include('family_access.urls')),
     path('accounts/', include('allauth.urls')),
     path('admin/', admin.site.urls),
     path('healthz/', healthz, name='healthz'),

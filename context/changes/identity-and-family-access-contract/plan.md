@@ -339,15 +339,15 @@ This is the first product schema migration. No existing family data needs migrat
 
 #### Automated
 
-- [ ] 3.1 Unit tests cover helper behavior for parent, assigned child, other child, inactive membership, unknown authenticated user, and unauthenticated request.
-- [ ] 3.2 Route tests cover unauthenticated access, configured parent, configured child, and authenticated no-membership states.
-- [ ] 3.3 `uv run python manage.py test` passes.
+- [x] 3.1 Unit tests cover helper behavior for parent, assigned child, other child, inactive membership, unknown authenticated user, and unauthenticated request.
+- [x] 3.2 Route tests cover unauthenticated access, configured parent, configured child, and authenticated no-membership states.
+- [x] 3.3 `uv run python manage.py test` passes.
 
 #### Manual
 
-- [ ] 3.4 Signing in as a configured parent shows parent status.
-- [ ] 3.5 Signing in as a configured child shows child status.
-- [ ] 3.6 Signing in with an unconfigured Google account shows no family data.
+- [x] 3.4 Signing in as a configured parent shows parent status.
+- [x] 3.5 Signing in as a configured child shows child status.
+- [x] 3.6 Signing in with an unconfigured Google account shows no family data.
 
 ### Phase 4: Contract Verification and Operational Finish
 
