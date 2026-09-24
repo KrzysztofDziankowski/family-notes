@@ -3,7 +3,7 @@
 ## Deployment Outcome
 
 Successfully deployed the latest release on 2026-09-22 at
-`https://inodzik.bieda.it/` using commit
+`https://familynotes.mikrus.dev/` using commit
 `513f9854b2d28489abb48873c23e24259f491d25` and release
 `20260922T063107Z-513f9854b2d2`. The live stack is nginx on HTTP port `20121`,
 Gunicorn under `family-notes.service`, a Unix application socket, Mikrus-managed
@@ -51,7 +51,7 @@ The following steps require the account owner and must complete before the first
 - Open the purchased dedicated Mikrus PostgreSQL service and record its host, port, TLS mode, capacity, administrative credentials, and backup capabilities in a password manager.
 - Create a dedicated `family_notes` database owned by a restricted `family_notes_app` login. The application login must not have superuser, database-creation, role-creation, or replication privileges.
 - Restrict database network access to the application VPS when the service supports source allow-listing. Never expose PostgreSQL for routine developer access.
-- Use `inodzik.bieda.it`, the hostname configured in `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS`, backed by nginx listening on plain HTTP at `[::]:20121`. Mikrus terminates public HTTPS; do not install Certbot or configure nginx TLS. The older automatic hostname `ula121-20121.wykr.es` is not an accepted application host and returns HTTP 400.
+- Use `familynotes.mikrus.dev`, the hostname configured in `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS`, backed by nginx listening on plain HTTP at `[::]:20121`. Mikrus terminates public HTTPS; do not install Certbot or configure nginx TLS. The older automatic hostname `ula121-20121.wykr.es` is not an accepted application host and returns HTTP 400.
 - Enable Mikr.us backup space if available and choose a separate destination for encrypted off-provider database copies.
 - Add the operator's SSH public key before disabling password-based SSH access. Preserve provider console access as the recovery path.
 - Treat direct root SSH from the development machine as unavailable. Perform privileged bootstrap and exceptional repair through the Mikrus provider console or another owner-authorized root-capable path; do not broaden the `deploy` account's sudo permissions as a workaround.
@@ -84,7 +84,7 @@ GOOGLE_OAUTH_CLIENT_ID
 GOOGLE_OAUTH_CLIENT_SECRET
 ```
 
-Google OAuth is configured with the production redirect URI `https://<PUBLIC_HOST>/accounts/google/login/callback/`. Store the OAuth client ID and secret only in the protected production environment file; never deploy placeholders or commit either value. AI-provider variables are not required until that integration is implemented. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
+Google OAuth is configured with the production redirect URI `https://familynotes.mikrus.dev/accounts/google/login/callback/`. Store the OAuth client ID and secret only in the protected production environment file; never deploy placeholders or commit either value. AI-provider variables are not required until that integration is implemented. Store only the restricted application database credentials in this file; dedicated PostgreSQL administrator credentials remain in the password manager and are used only for database administration and recovery.
 
 Before deploying authentication, confirm that `GOOGLE_OAUTH_CLIENT_ID` and
 `GOOGLE_OAUTH_CLIENT_SECRET` are both populated with the production web client
