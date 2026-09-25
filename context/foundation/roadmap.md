@@ -40,7 +40,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | ID   | Change ID                            | Outcome (user can ...)                                                    | Prerequisites | PRD refs                         | Status   |
 | ---- | ------------------------------------ | ------------------------------------------------------------------------- | ------------- | -------------------------------- | -------- |
 | F-01 | identity-and-family-access-contract  | (foundation) family identity, roles, and scoped access contract exist      | -             | FR-001, FR-002, FR-008, Access Control, NFR family privacy | in-progress |
-| F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | ready    |
+| F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | planning |
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | in-progress |
 | S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | proposed |
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | proposed |
@@ -95,7 +95,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** Sequenced before the first capture slice because classification input is sensitive; the risk is letting provider details leak into product planning instead of keeping the boundary minimal.
-- **Status:** ready
+- **Status:** planning
 
 ### F-03: Production Health Release Gate
 
