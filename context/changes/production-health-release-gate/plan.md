@@ -233,13 +233,13 @@ The installed retry library and helper form one operational version and must be 
 
 #### Automated
 
-- [x] 2.1 Shell syntax validation passes for the library, deployment helper, release script, and test harness.
-- [x] 2.2 Focused Django health tests and the complete Django test suite pass without changing the `/healthz/` contract.
-- [x] 2.3 Deployment-script tests prove that exhausted readiness prevents completion, exits nonzero, emits diagnostic guidance, and never invokes rollback.
+- [x] 2.1 Shell syntax validation passes for the library, deployment helper, release script, and test harness. — eea05c1
+- [x] 2.2 Focused Django health tests and the complete Django test suite pass without changing the `/healthz/` contract. — eea05c1
+- [x] 2.3 Deployment-script tests prove that exhausted readiness prevents completion, exits nonzero, emits diagnostic guidance, and never invokes rollback. — eea05c1
 
 #### Manual
 
-- [x] 2.4 A local mocked release rehearsal shows timestamped stage output without secrets, response bodies, or automatic log dumping.
+- [x] 2.4 A local mocked release rehearsal shows timestamped stage output without secrets, response bodies, or automatic log dumping. — eea05c1
 
 ### Phase 3: Operator Documentation and Acceptance
 
