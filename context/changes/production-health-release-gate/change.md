@@ -1,9 +1,9 @@
 ---
 change_id: production-health-release-gate
 title: Production health release gate
-status: planned
+status: implementing
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-25
 archived_at: null
 ---
 

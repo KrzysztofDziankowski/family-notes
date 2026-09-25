@@ -226,8 +226,8 @@ The installed retry library and helper form one operational version and must be 
 
 #### Automated
 
-- [ ] 1.1 Shell syntax validation passes for the readiness library and test harness.
-- [ ] 1.2 The dependency-free readiness harness passes every success, recovery, timeout, and boundary scenario.
+- [x] 1.1 Shell syntax validation passes for the readiness library and test harness.
+- [x] 1.2 The dependency-free readiness harness passes every success, recovery, timeout, and boundary scenario.
 
 ### Phase 2: Release Integration and Failure Contract
 
