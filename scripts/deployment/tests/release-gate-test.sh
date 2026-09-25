@@ -56,6 +56,7 @@ fake_probe() {
 
 fake_sleep() {
     printf '%s\n' "$1" >>"$CASE_DIR/sleeps"
+    return "${FAKE_SLEEP_RESULT:-0}"
 }
 
 run_success() {
@@ -109,6 +110,20 @@ new_case clamped-sleep 100 129 130
 set_probe_results 1
 run_failure clamped-sleep
 assert_eq 1 "$(cat "$CASE_DIR/sleeps")" "sleep was not clamped to remaining budget"
+
+new_case failed-sleep 100 100 102 102
+set_probe_results 1 0
+FAKE_SLEEP_RESULT=1
+run_failure failed-sleep
+FAKE_SLEEP_RESULT=0
+assert_eq 1 "$(wc -l <"$CASE_DIR/budgets" | tr -d ' ')" "failed sleep allowed another probe"
+assert_contains 'readiness gate exhausted' "$CASE_DIR/output" "failed sleep exhaustion missing"
+
+new_case post-sleep-backward-clock 100 100 99
+set_probe_results 1
+run_failure post-sleep-backward-clock
+assert_eq 1 "$(wc -l <"$CASE_DIR/budgets" | tr -d ' ')" "post-sleep clock regression retried"
+assert_contains 'readiness gate exhausted' "$CASE_DIR/output" "post-sleep regression exhaustion missing"
 
 new_case deadline-exhaustion
 : >"$CASE_DIR/clocks"

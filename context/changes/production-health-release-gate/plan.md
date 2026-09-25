@@ -226,20 +226,20 @@ The installed retry library and helper form one operational version and must be 
 
 #### Automated
 
-- [x] 1.1 Shell syntax validation passes for the readiness library and test harness.
-- [x] 1.2 The dependency-free readiness harness passes every success, recovery, timeout, and boundary scenario.
+- [x] 1.1 Shell syntax validation passes for the readiness library and test harness. — 594e833
+- [x] 1.2 The dependency-free readiness harness passes every success, recovery, timeout, and boundary scenario. — 594e833
 
 ### Phase 2: Release Integration and Failure Contract
 
 #### Automated
 
-- [ ] 2.1 Shell syntax validation passes for the library, deployment helper, release script, and test harness.
-- [ ] 2.2 Focused Django health tests and the complete Django test suite pass without changing the `/healthz/` contract.
-- [ ] 2.3 Deployment-script tests prove that exhausted readiness prevents completion, exits nonzero, emits diagnostic guidance, and never invokes rollback.
+- [x] 2.1 Shell syntax validation passes for the library, deployment helper, release script, and test harness.
+- [x] 2.2 Focused Django health tests and the complete Django test suite pass without changing the `/healthz/` contract.
+- [x] 2.3 Deployment-script tests prove that exhausted readiness prevents completion, exits nonzero, emits diagnostic guidance, and never invokes rollback.
 
 #### Manual
 
-- [ ] 2.4 A local mocked release rehearsal shows timestamped stage output without secrets, response bodies, or automatic log dumping.
+- [x] 2.4 A local mocked release rehearsal shows timestamped stage output without secrets, response bodies, or automatic log dumping.
 
 ### Phase 3: Operator Documentation and Acceptance
 

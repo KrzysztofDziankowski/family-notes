@@ -5,6 +5,19 @@ RELEASES=/srv/family-notes/releases
 CURRENT=/srv/family-notes/current
 ENV_FILE=/etc/family-notes/env
 BACKUPS=/var/backups/family-notes
+RELEASE_GATE_LIBRARY=/usr/local/libexec/family-notes/release-gate.sh
+EXPECTED_RELEASE_GATE_PROTOCOL_VERSION=1
+
+[ -r "$RELEASE_GATE_LIBRARY" ] || {
+    echo "family-notes-deploy: release gate library is unavailable" >&2
+    exit 1
+}
+# shellcheck disable=SC1090
+. "$RELEASE_GATE_LIBRARY"
+[ "${RELEASE_GATE_PROTOCOL_VERSION:-}" = "$EXPECTED_RELEASE_GATE_PROTOCOL_VERSION" ] || {
+    echo "family-notes-deploy: incompatible release gate protocol" >&2
+    exit 1
+}
 
 fail() {
     echo "family-notes-deploy: $*" >&2
@@ -35,6 +48,31 @@ run_manage() {
     shift
     runuser -u familynotes -- sh -c 'cd "$1" && shift && exec .venv/bin/python manage.py "$@"' sh "$release_dir" "$@"
 }
+
+health_probe() {
+    health_budget=$1
+    case "$health_budget" in
+        ''|*[!0-9]*|0) return 1 ;;
+    esac
+    umask 077
+    health_response=$(mktemp)
+    trap 'rm -f "$health_response"' EXIT HUP INT TERM
+    if curl --fail --silent --show-error --max-time "$health_budget" \
+        --unix-socket /run/family-notes/gunicorn.sock \
+        -H "Host: $health_host" -H 'X-Forwarded-Proto: https' \
+        --output "$health_response" http://localhost/healthz/ \
+        && printf '%s' '{"status": "ok"}' | cmp -s - "$health_response"; then
+        health_result=0
+    else
+        health_result=1
+    fi
+    rm -f "$health_response"
+    trap - EXIT HUP INT TERM
+    return "$health_result"
+}
+
+health_clock() { date -u +%s; }
+health_sleep() { sleep "$1"; }
 
 command=${1:-}
 case "$command" in
@@ -83,22 +121,22 @@ case "$command" in
         [ "$#" -eq 1 ] || fail "usage: $0 logs"
         journalctl -u family-notes -n 100 --no-pager
         ;;
+    gate-version)
+        [ "$#" -eq 1 ] || fail "usage: $0 gate-version"
+        printf '%s\n' "$RELEASE_GATE_PROTOCOL_VERSION"
+        ;;
     health)
         [ "$#" -eq 1 ] || fail "usage: $0 health"
         load_environment
         health_host=${DJANGO_ALLOWED_HOSTS%%,*}
         [ -n "$health_host" ] || fail "DJANGO_ALLOWED_HOSTS is empty"
-        curl --fail --silent --show-error \
-            --unix-socket /run/family-notes/gunicorn.sock \
-            -H "Host: $health_host" \
-            -H 'X-Forwarded-Proto: https' \
-            http://localhost/healthz/
+        release_gate_wait health_probe health_clock health_sleep
         ;;
     reboot)
         [ "$#" -eq 1 ] || fail "usage: $0 reboot"
         systemctl reboot
         ;;
     *)
-        fail "usage: $0 {check|backup|activate|rollback|status|logs|health|reboot} [RELEASE_ID]"
+        fail "usage: $0 {check|backup|activate|rollback|status|logs|gate-version|health|reboot} [RELEASE_ID]"
         ;;
 esac

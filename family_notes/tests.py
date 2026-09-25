@@ -62,6 +62,7 @@ class HealthCheckTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'status': 'ok'})
+        self.assertEqual(response.content, b'{"status": "ok"}')
 
     @patch('family_notes.views.connection.cursor', side_effect=DatabaseError)
     def test_health_check_hides_database_failure_details(self, _cursor):

@@ -91,7 +91,10 @@ release_gate_wait() {
         fi
         printf '[epoch=%s] readiness gate retrying in %ss (remaining=%ss)\n' \
             "$release_gate_after" "$release_gate_delay" "$release_gate_remaining" >&2
-        "$release_gate_sleep" "$release_gate_delay"
+        if ! "$release_gate_sleep" "$release_gate_delay"; then
+            release_gate_exhausted "$release_gate_after"
+            return 1
+        fi
 
         release_gate_before=$($release_gate_clock) || {
             release_gate_exhausted unknown
