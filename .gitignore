@@ -1,7 +1,10 @@
 .agents/*/10x*
+.claude/*/10x*
 .agents/.10x*
+.claude/.10x*
 .10x*
 .agents/prompts/
+.claude/prompts/
 **/__pycache__/
 .env
 .env.*
