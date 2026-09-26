@@ -1,10 +1,10 @@
 ---
 change_id: identity-and-family-access-contract
 title: Identity and family access contract
-status: impl_reviewed
+status: archived
 created: 2026-09-23
-updated: 2026-09-24
-archived_at: null
+updated: 2026-09-26
+archived_at: 2026-09-26T10:26:40Z
 ---
 
 ## Notes
