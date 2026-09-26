@@ -287,22 +287,22 @@ No database migration or existing-data transformation is expected. Rollback cons
 
 #### Automated
 
-- [x] 1.1 Domain and validation tests pass for complete proposals, general-note fallback, required-field follow-ups, unknown names, and duplicate-name ambiguity.
-- [x] 1.2 Tests prove domain result and exception representations do not contain submitted text or raw provider payloads.
-- [x] 1.3 Django system checks pass with the new app and no migrations are generated.
+- [x] 1.1 Domain and validation tests pass for complete proposals, general-note fallback, required-field follow-ups, unknown names, and duplicate-name ambiguity. — c59d483
+- [x] 1.2 Tests prove domain result and exception representations do not contain submitted text or raw provider payloads. — c59d483
+- [x] 1.3 Django system checks pass with the new app and no migrations are generated. — c59d483
 
 #### Manual
 
-- [x] 1.4 Review the public classification types and confirm later S-01 code can consume them without importing OpenAI classes.
+- [x] 1.4 Review the public classification types and confirm later S-01 code can consume them without importing OpenAI classes. — c59d483
 
 ### Phase 2: OpenAI Privacy Adapter
 
 #### Automated
 
-- [ ] 2.1 Mocked adapter tests verify strict parsing, `store=False`, the minimal payload, configured model, and absence of stateful OpenAI features.
-- [ ] 2.2 Deterministic clock/transport tests cover first-attempt success, eligible retry, insufficient retry budget, exact deadline, timeout, rate limit, connection failure, 5xx, refusal, malformed output, and non-retryable 4xx.
-- [ ] 2.3 Log-capture tests use unique sensitive sentinels and prove submitted text, member names, response content, exception bodies, and credentials never appear.
-- [ ] 2.4 Locked dependency audit and Django system checks pass.
+- [x] 2.1 Mocked adapter tests verify strict parsing, `store=False`, the minimal payload, configured model, and absence of stateful OpenAI features.
+- [x] 2.2 Deterministic clock/transport tests cover first-attempt success, eligible retry, insufficient retry budget, exact deadline, timeout, rate limit, connection failure, 5xx, refusal, malformed output, and non-retryable 4xx.
+- [x] 2.3 Log-capture tests use unique sensitive sentinels and prove submitted text, member names, response content, exception bodies, and credentials never appear.
+- [x] 2.4 Locked dependency audit and Django system checks pass.
 
 #### Manual
 

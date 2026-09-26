@@ -32,6 +32,63 @@ def env_list(name, default=''):
     return [item.strip() for item in os.getenv(name, default).split(',') if item.strip()]
 
 
+def env_number(name, default, cast=float):
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        return cast(value)
+    except ValueError:
+        # Name the variable only; never echo configured values.
+        raise ImproperlyConfigured(f'{name} must be a number.') from None
+
+
+def validate_classification_settings(
+    *,
+    enabled,
+    debug,
+    api_key,
+    model,
+    zdr_attested,
+    deadline_seconds,
+    attempt_timeout_seconds,
+    max_retries,
+):
+    """Fail closed on unsafe classification configuration.
+
+    Error messages name variables only, never their values, so a failed
+    startup cannot print the provider key.
+    """
+    if not deadline_seconds > 0:
+        raise ImproperlyConfigured('CLASSIFICATION_DEADLINE_SECONDS must be positive.')
+    if not 0 < attempt_timeout_seconds <= deadline_seconds:
+        raise ImproperlyConfigured(
+            'CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS must be positive and not exceed '
+            'CLASSIFICATION_DEADLINE_SECONDS.'
+        )
+    if max_retries not in (0, 1):
+        raise ImproperlyConfigured('CLASSIFICATION_MAX_RETRIES must be 0 or 1.')
+
+    # Development may enable the flag without provider settings; the backend
+    # factory still refuses to build a provider client until all are present.
+    if not enabled or debug:
+        return
+    missing = [
+        variable
+        for variable, present in (
+            ('OPENAI_API_KEY', bool(api_key)),
+            ('OPENAI_CLASSIFICATION_MODEL', bool(model)),
+            ('OPENAI_ZDR_ATTESTED', bool(zdr_attested)),
+        )
+        if not present
+    ]
+    if missing:
+        raise ImproperlyConfigured(
+            'CLASSIFICATION_ENABLED requires these settings when DJANGO_DEBUG is false: '
+            f'{", ".join(missing)}.'
+        )
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -176,6 +233,31 @@ if not DEBUG and (not GOOGLE_OAUTH_CLIENT_ID or not GOOGLE_OAUTH_CLIENT_SECRET):
         'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET are required '
         'when DJANGO_DEBUG is false.'
     )
+
+# Natural-language classification (OpenAI Responses API).
+# store=False is sent on every request but does not replace Zero Data
+# Retention: set OPENAI_ZDR_ATTESTED only after an operator confirms the
+# production OpenAI project is approved and configured for ZDR.
+CLASSIFICATION_ENABLED = env_bool('CLASSIFICATION_ENABLED', default=False)
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_CLASSIFICATION_MODEL = os.getenv('OPENAI_CLASSIFICATION_MODEL', '')
+OPENAI_ZDR_ATTESTED = env_bool('OPENAI_ZDR_ATTESTED', default=False)
+CLASSIFICATION_DEADLINE_SECONDS = env_number('CLASSIFICATION_DEADLINE_SECONDS', 25.0)
+CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS = env_number(
+    'CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS', 10.0
+)
+CLASSIFICATION_MAX_RETRIES = env_number('CLASSIFICATION_MAX_RETRIES', 1, cast=int)
+
+validate_classification_settings(
+    enabled=CLASSIFICATION_ENABLED,
+    debug=DEBUG,
+    api_key=OPENAI_API_KEY,
+    model=OPENAI_CLASSIFICATION_MODEL,
+    zdr_attested=OPENAI_ZDR_ATTESTED,
+    deadline_seconds=CLASSIFICATION_DEADLINE_SECONDS,
+    attempt_timeout_seconds=CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS,
+    max_retries=CLASSIFICATION_MAX_RETRIES,
+)
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
