@@ -19,6 +19,10 @@ Updated 2026-09-23:
 - [x] Step 9: nginx serving HTTP on port `20121` behind Mikrus HTTPS
 - [x] Step 10: production deployment verified (reported by the operator)
 - [x] Dedicated public hostname changed to `familynotes.mikrus.dev`
+- [ ] Matched release-gate library and helper (protocol `1`) installed through the
+  provider console
+- [ ] Release gate acceptance recorded (approved release and failed-probe
+  rehearsal)
 
 ### First Deployment Record
 
@@ -130,6 +134,13 @@ ssh familynotes-mikrus
 Keep the current root session open while testing any SSH configuration change.
 Provider console access is the recovery path if SSH stops working.
 
+On the current production VPS, direct root SSH from the development machine is
+unavailable: root login rejects the available identity. Every root-only task,
+including installing or updating the deployment helper and release-gate library,
+requires the account owner to use the Mikrus provider console or another
+explicitly authorized root-capable path. Do not broaden the `deploy` account's
+sudo rule as a workaround.
+
 ## 3. Bootstrap the VPS as Root
 
 Inspect the operating system, available storage, and memory first:
@@ -160,22 +171,17 @@ install -d -o root -g root -m 0700 /etc/family-notes
 usermod -aG familynotes deploy
 ```
 
-Install the repository-owned deployment helper as a root-owned executable. This
-is a one-time root operation; after it is complete, routine deployments do not
-require root SSH access. Run this command from the repository on the development
-machine:
-
-```bash
-ssh -l root familynotes-mikrus \
-  'install -o root -g root -m 0755 /dev/stdin /usr/local/sbin/family-notes-deploy' \
-  < scripts/deployment/family-notes-deploy
-```
-
-Validate the helper syntax before granting access:
-
-```bash
-/bin/sh -n /usr/local/sbin/family-notes-deploy
-```
+Install the repository-owned release-gate library and deployment helper as a
+matched root-owned pair. Direct root SSH from the development machine is no
+longer available: root login rejects the available identity, so this and every
+later helper update must run as root in the Mikrus provider console (or another
+owner-authorized root-capable path). Follow
+[Install or Update the Release Gate Pair](#install-or-update-the-release-gate-pair).
+On a fresh server, first install the `deploy` SSH key (below) so the files can be
+staged over SSH, and skip the commands that retain or restore previously
+installed artifacts because none exist yet. Validate the installed pair before
+granting sudo access. After the pair is installed, routine deployments do not
+require root access.
 
 Allow `deploy` to invoke only this validated helper as root:
 
@@ -509,11 +515,143 @@ listener, or Certbot. Mikrus accepts public HTTPS for `<PUBLIC_HOST>` and forwar
 plain HTTP to port `20121`, as configured for `familynotes.mikrus.dev` in the
 subdomain panel.
 
+## Install or Update the Release Gate Pair
+
+The privileged helper `/usr/local/sbin/family-notes-deploy` sources the readiness
+library from the fixed path `/usr/local/libexec/family-notes/release-gate.sh`.
+Together they form release-gate protocol version `1` and must always be installed
+from the same repository commit. There is no environment or command-line override
+for either path. The new helper fails closed before running any action when the
+library is missing (`family-notes-deploy: release gate library is unavailable`)
+or reports a different protocol (`family-notes-deploy: incompatible release gate
+protocol`). The release script calls the helper's `gate-version` action before it
+fetches or creates anything and stops unless the output is exactly `1`, so an
+incomplete or mismatched installation blocks releases without mutating
+production.
+
+Install the pair before running the revised `scripts/deployment/release.sh`. A
+helper installed before this change has no `gate-version` action, so the revised
+script stops with `release: release gate protocol check failed`.
+
+### Stage the files as `deploy`
+
+From the repository on the development machine, at the approved commit, record
+the checksums and copy both files into a private staging directory owned by
+`deploy`:
+
+```bash
+sha256sum scripts/deployment/release-gate.sh scripts/deployment/family-notes-deploy
+ssh familynotes-mikrus 'install -d -m 0700 ~/gate-staging'
+ssh familynotes-mikrus 'cat > ~/gate-staging/release-gate.sh' \
+  < scripts/deployment/release-gate.sh
+ssh familynotes-mikrus 'cat > ~/gate-staging/family-notes-deploy' \
+  < scripts/deployment/family-notes-deploy
+```
+
+The staged copies are writable by `deploy`, so root never executes or promotes
+them in place.
+
+### Install as root through the provider console
+
+Open a root shell in the Mikrus provider console and define the paths:
+
+```bash
+SRC=/home/deploy/gate-staging
+LIB=/usr/local/libexec/family-notes/release-gate.sh
+HELPER=/usr/local/sbin/family-notes-deploy
+install -d -o root -g root -m 0755 /usr/local/libexec/family-notes
+```
+
+Copy both files into root-owned temporary files in their destination
+directories, so each later rename stays on one filesystem, with their final
+ownership and permissions. Then compare the checksums with the values recorded
+on the development machine and syntax-check both staged files:
+
+```bash
+install -o root -g root -m 0644 "$SRC/release-gate.sh" "$LIB.new"
+install -o root -g root -m 0755 "$SRC/family-notes-deploy" "$HELPER.new"
+sha256sum "$LIB.new" "$HELPER.new"
+/bin/sh -n "$LIB.new"
+/bin/sh -n "$HELPER.new"
+```
+
+Stop and remove both `.new` files if a checksum differs or a syntax check fails.
+
+Retain recoverable copies of the currently installed artifacts in the same
+directories. Skip the library copy when no library has been installed yet:
+
+```bash
+cp -p "$HELPER" "$HELPER.previous"
+[ ! -e "$LIB" ] || cp -p "$LIB" "$LIB.previous"
+```
+
+Promote the library first with a same-filesystem rename. The installed helper
+keeps working during this step: a helper installed before this change does not
+load the library, and a helper of the same protocol accepts the new library.
+
+```bash
+mv -f "$LIB.new" "$LIB"
+```
+
+Run the staged helper's `gate-version` action. It loads the newly installed
+library from the fixed path and must print exactly `1`. Only then promote the
+helper with another same-filesystem rename:
+
+```bash
+"$HELPER.new" gate-version
+mv -f "$HELPER.new" "$HELPER"
+```
+
+If `gate-version` prints anything else or fails, do not promote the helper;
+remove `$HELPER.new` and restore the library as described below.
+
+### Verify before allowing a release
+
+Still as root, confirm ownership, permissions, syntax, and the protocol version:
+
+```bash
+stat -c '%U:%G %a %n' /usr/local/libexec/family-notes "$LIB" "$HELPER"
+/bin/sh -n "$LIB"
+/bin/sh -n "$HELPER"
+"$HELPER" gate-version
+```
+
+Expected: the directory and both files are owned by `root:root`, the directory and
+helper are mode `755`, the library is mode `644`, both syntax checks are silent,
+and `gate-version` prints `1`. Then, as `deploy` (on a fresh server, after the
+sudo rule in step 3 exists), confirm the sudo path reports the same version and
+remove the staging directory:
+
+```bash
+sudo -n /usr/local/sbin/family-notes-deploy gate-version
+rm -rf ~/gate-staging
+```
+
+Keep `$HELPER.previous` and `$LIB.previous` until the next approved release
+passes its readiness gate.
+
+### Restore the retained artifacts if verification fails
+
+If any final verification fails, restore the retained helper first (it does not
+depend on the new library), then the library, and remove leftovers:
+
+```bash
+mv -f "$HELPER.previous" "$HELPER"
+if [ -e "$LIB.previous" ]; then mv -f "$LIB.previous" "$LIB"; else rm -f "$LIB"; fi
+rm -f "$LIB.new" "$HELPER.new"
+/bin/sh -n "$HELPER"
+```
+
+A restored pre-change helper has no `gate-version` action, so the revised release
+script refuses to run until a matched pair is installed successfully. Do not work
+around this by editing the release script or the sudo rule.
+
 ## Automated Subsequent Releases
 
-After the one-time server bootstrap is complete, use the repository-owned release
-script for every deployment. From the development machine, confirm the approved
-commit is pushed, then stream the script to a single SSH session as `deploy`:
+After the one-time server bootstrap is complete and the matched release-gate pair
+is installed, use the repository-owned release script for every deployment. From
+the development machine, confirm the approved commit is pushed, then stream the
+script to a single SSH session as `deploy`:
 
 ```bash
 RELEASE_COMMIT="$(git rev-parse HEAD)"
@@ -522,28 +660,80 @@ ssh familynotes-mikrus sh -s -- "$RELEASE_COMMIT" \
   < scripts/deployment/release.sh
 ```
 
-The script requires a full commit SHA and confirms that it is reachable from the
-server's freshly fetched `master`. It creates a timestamped detached worktree,
-installs locked production dependencies, runs deployment and migration checks,
-creates a verified database dump, applies migrations, collects static files,
-switches the active release, restarts the service, and checks the Unix-socket
-health endpoint. Protected operations go through
-`/usr/local/sbin/family-notes-deploy`; the SSH session itself never runs as root
-and cannot read `/etc/family-notes/env`.
+The script requires a full commit SHA and first requires the helper's
+`gate-version` action to print exactly `1`. It then confirms that the commit is
+reachable from the server's freshly fetched `master`, creates a timestamped
+detached worktree, installs locked production dependencies, runs deployment and
+migration checks, creates a verified database dump, applies migrations, collects
+static files, switches the active release, restarts the service, prints the
+service status, and runs the internal readiness gate. Protected operations go
+through `/usr/local/sbin/family-notes-deploy`; the SSH session itself never runs
+as root and cannot read `/etc/family-notes/env`.
+
+### Internal readiness gate
+
+Activation switches `current` and restarts the service before readiness is
+checked; the previous release does not stay active while the new one is tested.
+The release is declared complete only when the gate passes, which the script
+reports as `[release=<RELEASE_ID>] Deployment completed: <RELEASE_ID> (<RELEASE_COMMIT>)`.
+
+The gate is the helper's `health` action. It sends `GET /healthz/` through
+`/run/family-notes/gunicorn.sock` with the first host from `DJANGO_ALLOWED_HOSTS`
+and `X-Forwarded-Proto: https`. An attempt succeeds only when `curl` reports
+success and the body is exactly `{"status": "ok"}`, which the endpoint returns
+only after a successful database query. Failed attempts, including connection
+errors, `503 {"status": "unavailable"}`, and unexpected bodies, are retried every
+two seconds.
+
+The window is a strict 30-second deadline measured from immediately before the
+first attempt, using UTC epoch seconds. An attempt may start only while less than
+30 seconds have elapsed and counts only if it also completes before 30 seconds;
+each `curl` attempt and each sleep is capped to the remaining whole-second
+budget. A system clock that moves backward is treated as exhaustion. The gate
+prints only timestamped state transitions, never response bodies or secrets:
+
+```text
+[epoch=<EPOCH>] readiness gate started (deadline=30s)
+[epoch=<EPOCH>] readiness gate retrying in 2s (remaining=<N>s)
+[epoch=<EPOCH>] readiness gate succeeded (elapsed=<N>s)
+[epoch=<EPOCH>] readiness gate exhausted
+```
+
+### When the gate is exhausted
 
 If the script fails before activation, it removes the incomplete worktree. Once
-activation starts, it leaves the release and backup in place for diagnosis
-because migrations may already have run. Inspect status and logs before deciding
-whether to roll forward or use the documented application rollback.
+activation starts, it never removes the release. When readiness is exhausted, the
+script exits nonzero without the completion message and prints:
+
+```text
+release: readiness exhausted for release <RELEASE_ID>
+The activated release and pre-release backup remain in place.
+Inspect service status: sudo -n /usr/local/sbin/family-notes-deploy status
+Inspect service logs: sudo -n /usr/local/sbin/family-notes-deploy logs
+Retry internal health: sudo -n /usr/local/sbin/family-notes-deploy health
+```
+
+The script does not read logs automatically, switch the symlink back, invoke
+`rollback`, reverse migrations, or restore the database. The newly activated
+release stays live and the pre-release dump stays at
+`/var/backups/family-notes/pre-release-<RELEASE_ID>.dump`. Run the printed
+commands, then decide whether to roll forward with a corrective release or use the
+human-controlled [application rollback](#11-roll-back-the-application). Database
+restoration remains a separate, human-approved incident procedure.
+
+Public HTTPS is not part of the automated gate. After every release, verify it
+manually as described in step 10.
 
 ## 10. Verify Before Calling the Deployment Complete
 
 On the VPS:
 
 ```bash
+sudo -n /usr/local/sbin/family-notes-deploy gate-version
 sudo -n /usr/local/sbin/family-notes-deploy status
 systemctl is-active nginx
 sudo -n /usr/local/sbin/family-notes-deploy logs
+sudo -n /usr/local/sbin/family-notes-deploy health
 curl --unix-socket /run/family-notes/gunicorn.sock \
   -H 'Host: <PUBLIC_HOST>' \
   -H 'X-Forwarded-Proto: https' \
@@ -551,12 +741,22 @@ curl --unix-socket /run/family-notes/gunicorn.sock \
 curl -I "http://[::1]:20121/healthz/" -H 'Host: <PUBLIC_HOST>'
 ```
 
-From the development machine:
+`gate-version` must print `1`, and the `health` action runs the same 30-second
+readiness gate used by the release script, ending in `readiness gate succeeded`.
+
+The release script's gate proves internal, database-backed readiness only. Public
+HTTPS remains a manual acceptance step. From the development machine:
 
 ```bash
 curl -fsS https://<PUBLIC_HOST>/healthz/
 curl -I https://<PUBLIC_HOST>/
 ```
+
+The public health response must be `{"status": "ok"}`. The production
+`check --deploy` output is expected to include the `SECURE_HSTS_INCLUDE_SUBDOMAINS`
+and `SECURE_HSTS_PRELOAD` warnings; they are accepted consequences of the shared
+`mikrus.dev` parent domain (see step 0) and do not block a release. Any other
+deployment-check finding must be resolved.
 
 Then verify in a browser that `https://<PUBLIC_HOST>/` has no TLS warning and
 loads its CSS. Confirm that `https://<PUBLIC_HOST>/admin/` is served only over
@@ -580,6 +780,37 @@ Finally, reboot once and repeat the checks:
 sudo -n /usr/local/sbin/family-notes-deploy reboot
 ```
 
+Reboot survival is not yet evidenced for this deployment; record it separately
+when performed (see [Separate follow-up work](#separate-follow-up-work)).
+
+### Release gate acceptance
+
+Production changes in this subsection require explicit operator authorization.
+Record the SSH transcript of each run as release evidence.
+
+1. **Installation:** an authorized operator installs the matched library and
+   helper through the provider console and records the `stat`, `/bin/sh -n`, and
+   `gate-version` results from
+   [Verify before allowing a release](#verify-before-allowing-a-release).
+2. **Approved release:** run an operator-approved release. The transcript must
+   show either an immediate `readiness gate succeeded` or one or more
+   `readiness gate retrying` lines followed by success, and the
+   `Deployment completed` line only after the gate succeeded.
+3. **Controlled failed-probe rehearsal:** with operator approval, and without
+   interrupting family access to data, rehearse a failed probe (for example a
+   release whose readiness cannot succeed in a planned window). The script must
+   exit nonzero, print `readiness exhausted for release <RELEASE_ID>` and the three
+   diagnostic commands, leave `readlink -f /srv/family-notes/current` pointing at
+   the attempted release, leave its `pre-release-<RELEASE_ID>.dump` in place, and
+   invoke no rollback. Recovery and public HTTPS verification stay manual.
+
+### Separate follow-up work
+
+The release gate does not cover these items. Track each as separate work until a
+deployment record marks it complete: external uptime monitoring and alerting,
+recurring scheduled backups with off-provider copies, a disposable restore drill,
+an application rollback rehearsal, and VPS reboot verification.
+
 ## 11. Roll Back the Application
 
 As `deploy`, list releases and identify the previous known-good directory:
@@ -594,10 +825,12 @@ Switch only the application release through the restricted helper, then verify:
 ```bash
 sudo -n /usr/local/sbin/family-notes-deploy rollback <PREVIOUS_RELEASE_ID>
 sudo -n /usr/local/sbin/family-notes-deploy status
+sudo -n /usr/local/sbin/family-notes-deploy health
 curl -fsS https://<PUBLIC_HOST>/healthz/
 ```
 
-Do not restore the database automatically. If a migration is incompatible with
+Rollback is always an operator decision; neither the release script nor the
+readiness gate invokes it. Do not restore the database automatically. If a migration is incompatible with
 the previous release, stop and prepare a forward fix. Database restoration is a
 separate, human-approved incident procedure.
 
@@ -625,6 +858,16 @@ separate, human-approved incident procedure.
   and check that all `DB_*` variables exist without printing their contents.
 - **Public URL times out:** verify nginx listens on port `20121`, that the port is
   assigned in the panel, and that `curl` works locally over IPv6.
+- **`release gate library is unavailable` or `incompatible release gate
+  protocol`:** the helper and library are not a matched pair. Reinstall both from
+  one commit through the provider console, or restore the retained artifacts, as
+  in [Install or Update the Release Gate Pair](#install-or-update-the-release-gate-pair).
+- **`release: release gate protocol check failed` or `unexpected release gate
+  protocol`:** the release stopped before fetching or creating a release. Check
+  `sudo -n /usr/local/sbin/family-notes-deploy gate-version`; it must print `1`.
+- **`readiness exhausted for release`:** the new release is active and its backup
+  is in place. Run the printed `status`, `logs`, and `health` commands, then choose
+  a forward fix or the manual application rollback.
 
 ## References
 

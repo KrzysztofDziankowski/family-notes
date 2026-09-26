@@ -33,7 +33,11 @@ fake_helper() {
             [ "${FAKE_GATE_RESULT:-0}" -eq 0 ] || return "$FAKE_GATE_RESULT"
             printf '%s\n' "${FAKE_GATE_VERSION-1}"
             ;;
-        health) return "${FAKE_HEALTH_RESULT:-0}" ;;
+        health)
+            assert_absent 'Deployment completed:' "$CASE_DIR/output" \
+                'completion was printed before readiness succeeded'
+            return "${FAKE_HEALTH_RESULT:-0}"
+            ;;
     esac
 }
 
