@@ -245,10 +245,10 @@ The installed retry library and helper form one operational version and must be 
 
 #### Automated
 
-- [x] 3.1 Repository verification passes: Django checks, migration drift check, full test suite, readiness harness, and POSIX syntax checks.
+- [x] 3.1 Repository verification passes: Django checks, migration drift check, full test suite, readiness harness, and POSIX syntax checks. — 8454e86
 
 #### Manual
 
-- [ ] 3.2 An authorized operator installs the matched library/helper pair and confirms their ownership, permissions, and syntax on Mikr.us.
-- [ ] 3.3 An operator-approved release demonstrates transient retry or immediate readiness, exact internal health success, and completion only after the gate passes.
-- [ ] 3.4 A controlled failed-probe rehearsal exits nonzero, preserves the selected release and backup, prints diagnostic commands, performs no rollback, and leaves public HTTPS verification manual.
+- [x] 3.2 An authorized operator installs the matched library/helper pair and confirms their ownership, permissions, and syntax on Mikr.us. — 8454e86
+- [x] 3.3 An operator-approved release demonstrates transient retry or immediate readiness, exact internal health success, and completion only after the gate passes. — 8454e86
+- [x] 3.4 A controlled failed-probe rehearsal exits nonzero, preserves the selected release and backup, prints diagnostic commands, performs no rollback, and leaves public HTTPS verification manual. — 8454e86

@@ -803,6 +803,9 @@ Record the SSH transcript of each run as release evidence.
    diagnostic commands, leave `readlink -f /srv/family-notes/current` pointing at
    the attempted release, leave its `pre-release-<RELEASE_ID>.dump` in place, and
    invoke no rollback. Recovery and public HTTPS verification stay manual.
+   `/var/backups/family-notes` is `root:root` mode `0700`, so `deploy` cannot list
+   it; confirm the dump from the path the helper prints after the backup stage,
+   or as root in the provider console with `ls -l` on that path.
 
 ### Separate follow-up work
 
