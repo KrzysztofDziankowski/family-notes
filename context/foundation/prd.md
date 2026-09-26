@@ -101,9 +101,9 @@ Children read family information relevant to them but do not create, edit, or de
 
 The application classifies a parent's natural-language text as a todo, calendar event, or note and extracts the affected family member and date.
 
-A test or homework entry requires both an affected family member and a date. A calendar entry requires a date, while its time is optional. If a required value is missing, the application asks a follow-up question before presenting the proposal for confirmation.
+A homework, class test, test, or quiz entry is a calendar event and requires both an affected family member and a date. A substitution or room-change entry is a note and requires a date. Lucky-number, grade, and late-arrival entries are notes without additional required fields. A calendar entry requires a date, while its time is optional. If a required value is missing, the application asks a follow-up question before presenting the proposal for confirmation.
 
-If no entry type or relevant detail can be recognized, the text is treated as a general note. The rules for other classification cases remain to be defined.
+If no entry type or relevant detail can be recognized, the text is treated as a general note.
 
 ## Access Control
 
@@ -124,4 +124,4 @@ Each member of the single preconfigured family signs in using their own external
 
 ## Open Questions
 
-1. **What validation and follow-up rules apply to classification cases other than tests, homework, and calendar entries?** — Owner: user. Resolution date: later product iteration; not blocking the defined MVP cases.
+No open questions currently block the MVP.

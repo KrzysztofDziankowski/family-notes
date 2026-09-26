@@ -39,7 +39,7 @@ The codebase exposes a tested application service callable by later views:
 - No entry confirmation or persistence.
 - No provider conversation, response chaining, files, background mode, tracing, cache, or analytics.
 - No deterministic, Jev, agent-framework, or local-LLM implementation.
-- No general solution for validation rules beyond the PRD’s defined cases.
+- No validation rules beyond the classification cases explicitly defined in the PRD.
 - No background worker or queue.
 - No change to unrelated F-03 planning/review files.
 
@@ -85,7 +85,7 @@ Establish provider-independent domain types, validation rules, and an injectable
 
 **Intent**: Validate semantic rules after structured parsing so schema-valid but unsafe or incomplete provider output cannot become an application proposal.
 
-**Contract**: Calendar events require a date; tests and homework require date and affected member; missing required information produces a follow-up; unrecognized content may become a general note; content must be non-empty and supported by submitted information; returned member names must come from the allow-list; duplicate normalized names never resolve automatically; and validation must not persist inputs or include them in exceptions.
+**Contract**: Calendar events require a date; homework, class tests, tests, and quizzes require date and affected member; substitutions and room changes require a date; lucky numbers, grades, and late arrivals require no additional fields; missing required information produces a follow-up; unrecognized content may become a general note; content must be non-empty and supported by submitted information; returned member names must come from the allow-list; duplicate normalized names never resolve automatically; and validation must not persist inputs or include them in exceptions.
 
 ### Success Criteria:
 
