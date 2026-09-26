@@ -10,7 +10,7 @@ the VPS's assigned ports. Do not install Certbot for this setup.
 
 ## Deployment Progress
 
-Updated 2026-09-23:
+Updated 2026-09-26:
 
 - [x] Application pre-deployment readiness implemented locally
 - [x] Steps 1-6 completed on Mikrus (reported by the operator)
@@ -19,10 +19,10 @@ Updated 2026-09-23:
 - [x] Step 9: nginx serving HTTP on port `20121` behind Mikrus HTTPS
 - [x] Step 10: production deployment verified (reported by the operator)
 - [x] Dedicated public hostname changed to `familynotes.mikrus.dev`
-- [ ] Matched release-gate library and helper (protocol `1`) installed through the
+- [x] Matched release-gate library and helper (protocol `1`) installed through the
   provider console
-- [ ] Release gate acceptance recorded (approved release and failed-probe
-  rehearsal)
+- [x] Release gate acceptance recorded (approved release and failed-probe
+  rehearsal; reported by the operator)
 
 ### First Deployment Record
 
