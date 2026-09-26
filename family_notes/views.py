@@ -15,4 +15,6 @@ def healthz(request):
     except DatabaseError:
         return JsonResponse({'status': 'unavailable'}, status=503)
 
-    return JsonResponse({'status': 'ok'})
+    # return JsonResponse({'status': 'ok'})
+    return JsonResponse({'status': 'ok', 'rehearsal': True})
+
