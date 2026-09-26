@@ -1,9 +1,9 @@
 ---
 change_id: classification-privacy-boundary
 title: Classification privacy boundary
-status: planned
+status: implementing
 created: 2026-09-24
-updated: 2026-09-25
+updated: 2026-09-26
 archived_at: null
 ---
 

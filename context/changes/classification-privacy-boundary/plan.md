@@ -287,13 +287,13 @@ No database migration or existing-data transformation is expected. Rollback cons
 
 #### Automated
 
-- [ ] 1.1 Domain and validation tests pass for complete proposals, general-note fallback, required-field follow-ups, unknown names, and duplicate-name ambiguity.
-- [ ] 1.2 Tests prove domain result and exception representations do not contain submitted text or raw provider payloads.
-- [ ] 1.3 Django system checks pass with the new app and no migrations are generated.
+- [x] 1.1 Domain and validation tests pass for complete proposals, general-note fallback, required-field follow-ups, unknown names, and duplicate-name ambiguity.
+- [x] 1.2 Tests prove domain result and exception representations do not contain submitted text or raw provider payloads.
+- [x] 1.3 Django system checks pass with the new app and no migrations are generated.
 
 #### Manual
 
-- [ ] 1.4 Review the public classification types and confirm later S-01 code can consume them without importing OpenAI classes.
+- [x] 1.4 Review the public classification types and confirm later S-01 code can consume them without importing OpenAI classes.
 
 ### Phase 2: OpenAI Privacy Adapter
 
