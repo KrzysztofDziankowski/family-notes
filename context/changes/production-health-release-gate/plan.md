@@ -245,7 +245,7 @@ The installed retry library and helper form one operational version and must be 
 
 #### Automated
 
-- [x] 3.1 Repository verification passes: Django checks, migration drift check, full test suite, readiness harness, and POSIX syntax checks. — 8454e86
+- [x] 3.1 Repository verification passes: Django checks, migration drift check, full test suite, readiness harness, and POSIX syntax checks.
 
 #### Manual
 
