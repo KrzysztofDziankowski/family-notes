@@ -1,7 +1,7 @@
 ---
 change_id: classification-privacy-boundary
 title: Classification privacy boundary
-status: implemented
+status: impl_reviewed
 created: 2026-09-24
 updated: 2026-09-27
 archived_at: null
@@ -15,5 +15,5 @@ archived_at: null
 
 - The production fail-closed gate no longer requires `OPENAI_ZDR_ATTESTED`; it requires only `CLASSIFICATION_ENABLED`, `OPENAI_API_KEY`, and `OPENAI_CLASSIFICATION_MODEL`. The setting was removed from `settings.py`, `.env.example`, the runbook, and tests.
 - `store=False`, the minimal payload, and sanitized logging are unchanged. Accepted trade-off: OpenAI may retain API traffic for abuse monitoring.
-- Progress 2.5 (ZDR confirmation) and the ZDR-evidence part of 4.6 are intentionally left `[ ]`: they are deferred, not done. 4.6 without ZDR still covers protected env configuration and sentinel absence from logs.
+- Progress 2.5 (ZDR confirmation) and the ZDR-evidence part of 4.6 are marked `[x]` with a SKIPPED annotation: they are out of scope and deferred, not done. 4.6 without ZDR covers protected env configuration and sentinel absence from logs.
 - Tracked for later in `context/foundation/roadmap.md` → Parked.

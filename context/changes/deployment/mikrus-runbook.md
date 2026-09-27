@@ -933,8 +933,8 @@ Both counts must be `0` and no nginx log file may be listed. The application's
 only classification log line has the form
 `classification provider=openai outcome=<CODE> status=<STATUS> request_id=<ID> elapsed_ms=<N> attempts=<N>`;
 any submitted text, member names, response content, provider payloads, or
-credentials in logs are a privacy incident. Record the smoke output line, the
-three sentinel results in the private operator record.
+credentials in logs are a privacy incident. Record the smoke output line and
+the three sentinel results in the private operator record.
 
 ### Disable classification
 

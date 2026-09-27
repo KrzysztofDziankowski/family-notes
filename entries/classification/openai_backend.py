@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 
 PROVIDER = 'openai'
 DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
+# Connecting gets a short slice of the attempt so a slow handshake cannot
+# consume the budget; read/write/pool keep the full attempt timeout.
+CONNECT_TIMEOUT_SECONDS = 3.0
 DEFAULT_MAX_OUTPUT_TOKENS = 1024
 
 EntryTypeValue = Literal[tuple(entry_type.value for entry_type in EntryType)]
@@ -171,6 +174,10 @@ class OpenAIClassificationBackend:
         self._clock = clock
         self._sleep = sleep
 
+    def close(self) -> None:
+        """Release the HTTP connection pool of the underlying client."""
+        self._client.close()
+
     def classify(self, request: BackendRequest) -> BackendOutput:
         started_at = self._clock()
         deadline_at = started_at + self._deadline_seconds
@@ -244,7 +251,10 @@ class OpenAIClassificationBackend:
         # message or body may echo family text) is chained to our error.
         try:
             response = self._client.responses.parse(
-                **self.request_kwargs(request), timeout=timeout
+                **self.request_kwargs(request),
+                timeout=openai.Timeout(
+                    timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout)
+                ),
             )
         except openai.APITimeoutError:
             return _Attempt(reason=UnavailableReason.TIMEOUT, retryable=True)

@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 from django.core.exceptions import PermissionDenied
+from django.views.decorators.debug import sensitive_variables
 
 from family_access.access import get_active_membership, is_parent, scope_queryset_to_family
 from family_access.models import FamilyMember
@@ -40,6 +41,8 @@ from .types import (
 from .validation import classify_output, normalize_member_name
 
 DEFAULT_LOCALE = 'pl-PL'
+# Upper bound on text sent to the provider; bounds cost and latency.
+MAX_SUBMITTED_TEXT_LENGTH = 2000
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,7 @@ class ParentClassification:
     member: Optional[FamilyMember] = field(default=None, repr=False)
 
 
+@sensitive_variables('submitted_text')
 def classify_for_parent(
     user,
     submitted_text: str,
@@ -74,6 +78,10 @@ def classify_for_parent(
     membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
+    if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
+        return ParentClassification(
+            result=ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG)
+        )
 
     candidates = _active_family_members(membership)
     if isinstance(reference_date, datetime.datetime):
@@ -86,13 +94,18 @@ def classify_for_parent(
     )
 
     try:
-        if backend is None:
+        owns_backend = backend is None
+        if owns_backend:
             # Imported lazily so the provider SDK is only touched once an
             # authorized parent actually needs it.
             from .openai_backend import build_openai_backend
 
             backend = build_openai_backend()
-        output = backend.classify(request)
+        try:
+            output = backend.classify(request)
+        finally:
+            if owns_backend:
+                backend.close()
     except ClassificationError as error:
         return ParentClassification(result=error.to_result())
 

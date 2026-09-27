@@ -2,7 +2,7 @@
 
 ## Overview
 
-Introduce a provider-independent, synchronous classification boundary for FamilyNotes. It will transform a parent’s natural-language instruction into a transient validated proposal or follow-up while enforcing family authorization, OpenAI ZDR requirements, a 25-second deadline, and strict non-retention of sensitive content.
+Introduce a provider-independent, synchronous classification boundary for FamilyNotes. It will transform a parent’s natural-language instruction into a transient validated proposal or follow-up while enforcing family authorization, a 25-second deadline, and strict non-retention of sensitive content. (ZDR deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.)
 
 ## Current State Analysis
 
@@ -20,7 +20,7 @@ The codebase exposes a tested application service callable by later views:
 - It rejects invented, inactive, cross-family, or ambiguous member resolutions.
 - It completes or fails safely inside a 25-second application deadline.
 - It never stores submitted text, provider payloads, or transient proposals.
-- Production enablement fails closed unless ZDR is explicitly attested.
+- Production enablement fails closed unless the key, model, and enablement flag are configured. (ZDR attestation deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.)
 
 ### Key Discoveries:
 
@@ -29,7 +29,7 @@ The codebase exposes a tested application service callable by later views:
 - `family_notes/settings.py:24-32` establishes environment parsing conventions.
 - `pyproject.toml:5-16` currently has no classifier/provider dependency.
 - The OpenAI SDK supports `responses.parse`, Pydantic structured output, client/request timeouts, and configurable retries.
-- OpenAI data controls distinguish `store=False` from abuse-monitoring retention; approved project/organization ZDR remains a production prerequisite.
+- OpenAI data controls distinguish `store=False` from abuse-monitoring retention; approved project/organization ZDR was originally a production prerequisite. (ZDR deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.)
 - Production uses synchronous Gunicorn with a 45-second worker timeout and nginx’s 50-second read timeout, leaving room for the application’s stricter 25-second deadline.
 
 ## What We're NOT Doing
@@ -61,7 +61,7 @@ Only active same-family display names are sent. A returned name must exactly mat
 
 ### Privacy gate
 
-`store=False` is required on every request but is not sufficient by itself. Production classification remains disabled unless an environment-backed ZDR attestation is true and the required provider settings are present.
+`store=False` is required on every request but is not sufficient by itself. Production classification remains disabled unless the required provider settings are present. The ZDR attestation gate was removed — deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked; the MVP accepts OpenAI abuse-monitoring retention.
 
 ## Phase 1: Classification Contract
 
@@ -117,7 +117,7 @@ Add the official OpenAI SDK adapter, environment-backed configuration, structure
 
 **Intent**: Add the official SDK and configure classification without committing secrets or accidentally enabling an unapproved production integration.
 
-**Contract**: Add and lock `openai`; configure an enablement flag, API key, structured-output-capable model, ZDR attestation, 25-second deadline, 10-second attempt timeout, and one application retry. Production-enabled configuration must fail closed without the key, model, and ZDR attestation. Local tests may inject a backend without credentials, and validation must never print secrets.
+**Contract**: Add and lock `openai`; configure an enablement flag, API key, structured-output-capable model, 25-second deadline, 10-second attempt timeout, and one application retry. Production-enabled configuration must fail closed without the key and model. (ZDR deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.) Local tests may inject a backend without credentials, and validation must never print secrets.
 
 #### 2. Structured-output adapter
 
@@ -146,7 +146,7 @@ Add the official OpenAI SDK adapter, environment-backed configuration, structure
 
 #### Manual Verification:
 
-- An operator confirms the selected production OpenAI project is approved and configured for ZDR before setting the enablement and ZDR-attestation flags.
+- ~~An operator confirms the selected production OpenAI project is approved and configured for ZDR before setting the enablement and ZDR-attestation flags.~~ Skipped — deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause for manual confirmation before proceeding.
 
@@ -214,7 +214,7 @@ Complete representative functional validation and document the privacy/configura
 
 **Intent**: Make production enablement explicit and auditable without exposing secrets or changing the established manual SSH release process.
 
-**Contract**: Document provider key/model, enablement, and ZDR attestation variables; state that `store=False` does not replace ZDR approval; require ZDR evidence; add a synthetic post-release classification smoke check; require sensitive-sentinel log inspection; and preserve the existing release flow, worker count, and proxy timeouts.
+**Contract**: Document provider key/model and enablement variables; state that `store=False` does not replace ZDR approval and that ZDR is deferred post-MVP; add a synthetic post-release classification smoke check; require sensitive-sentinel log inspection; and preserve the existing release flow, worker count, and proxy timeouts.
 
 ### Success Criteria:
 
@@ -228,7 +228,7 @@ Complete representative functional validation and document the privacy/configura
 #### Manual Verification:
 
 - Using synthetic data, an opt-in production-like smoke test returns a proposal or safe failure within 30 seconds.
-- Operator review confirms ZDR evidence, protected environment configuration, and sensitive-sentinel absence from application, journald, and nginx logs.
+- Operator review confirms ZDR evidence, protected environment configuration, and sensitive-sentinel absence from application, journald, and nginx logs. (ZDR evidence deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.)
 
 **Implementation Note**: Phase 4 completes F-02 evidence but does not authorize S-01 entry persistence or UI work.
 
@@ -252,12 +252,12 @@ Complete representative functional validation and document the privacy/configura
 
 ### Manual Testing Steps:
 
-1. Confirm the production OpenAI project has approved and enabled ZDR.
+1. ~~Confirm the production OpenAI project has approved and enabled ZDR.~~ Skipped — deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.
 2. Enable classification using protected environment variables without printing values.
 3. Submit only a synthetic Polish school instruction.
 4. Verify a proposal or safe failure returns inside 30 seconds.
 5. Search application, journald, and nginx logs for the synthetic sentinel and verify it is absent.
-6. Disable classification again if ZDR evidence or any privacy check is incomplete.
+6. Disable classification again if any privacy check is incomplete.
 
 ## Performance Considerations
 
@@ -306,7 +306,7 @@ No database migration or existing-data transformation is expected. Rollback cons
 
 #### Manual
 
-- [ ] 2.5 An operator confirms the selected production OpenAI project is approved and configured for ZDR before setting the enablement and ZDR-attestation flags.
+- [x] 2.5 An operator confirms the selected production OpenAI project is approved and configured for ZDR before setting the enablement and ZDR-attestation flags. — SKIPPED: out of scope, deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.
 
 ### Phase 3: Authorized Orchestration
 
@@ -332,4 +332,4 @@ No database migration or existing-data transformation is expected. Rollback cons
 #### Manual
 
 - [x] 4.5 Using synthetic data, an opt-in production-like smoke test returns a proposal or safe failure within 30 seconds. — af90c9b
-- [x] 4.6 Operator review confirms ZDR evidence, protected environment configuration, and sensitive-sentinel absence from application, journald, and nginx logs.
+- [x] 4.6 Operator review confirms ZDR evidence, protected environment configuration, and sensitive-sentinel absence from application, journald, and nginx logs. — protected env config and sentinel absence confirmed; ZDR evidence SKIPPED, deferred post-MVP by owner decision 2026-09-27; see `context/foundation/roadmap.md` → Parked.

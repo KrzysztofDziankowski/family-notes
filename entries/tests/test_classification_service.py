@@ -20,7 +20,11 @@ from entries.classification.backends import (
     BackendRequest,
     ClassificationBackendError,
 )
-from entries.classification.service import ParentClassification, classify_for_parent
+from entries.classification.service import (
+    MAX_SUBMITTED_TEXT_LENGTH,
+    ParentClassification,
+    classify_for_parent,
+)
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
@@ -159,6 +163,62 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
             outcome.result, ClassificationUnavailable(reason=UnavailableReason.DISABLED)
         )
         self.assertIsNone(outcome.member)
+
+    def test_default_backend_is_closed_after_classification(self):
+        for error in (None, ClassificationBackendError(UnavailableReason.TIMEOUT)):
+            with self.subTest(error=error):
+                built = mock.Mock()
+                if error is None:
+                    built.classify.return_value = school_test_output()
+                else:
+                    built.classify.side_effect = error
+                with mock.patch(
+                    'entries.classification.openai_backend.build_openai_backend',
+                    return_value=built,
+                ):
+                    classify_for_parent(
+                        self.parent.user, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
+                    )
+
+                built.close.assert_called_once_with()
+
+    def test_injected_backend_is_not_closed(self):
+        backend = mock.Mock()
+        backend.classify.return_value = school_test_output()
+
+        classify_for_parent(
+            self.parent.user, SUBMITTED_TEXT, reference_date=REFERENCE_DATE, backend=backend
+        )
+
+        backend.close.assert_not_called()
+
+    def test_overlong_text_is_rejected_without_backend_call(self):
+        backend = RecordingBackend()
+
+        outcome = classify_for_parent(
+            self.parent.user,
+            'x' * (MAX_SUBMITTED_TEXT_LENGTH + 1),
+            reference_date=REFERENCE_DATE,
+            backend=backend,
+        )
+
+        self.assertEqual(
+            outcome.result,
+            ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG),
+        )
+        self.assertEqual(backend.requests, [])
+
+    def test_text_at_length_limit_reaches_backend(self):
+        backend = RecordingBackend()
+
+        classify_for_parent(
+            self.parent.user,
+            'x' * MAX_SUBMITTED_TEXT_LENGTH,
+            reference_date=REFERENCE_DATE,
+            backend=backend,
+        )
+
+        self.assertEqual(len(backend.requests), 1)
 
     def test_reference_datetime_is_reduced_to_its_date(self):
         backend = RecordingBackend()

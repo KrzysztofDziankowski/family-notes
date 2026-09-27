@@ -189,6 +189,9 @@ class ScriptedTransport:
     def timeouts(self):
         return [request.extensions['timeout']['read'] for request in self.requests]
 
+    def connect_timeouts(self):
+        return [request.extensions['timeout']['connect'] for request in self.requests]
+
 
 def make_client(transport):
     return openai.OpenAI(
@@ -494,6 +497,18 @@ class TimingAndRetryTests(BackendHarness, SimpleTestCase):
         backend.classify(make_request())
 
         self.assertEqual(self.transport.timeouts(), [6.0])
+
+    def test_connect_timeout_is_a_short_slice_of_the_attempt(self):
+        for attempt_timeout, expected_connect in ((10.0, 3.0), (2.0, 2.0)):
+            with self.subTest(attempt_timeout=attempt_timeout):
+                backend = self.make_backend(
+                    [(1.0, ok())], attempt_timeout_seconds=attempt_timeout
+                )
+
+                backend.classify(make_request())
+
+                self.assertEqual(self.transport.connect_timeouts(), [expected_connect])
+                self.assertEqual(self.transport.timeouts(), [attempt_timeout])
 
     def test_non_retryable_failures_make_one_attempt(self):
         cases = {

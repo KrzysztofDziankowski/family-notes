@@ -73,7 +73,11 @@ class Command(BaseCommand):
         started_at = clock()
         try:
             backend = build_openai_backend()
-            result = classify_output(request, backend.classify(request))
+            try:
+                output = backend.classify(request)
+            finally:
+                backend.close()
+            result = classify_output(request, output)
         except ClassificationError as error:
             result = error.to_result()
         elapsed = clock() - started_at
