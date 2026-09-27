@@ -4,4 +4,15 @@
 
 {% block content %}
 <h1>Dodaj wpis</h1>
+{% if state == "saved" %}
+    {% include "entries/_saved_panel.html" with entry=saved_entry %}
+{% endif %}
+{% if state == "unavailable" %}
+    {% include "entries/_notice.html" with message=notice %}
+{% endif %}
+{% if review_form %}
+    {% include "entries/_review_form.html" with form=review_form %}
+{% else %}
+    {% include "entries/_capture_form.html" with form=capture_form %}
+{% endif %}
 {% endblock %}

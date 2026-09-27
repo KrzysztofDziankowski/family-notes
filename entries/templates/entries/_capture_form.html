@@ -1,0 +1,5 @@
+<form method="post" action="{% url 'entries:capture' %}" data-state-part="capture">
+    {% csrf_token %}
+    {% include "entries/_field.html" with field=form.text hint="" %}
+    <button type="submit">Rozpoznaj</button>
+</form>

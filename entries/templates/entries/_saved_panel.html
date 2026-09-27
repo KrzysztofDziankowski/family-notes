@@ -1,0 +1,19 @@
+<section class="fn-panel fn-panel--success" role="status" data-state-part="saved">
+    <h2>Dodano wpis</h2>
+    <dl class="fn-details">
+        <dt>Rodzaj</dt>
+        <dd>{{ entry.get_entry_type_display }}</dd>
+        <dt>Tytuł</dt>
+        <dd>{{ entry.content }}</dd>
+        {% if entry.date %}
+            <dt>Data</dt>
+            <dd>{{ entry.date|date:"l, j E Y"|lower }}</dd>
+        {% endif %}
+        {% if entry.time %}
+            <dt>Godzina</dt>
+            <dd>{{ entry.time|time:"H:i" }}</dd>
+        {% endif %}
+        <dt>Dla kogo</dt>
+        <dd>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Cała rodzina{% endif %}</dd>
+    </dl>
+</section>

@@ -6,4 +6,5 @@ app_name = 'entries'
 
 urlpatterns = [
     path('new/', views.capture, name='capture'),
+    path('confirm/', views.confirm, name='confirm'),
 ]
