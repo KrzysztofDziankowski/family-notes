@@ -1,0 +1,23 @@
+<form method="post" action="{% url 'entries:confirm' %}" data-state-part="review">
+    {% csrf_token %}
+    <h2>Sprawdź wpis</h2>
+    {% if form.non_field_errors %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+    {% endif %}
+    {% for row in form.rows %}
+        {% include "entries/_field.html" with field=row.field hint=row.hint %}
+        {% if row.field.name == "date" %}
+            {% with shown_date=form.display_date %}
+                {% if shown_date %}<p class="fn-muted" data-human-date>{{ shown_date|date:"l, j E Y"|lower }}</p>{% endif %}
+            {% endwith %}
+        {% endif %}
+    {% endfor %}
+    {{ form.school_item }}
+    {{ form.submission_key }}
+    <div class="fn-actions">
+        <button type="submit">Zapisz wpis</button>
+        <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+    </div>
+</form>

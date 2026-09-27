@@ -432,8 +432,10 @@ class NoPersistenceTests(FamilyFixtureMixin, TestCase):
         )
         self.assertEqual(self._row_counts(), counts_before)
 
-    def test_entries_app_still_has_no_models(self):
-        self.assertEqual(list(apps.get_app_config('entries').get_models()), [])
+    def test_entries_app_models_hold_no_classification_drafts(self):
+        # S-01 adds the confirmed Entry; classification itself stores nothing.
+        models = apps.get_app_config('entries').get_models()
+        self.assertEqual([model.__name__ for model in models], ['Entry'])
 
     def _row_counts(self):
         return {

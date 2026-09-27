@@ -224,8 +224,11 @@ class AccountStatusRouteTests(TestCase):
         response = self.client.get(reverse('account_status'))
 
         self.assertContains(response, 'Alex')
-        self.assertContains(response, 'Role: Parent')
+        self.assertContains(response, 'Rodzic')
+        self.assertContains(response, 'Dodaj wpis')
+        self.assertContains(response, f'href="{reverse("entries:capture")}"')
         self.assertTemplateUsed(response, 'family_access/account_status.html')
+        self.assertTemplateUsed(response, 'base.html')
 
     def test_configured_child_sees_display_name_and_role(self):
         user = self._create_member('child', FamilyMember.Role.CHILD, 'Sam')
@@ -234,7 +237,8 @@ class AccountStatusRouteTests(TestCase):
         response = self.client.get(reverse('account_status'))
 
         self.assertContains(response, 'Sam')
-        self.assertContains(response, 'Role: Child')
+        self.assertContains(response, 'Dziecko')
+        self.assertNotContains(response, 'Dodaj wpis')
 
     def test_authenticated_user_without_membership_sees_generic_status(self):
         user = get_user_model().objects.create_user(username='unconfigured')
@@ -242,9 +246,12 @@ class AccountStatusRouteTests(TestCase):
 
         response = self.client.get(reverse('account_status'))
 
-        self.assertContains(response, 'Your family membership is not configured yet.')
+        self.assertContains(
+            response, 'Twoje członkostwo w rodzinie nie jest jeszcze skonfigurowane.'
+        )
         self.assertNotContains(response, self.family.name)
-        self.assertNotContains(response, 'Role:')
+        self.assertNotContains(response, 'Rola')
+        self.assertNotContains(response, 'Dodaj wpis')
 
     def _create_member(self, username, role, display_name):
         user = get_user_model().objects.create_user(username=username)

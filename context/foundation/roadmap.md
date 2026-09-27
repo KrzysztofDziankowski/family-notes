@@ -43,7 +43,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | done        |
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | done        |
 | F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token, and its notifications are stored fast in a pre-events table | F-01 | FR-009, Access Control, NFR token revocation, NFR fast intake | planning |
-| S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | planning |
+| S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | in-progress |
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | proposed |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | proposed |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
@@ -138,7 +138,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** This is the first product proof; keeping it to the school-event case prevents the broader classification question from blocking the core flow.
-- **Status:** planning
+- **Status:** in-progress
 
 ### S-02: Parent Family Entry Management
 

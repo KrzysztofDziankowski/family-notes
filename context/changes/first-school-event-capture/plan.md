@@ -356,63 +356,63 @@ This adds one table (`entries 0001`) and no data migration. To roll back, unappl
 
 #### Automated
 
-- [ ] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
-- [ ] 1.3 Model tests pass: calendar event without date is rejected by the DB constraint; note/todo without date are accepted; an `eduvulcan` entry with no `submission_key` and no `created_by` saves (S-05 openness)
-- [ ] 1.4 Service tests pass: active parent creates an entry with `source=manual`, `family` and `created_by` set; child, inactive parent, inactive family, no membership and anonymous raise `PermissionDenied` and write nothing; assigning another family's member or an inactive member raises `ValidationError` and writes nothing
-- [ ] 1.5 Idempotency tests pass: the same `submission_key` twice returns `(same entry, False)` with one row; a second call with the same key but different values returns the original, unchanged entry; a key belonging to another family raises `ValidationError` and returns nothing
-- [ ] 1.6 `Entry.__str__` and `repr` contain no content text (sentinel test)
-- [ ] 1.7 Delete behaviour: deleting a Family with assigned entries cascades them; deleting an assigned FamilyMember or its User raises `RestrictedError` and leaves the entry
-- [ ] 1.8 Full suite passes: `uv run python manage.py test`
+- [x] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run` — d594e66
+- [x] 1.2 Django checks pass: `uv run python manage.py check` — d594e66
+- [x] 1.3 Model tests pass: calendar event without date is rejected by the DB constraint; note/todo without date are accepted; an `eduvulcan` entry with no `submission_key` and no `created_by` saves (S-05 openness) — d594e66
+- [x] 1.4 Service tests pass: active parent creates an entry with `source=manual`, `family` and `created_by` set; child, inactive parent, inactive family, no membership and anonymous raise `PermissionDenied` and write nothing; assigning another family's member or an inactive member raises `ValidationError` and writes nothing — d594e66
+- [x] 1.5 Idempotency tests pass: the same `submission_key` twice returns `(same entry, False)` with one row; a second call with the same key but different values returns the original, unchanged entry; a key belonging to another family raises `ValidationError` and returns nothing — d594e66
+- [x] 1.6 `Entry.__str__` and `repr` contain no content text (sentinel test) — d594e66
+- [x] 1.7 Delete behaviour: deleting a Family with assigned entries cascades them; deleting an assigned FamilyMember or its User raises `RestrictedError` and leaves the entry — d594e66
+- [x] 1.8 Full suite passes: `uv run python manage.py test` — d594e66
 
 #### Manual
 
-- [ ] 1.9 Entries appear in `/admin/` for a superuser with no content column in the list view
+- [x] 1.9 Entries appear in `/admin/` for a superuser with no content column in the list view — d594e66
 
 ### Phase 2: UI Foundation (Pico CSS, Tokens, Base Template)
 
 #### Automated
 
-- [ ] 2.1 `uv run python manage.py check` passes and `uv run python manage.py collectstatic --noinput --dry-run` finds `vendor/pico/pico.min.css` and `css/tokens.css`
-- [ ] 2.2 Account status tests pass with Polish strings; parent sees the "Dodaj wpis" link, child and unconfigured user do not
-- [ ] 2.3 A settings test asserts `TIME_ZONE == 'Europe/Warsaw'` and `LANGUAGE_CODE == 'pl'`
-- [ ] 2.4 Full suite passes: `uv run python manage.py test`
+- [x] 2.1 `uv run python manage.py check` passes and `uv run python manage.py collectstatic --noinput --dry-run` finds `vendor/pico/pico.min.css` and `css/tokens.css` — 212054a
+- [x] 2.2 Account status tests pass with Polish strings; parent sees the "Dodaj wpis" link, child and unconfigured user do not — 212054a
+- [x] 2.3 A settings test asserts `TIME_ZONE == 'Europe/Warsaw'` and `LANGUAGE_CODE == 'pl'` — 212054a
+- [x] 2.4 Full suite passes: `uv run python manage.py test` — 212054a
 
 #### Manual
 
-- [ ] 2.5 `/account/` renders with Pico styling and the accent colour at 360 px width in Chrome device mode, with no horizontal scroll
-- [ ] 2.6 Login pages (allauth) render in Polish
+- [x] 2.5 `/account/` renders with Pico styling and the accent colour at 360 px width in Chrome device mode, with no horizontal scroll — 212054a
+- [x] 2.6 Login pages (allauth) render in Polish — 212054a
 
 ### Phase 3: Capture Flow (Classify → Review/Correct → Confirm)
 
 #### Automated
 
-- [ ] 3.1 Access matrix: anonymous GET/POST → login redirect; child, no membership, inactive parent → 403 on both views; `GET entries/confirm/` → 405; no backend call and no row for any denied path
-- [ ] 3.2 US-01 acceptance: with `entries.views.timezone.localdate` patched to return 2026-09-19 and the scripted backend returning Michał / "Sprawdzian z biologii o skórze" / 2026-09-21, the review page preselects Michał, shows 2026-09-21 and the title; confirming creates one `calendar_event` entry for Michał, `source=manual`, and the redirected page shows "Dodano wpis" with the same values
-- [ ] 3.3 Correction: changing member, date, type and title on the review form saves the corrected values, not the classified ones
-- [ ] 3.4 Re-validation: a posted `assigned_member` from another family or inactive → form error, no row; calendar event without date → error; `school_item=test` with type still `calendar_event` and no member → error; `school_item=test` with type changed to `note` → saves with `school_item` cleared
-- [ ] 3.5 Follow-up: missing date renders the prefilled form with the date field marked invalid and saves after the parent fills it
-- [ ] 3.6 Unavailable: `TIMEOUT`/`DISABLED`/`UNKNOWN_MEMBER` render the notice and a `note` form containing the original text; `INPUT_TOO_LONG` renders a capture error with no review form
-- [ ] 3.7 Idempotency: posting the same confirm payload twice yields one row and both responses redirect to the same `?saved=<pk>`; re-posting the same key with an edited date keeps the first saved values and the saved panel shows them; a key owned by another family re-renders the review form with a new key and writes no row
-- [ ] 3.8 `?saved=<pk>` for another family's entry shows no panel and leaks no content
-- [ ] 3.9 Privacy: a log-capture test with a sentinel instruction proves the text appears in no log record across classify and confirm; the only rows written are the confirmed `Entry`
-- [ ] 3.10 Widget formats: under `LANGUAGE_CODE='pl'` the review form renders `value="2026-09-21"` for the date and `value="08:30"` for the time
-- [ ] 3.11 Django checks and migration check pass; full suite passes: `uv run python manage.py test`
+- [x] 3.1 Access matrix: anonymous GET/POST → login redirect; child, no membership, inactive parent → 403 on both views; `GET entries/confirm/` → 405; no backend call and no row for any denied path — 1df989d
+- [x] 3.2 US-01 acceptance: with `entries.views.timezone.localdate` patched to return 2026-09-19 and the scripted backend returning Michał / "Sprawdzian z biologii o skórze" / 2026-09-21, the review page preselects Michał, shows 2026-09-21 and the title; confirming creates one `calendar_event` entry for Michał, `source=manual`, and the redirected page shows "Dodano wpis" with the same values — 1df989d
+- [x] 3.3 Correction: changing member, date, type and title on the review form saves the corrected values, not the classified ones — 1df989d
+- [x] 3.4 Re-validation: a posted `assigned_member` from another family or inactive → form error, no row; calendar event without date → error; `school_item=test` with type still `calendar_event` and no member → error; `school_item=test` with type changed to `note` → saves with `school_item` cleared — 1df989d
+- [x] 3.5 Follow-up: missing date renders the prefilled form with the date field marked invalid and saves after the parent fills it — 1df989d
+- [x] 3.6 Unavailable: `TIMEOUT`/`DISABLED`/`UNKNOWN_MEMBER` render the notice and a `note` form containing the original text; `INPUT_TOO_LONG` renders a capture error with no review form — 1df989d
+- [x] 3.7 Idempotency: posting the same confirm payload twice yields one row and both responses redirect to the same `?saved=<pk>`; re-posting the same key with an edited date keeps the first saved values and the saved panel shows them; a key owned by another family re-renders the review form with a new key and writes no row — 1df989d
+- [x] 3.8 `?saved=<pk>` for another family's entry shows no panel and leaks no content — 1df989d
+- [x] 3.9 Privacy: a log-capture test with a sentinel instruction proves the text appears in no log record across classify and confirm; the only rows written are the confirmed `Entry` — 1df989d
+- [x] 3.10 Widget formats: under `LANGUAGE_CODE='pl'` the review form renders `value="2026-09-21"` for the date and `value="08:30"` for the time — 1df989d
+- [x] 3.11 Django checks and migration check pass; full suite passes: `uv run python manage.py test` — 1df989d
 
 #### Manual
 
-- [ ] 3.12 With `CLASSIFICATION_ENABLED` and a real key, on Chrome for Android (or device mode), entering "Michał ma w poniedziałek sprawdzian z biologii o skórze" returns a proposal within 30 s, and confirm shows "Dodano wpis"
-- [ ] 3.13 With classification disabled, the same text falls back to a saveable note
-- [ ] 3.14 Double-tapping "Zapisz wpis" on a phone creates one entry (checked in admin)
+- [x] 3.12 With `CLASSIFICATION_ENABLED` and a real key, on Chrome for Android (or device mode), entering "Michał ma w poniedziałek sprawdzian z biologii o skórze" returns a proposal within 30 s, and confirm shows "Dodano wpis" — 1df989d
+- [x] 3.13 With classification disabled, the same text falls back to a saveable note — 1df989d
+- [x] 3.14 Double-tapping "Zapisz wpis" on a phone creates one entry (checked in admin) — 1df989d
 
 ### Phase 4: States Kitchen Sink and Screenshot Gate
 
 #### Automated
 
-- [ ] 4.1 With `DEBUG=False` `entries:states` returns 404; with `DEBUG=True` a parent gets 200 containing a marker for each of the six states, a child gets 403, and no `Entry` rows are created
-- [ ] 4.2 Full suite passes: `uv run python manage.py test`
+- [x] 4.1 With `DEBUG=False` `entries:states` returns 404; with `DEBUG=True` a parent gets 200 containing a marker for each of the six states, a child gets 403, and no `Entry` rows are created — 9c9c380
+- [x] 4.2 Full suite passes: `uv run python manage.py test` — 9c9c380
 
 #### Manual
 
-- [ ] 4.3 Kitchen-sink screenshot at 360 px shows all six states legibly: no horizontal scroll, invalid fields visibly marked, accent colour from tokens, Polish copy throughout
-- [ ] 4.4 Screenshots are committed under `context/changes/first-school-event-capture/screenshots/`
+- [x] 4.3 Kitchen-sink screenshot at 360 px shows all six states legibly: no horizontal scroll, invalid fields visibly marked, accent colour from tokens, Polish copy throughout — 9c9c380
+- [x] 4.4 Screenshots are committed under `context/changes/first-school-event-capture/screenshots/` — 9c9c380

@@ -57,11 +57,11 @@ def make_output(**overrides):
 
 
 class EntriesAppTests(SimpleTestCase):
-    def test_entries_app_is_installed_without_models(self):
+    def test_entries_app_is_installed_with_only_the_entry_model(self):
         config = apps.get_app_config('entries')
 
         self.assertEqual(config.name, 'entries')
-        self.assertEqual(list(config.get_models()), [])
+        self.assertEqual([model.__name__ for model in config.get_models()], ['Entry'])
 
     def test_entry_type_values(self):
         self.assertEqual(
