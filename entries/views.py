@@ -1,7 +1,11 @@
+import datetime
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import Http404
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -9,9 +13,14 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_http_methods, require_POST
 
 from family_access.access import get_active_membership, is_parent, scope_queryset_to_family
+from family_access.models import FamilyMember
 
 from .classification.service import classify_for_parent
+from .classification.service import ParentClassification
 from .classification.types import (
+    EntryType,
+    MissingField,
+    SchoolItemKind,
     ClassificationFollowUp,
     ClassificationProposal,
     ClassificationUnavailable,
@@ -123,3 +132,110 @@ def _saved_entry(membership, saved):
         .filter(pk=int(saved))
         .first()
     )
+
+
+# Fictional kitchen-sink data: never real family members or saved rows.
+STATES_MEMBER_CHOICES = [('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek')]
+STATES_DATE = datetime.date(2026, 10, 5)
+
+
+def states(request):
+    """DEBUG-only page rendering every capture state from unsaved synthetic data."""
+    if not settings.DEBUG:
+        raise Http404
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    membership = _require_parent(request)
+
+    def synthetic_review(result, member_value='', text=''):
+        form, _ = review_form_from_classification(
+            membership, ParentClassification(result=result), text
+        )
+        _use_synthetic_members(form)
+        form.initial['assigned_member'] = member_value
+        return form
+
+    proposal = ClassificationProposal(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Sprawdzian z historii o średniowieczu',
+        date=STATES_DATE,
+        time=datetime.time(8, 0),
+        school_item=SchoolItemKind.TEST,
+    )
+    invalid_form = EntryReviewForm(
+        membership,
+        {
+            'entry_type': EntryType.CALENDAR_EVENT.value,
+            'content': '',
+            'date': '',
+            'time': '',
+            'assigned_member': '',
+            'school_item': SchoolItemKind.TEST.value,
+            'submission_key': str(uuid.uuid4()),
+        },
+    )
+    _use_synthetic_members(invalid_form)
+    invalid_form.is_valid()
+    saved_entry = Entry(
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Sprawdzian z historii o średniowieczu',
+        date=STATES_DATE,
+        time=datetime.time(8, 0),
+        assigned_member=FamilyMember(display_name='Kasia'),
+    )
+
+    sections = [
+        {'name': 'empty', 'label': 'Pusty formularz', 'capture_form': CaptureForm()},
+        {
+            'name': 'proposal',
+            'label': 'Propozycja do sprawdzenia',
+            'review_form': synthetic_review(proposal, member_value='s1'),
+        },
+        {
+            'name': 'follow_up',
+            'label': 'Brakująca data',
+            'review_form': synthetic_review(
+                ClassificationFollowUp(
+                    missing_fields=(MissingField.DATE,),
+                    entry_type=EntryType.CALENDAR_EVENT,
+                    content='Kartkówka z matematyki',
+                    school_item=SchoolItemKind.QUIZ,
+                ),
+                member_value='s2',
+            ),
+        },
+        {
+            'name': 'follow_up_member',
+            'label': 'Niejednoznaczna osoba',
+            'review_form': synthetic_review(
+                ClassificationFollowUp(
+                    missing_fields=(MissingField.AMBIGUOUS_MEMBER,),
+                    entry_type=EntryType.CALENDAR_EVENT,
+                    content='Zadanie domowe z polskiego',
+                    date=STATES_DATE,
+                    school_item=SchoolItemKind.HOMEWORK,
+                )
+            ),
+        },
+        {
+            'name': 'unavailable',
+            'label': 'Rozpoznanie niedostępne',
+            'notice': UNAVAILABLE_NOTICE,
+            'review_form': synthetic_review(
+                ClassificationUnavailable(reason=UnavailableReason.TIMEOUT),
+                text='Kupić blok techniczny na plastykę',
+            ),
+        },
+        {'name': 'invalid', 'label': 'Błędy w formularzu', 'review_form': invalid_form},
+        {
+            'name': 'saved',
+            'label': 'Zapisano',
+            'saved_entry': saved_entry,
+            'capture_form': CaptureForm(),
+        },
+    ]
+    return render(request, 'entries/states.html', {'sections': sections})
+
+
+def _use_synthetic_members(form):
+    form.fields['assigned_member'].choices = STATES_MEMBER_CHOICES

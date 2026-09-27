@@ -387,32 +387,32 @@ This adds one table (`entries 0001`) and no data migration. To roll back, unappl
 
 #### Automated
 
-- [x] 3.1 Access matrix: anonymous GET/POST → login redirect; child, no membership, inactive parent → 403 on both views; `GET entries/confirm/` → 405; no backend call and no row for any denied path
-- [x] 3.2 US-01 acceptance: with `entries.views.timezone.localdate` patched to return 2026-09-19 and the scripted backend returning Michał / "Sprawdzian z biologii o skórze" / 2026-09-21, the review page preselects Michał, shows 2026-09-21 and the title; confirming creates one `calendar_event` entry for Michał, `source=manual`, and the redirected page shows "Dodano wpis" with the same values
-- [x] 3.3 Correction: changing member, date, type and title on the review form saves the corrected values, not the classified ones
-- [x] 3.4 Re-validation: a posted `assigned_member` from another family or inactive → form error, no row; calendar event without date → error; `school_item=test` with type still `calendar_event` and no member → error; `school_item=test` with type changed to `note` → saves with `school_item` cleared
-- [x] 3.5 Follow-up: missing date renders the prefilled form with the date field marked invalid and saves after the parent fills it
-- [x] 3.6 Unavailable: `TIMEOUT`/`DISABLED`/`UNKNOWN_MEMBER` render the notice and a `note` form containing the original text; `INPUT_TOO_LONG` renders a capture error with no review form
-- [x] 3.7 Idempotency: posting the same confirm payload twice yields one row and both responses redirect to the same `?saved=<pk>`; re-posting the same key with an edited date keeps the first saved values and the saved panel shows them; a key owned by another family re-renders the review form with a new key and writes no row
-- [x] 3.8 `?saved=<pk>` for another family's entry shows no panel and leaks no content
-- [x] 3.9 Privacy: a log-capture test with a sentinel instruction proves the text appears in no log record across classify and confirm; the only rows written are the confirmed `Entry`
-- [x] 3.10 Widget formats: under `LANGUAGE_CODE='pl'` the review form renders `value="2026-09-21"` for the date and `value="08:30"` for the time
-- [x] 3.11 Django checks and migration check pass; full suite passes: `uv run python manage.py test`
+- [x] 3.1 Access matrix: anonymous GET/POST → login redirect; child, no membership, inactive parent → 403 on both views; `GET entries/confirm/` → 405; no backend call and no row for any denied path — 1df989d
+- [x] 3.2 US-01 acceptance: with `entries.views.timezone.localdate` patched to return 2026-09-19 and the scripted backend returning Michał / "Sprawdzian z biologii o skórze" / 2026-09-21, the review page preselects Michał, shows 2026-09-21 and the title; confirming creates one `calendar_event` entry for Michał, `source=manual`, and the redirected page shows "Dodano wpis" with the same values — 1df989d
+- [x] 3.3 Correction: changing member, date, type and title on the review form saves the corrected values, not the classified ones — 1df989d
+- [x] 3.4 Re-validation: a posted `assigned_member` from another family or inactive → form error, no row; calendar event without date → error; `school_item=test` with type still `calendar_event` and no member → error; `school_item=test` with type changed to `note` → saves with `school_item` cleared — 1df989d
+- [x] 3.5 Follow-up: missing date renders the prefilled form with the date field marked invalid and saves after the parent fills it — 1df989d
+- [x] 3.6 Unavailable: `TIMEOUT`/`DISABLED`/`UNKNOWN_MEMBER` render the notice and a `note` form containing the original text; `INPUT_TOO_LONG` renders a capture error with no review form — 1df989d
+- [x] 3.7 Idempotency: posting the same confirm payload twice yields one row and both responses redirect to the same `?saved=<pk>`; re-posting the same key with an edited date keeps the first saved values and the saved panel shows them; a key owned by another family re-renders the review form with a new key and writes no row — 1df989d
+- [x] 3.8 `?saved=<pk>` for another family's entry shows no panel and leaks no content — 1df989d
+- [x] 3.9 Privacy: a log-capture test with a sentinel instruction proves the text appears in no log record across classify and confirm; the only rows written are the confirmed `Entry` — 1df989d
+- [x] 3.10 Widget formats: under `LANGUAGE_CODE='pl'` the review form renders `value="2026-09-21"` for the date and `value="08:30"` for the time — 1df989d
+- [x] 3.11 Django checks and migration check pass; full suite passes: `uv run python manage.py test` — 1df989d
 
 #### Manual
 
-- [x] 3.12 With `CLASSIFICATION_ENABLED` and a real key, on Chrome for Android (or device mode), entering "Michał ma w poniedziałek sprawdzian z biologii o skórze" returns a proposal within 30 s, and confirm shows "Dodano wpis"
-- [x] 3.13 With classification disabled, the same text falls back to a saveable note
-- [x] 3.14 Double-tapping "Zapisz wpis" on a phone creates one entry (checked in admin)
+- [x] 3.12 With `CLASSIFICATION_ENABLED` and a real key, on Chrome for Android (or device mode), entering "Michał ma w poniedziałek sprawdzian z biologii o skórze" returns a proposal within 30 s, and confirm shows "Dodano wpis" — 1df989d
+- [x] 3.13 With classification disabled, the same text falls back to a saveable note — 1df989d
+- [x] 3.14 Double-tapping "Zapisz wpis" on a phone creates one entry (checked in admin) — 1df989d
 
 ### Phase 4: States Kitchen Sink and Screenshot Gate
 
 #### Automated
 
-- [ ] 4.1 With `DEBUG=False` `entries:states` returns 404; with `DEBUG=True` a parent gets 200 containing a marker for each of the six states, a child gets 403, and no `Entry` rows are created
-- [ ] 4.2 Full suite passes: `uv run python manage.py test`
+- [x] 4.1 With `DEBUG=False` `entries:states` returns 404; with `DEBUG=True` a parent gets 200 containing a marker for each of the six states, a child gets 403, and no `Entry` rows are created
+- [x] 4.2 Full suite passes: `uv run python manage.py test`
 
 #### Manual
 
-- [ ] 4.3 Kitchen-sink screenshot at 360 px shows all six states legibly: no horizontal scroll, invalid fields visibly marked, accent colour from tokens, Polish copy throughout
-- [ ] 4.4 Screenshots are committed under `context/changes/first-school-event-capture/screenshots/`
+- [x] 4.3 Kitchen-sink screenshot at 360 px shows all six states legibly: no horizontal scroll, invalid fields visibly marked, accent colour from tokens, Polish copy throughout
+- [x] 4.4 Screenshots are committed under `context/changes/first-school-event-capture/screenshots/`
