@@ -420,18 +420,18 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 
 #### Automated
 
-- [x] 3.1 The full test suite passes: `uv run python manage.py test`
-- [x] 3.2 No missing migrations: `uv run python manage.py makemigrations --check --dry-run`
-- [x] 3.3 Valid token and payload get 202 and one pending row bound to the family and token
-- [x] 3.4 Request path bounded: pinned query count and no classification call
-- [x] 3.5 Duplicate notification_id is idempotent per family
-- [x] 3.6 Invalid payload gets 400, oversized gets 413, nothing stored
-- [x] 3.7 Token rejection paths get 401, GET gets 405, route is CSRF-exempt
-- [x] 3.8 InboundNotification admin is read-only and superuser-only
-- [x] 3.11 Same-day identical content under a new notification_id is deduplicated
+- [x] 3.1 The full test suite passes: `uv run python manage.py test` — 30ae082
+- [x] 3.2 No missing migrations: `uv run python manage.py makemigrations --check --dry-run` — 30ae082
+- [x] 3.3 Valid token and payload get 202 and one pending row bound to the family and token — 30ae082
+- [x] 3.4 Request path bounded: pinned query count and no classification call — 30ae082
+- [x] 3.5 Duplicate notification_id is idempotent per family — 30ae082
+- [x] 3.6 Invalid payload gets 400, oversized gets 413, nothing stored — 30ae082
+- [x] 3.7 Token rejection paths get 401, GET gets 405, route is CSRF-exempt — 30ae082
+- [x] 3.8 InboundNotification admin is read-only and superuser-only — 30ae082
+- [x] 3.11 Same-day identical content under a new notification_id is deduplicated — 30ae082
 
 #### Manual
 
-- [x] 3.9 Local curl POST returns 202 at once and the row is pending in admin
+- [x] 3.9 Local curl POST returns 202 at once and the row is pending in admin — 30ae082
 - [ ] 3.10 Real phone automation delivers to production with no duplicate rows
-- [x] 3.12 README intake curl example returns 202 as written
+- [x] 3.12 README intake curl example returns 202 as written — 30ae082
