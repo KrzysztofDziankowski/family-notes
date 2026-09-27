@@ -188,7 +188,7 @@ Each member of the single preconfigured family signs in using their own external
 - Automatic confirmation after five seconds.
 - Re-dictation from the confirmation screen.
 - Read-only kiosk access by token.
-- Integrations with external calendar, task, and other sources.
+- Integrations with external calendar, task, and other sources (except EduVulcan notification intake — see amendment below).
 - In-app family member and role administration.
 - Automatic tag assignment.
 
@@ -196,3 +196,15 @@ Each member of the single preconfigured family signs in using their own external
 
 - Preferred identity provider: Google accounts.
 - Candidate future integration sources: Google Calendar, Todoist, and other external sources.
+
+## Amendment 2026-09-27: EduVulcan school intake (PRD v2)
+
+Post-shaping scope decision by the owner, recorded here so the deferred items above are not read as still binding. The PRD (v2) is the source of truth.
+
+- A parent-owned automation forwards captured EduVulcan mobile notifications to a token-authenticated endpoint that only adds school entries.
+- Tokens are assigned to parent users and issued/revoked only by the administrator (no in-app token page).
+- Known notification categories are parsed by fixed rules; unknown formats fall back to classification, then to a general note.
+- Automated entries are saved without parent confirmation and corrected later through entry management.
+- Duplicates are suppressed by notification id and by identical title, message, and child.
+- Teacher messages ("Nowa wiadomość") are saved as general family notes.
+- Example payloads live in the gitignored `eduvulcan-queue/` directory (real names; anonymize before using as fixtures).

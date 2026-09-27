@@ -4,7 +4,7 @@ version: 1
 status: draft
 created: 2026-09-22
 updated: 2026-09-27
-prd_version: 1
+prd_version: 2
 main_goal: speed
 top_blocker: capacity
 milestone_id: first-family-capture-loop
@@ -14,7 +14,7 @@ milestone_status: open
 
 # Roadmap: FamilyNotes
 
-> Derived from `context/foundation/prd.md` (v1), `context/foundation/tech-stack.md`, `context/foundation/infrastructure.md`, and auto-researched codebase baseline.
+> Derived from `context/foundation/prd.md` (v2), `context/foundation/tech-stack.md`, `context/foundation/infrastructure.md`, and auto-researched codebase baseline.
 > Edit-in-place; archive when superseded.
 > Slices below are listed in dependency order. The "At a glance" table is the index.
 
@@ -23,13 +23,13 @@ milestone_status: open
 **M-1: First Family Capture Loop** - Status: open
 
 - **Intent:** Deliver the smallest working family information loop: signed-in family members, a parent capture flow, a saved entry, and child-safe visibility. The milestone proves that a parent can turn one natural-language school instruction into family data without exposing that data outside the configured family.
-- **Source materials:** `context/foundation/prd.md` (v1)
+- **Source materials:** `context/foundation/prd.md` (v2; v2 added automated EduVulcan school intake on 2026-09-27)
 - **Done when:** every F-NN and S-NN below is `done`.
-- **Scope anchors:** FR-001 through FR-008, US-01, NFR family privacy, NFR 30-second classification-or-follow-up boundary, Access Control.
+- **Scope anchors:** FR-001 through FR-011, US-01, US-02, NFR family privacy, NFR 30-second classification-or-follow-up boundary, NFR token revocation, Access Control.
 
 ## Vision recap
 
-FamilyNotes replaces scattered family tasks, events, and notes with one shared family space. The first product promise is a single accessible text field where a parent can enter a short natural-language instruction, review the proposed entry, correct it if needed, and save it for the right family member. The MVP stays focused on one preconfigured family and defers external integrations, custom audio capture, multi-family administration, and richer classification cases.
+FamilyNotes replaces scattered family tasks, events, and notes with one shared family space. The first product promise is a single accessible text field where a parent can enter a short natural-language instruction, review the proposed entry, correct it if needed, and save it for the right family member. A parent-owned automation can also forward EduVulcan school notifications with a parent's token, so school events arrive without retyping. The MVP stays focused on one preconfigured family and defers other external integrations, custom audio capture, multi-family administration, and richer classification cases.
 
 ## North star
 
@@ -42,10 +42,12 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | F-01 | identity-and-family-access-contract  | (foundation) family identity, roles, and scoped access contract exist      | -             | FR-001, FR-002, FR-008, Access Control, NFR family privacy | done        |
 | F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | done        |
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | done        |
+| F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token | F-01 | FR-009, Access Control, NFR token revocation | proposed |
 | S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | proposed |
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | proposed |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | proposed |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
+| S-05 | eduvulcan-school-event-intake        | parent's automation can forward an EduVulcan notification and it is saved as a school entry | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic | proposed |
 
 ## Streams
 
@@ -56,6 +58,7 @@ Navigation aid - groups items that share a Prerequisites chain. Canonical orderi
 | A      | Access-controlled data | `F-01` -> `S-01` -> `S-02` -> `S-03` | Drives the shortest path from signed-in family members to safe family visibility. |
 | B      | Classification flow    | `F-02` -> `S-04`              | Joins Stream A at `S-01`; keeps classification behavior useful without expanding the first slice. |
 | C      | Release confidence     | `F-03`                        | Stays parallel so launch checks do not delay the first product flow longer than necessary. |
+| D      | Automated school intake | `F-04` -> `S-05`             | `F-04` can run now, parallel with `S-01`; `S-05` joins Stream A after `S-01` (entry model) and reuses `F-02` for fallback classification. |
 
 ## Baseline
 
@@ -110,6 +113,19 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Sequenced as a launch enabler because the chosen infrastructure is self-managed; the risk is turning operations hardening into a broad deployment project instead of a minimal health gate.
 - **Status:** done
 
+### F-04: Automation Token Access
+
+- **Outcome:** (foundation) a parent's automation can authenticate with a token issued and revoked by the administrator, and the token acts only on behalf of that parent's family.
+- **Change ID:** automation-token-access
+- **PRD refs:** FR-009, Access Control, NFR token revocation
+- **Unlocks:** S-05; access tests for a valid token, a revoked token, a missing/unknown token, and a token owned by a child or inactive member
+- **Prerequisites:** F-01
+- **Parallel with:** S-01, S-02, S-03, S-04
+- **Blockers:** -
+- **Unknowns:** -
+- **Risk:** The token is a second authentication path beside the signed-in session; the risk is letting it reach anything other than school intake. Kept admin-only (no parent-facing page) to stay inside the MVP's no-in-app-administration stance.
+- **Status:** proposed
+
 ## Slices
 
 ### S-01: First School Event Capture
@@ -161,6 +177,19 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Risk:** Sequenced after the first capture case so missing-field behavior extends proven classification rather than delaying the initial end-to-end flow.
 - **Status:** proposed
 
+### S-05: EduVulcan School Event Intake
+
+- **Outcome:** a parent's automation can forward a captured EduVulcan notification with the parent's token, and it is saved (without confirmation) as a school entry for the named child, deduplicated, and visible in the family and child views.
+- **Change ID:** eduvulcan-school-event-intake
+- **PRD refs:** US-02, FR-010, FR-011, Business Logic
+- **Prerequisites:** S-01, F-02, F-04
+- **Parallel with:** S-02, S-03, S-04
+- **Blockers:** -
+- **Unknowns:**
+  - Is the notification title set and message format stable enough for fixed rules, or will fallback classification carry most of the load? - Owner: user. Block: no (fallback to classification, then general note, covers drift).
+- **Risk:** Depends on the entry model shaped by S-01, which must allow a source marker and entries created without a confirmation step. Real sample notifications (gitignored `eduvulcan-queue/`) contain names, so fixtures must be anonymized before they enter the repo. The LLM fallback sends notification text through the F-02 privacy boundary.
+- **Status:** proposed
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID                           | Suggested issue title                               | Ready for `/10x-plan` | Notes |
@@ -172,6 +201,8 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | S-02       | parent-family-entry-management      | Parent manages saved family entries                 | no                    | Wait for F-01 and S-01. |
 | S-03       | child-assigned-entry-view           | Child sees only assigned entries                    | no                    | Wait for F-01 and S-01. |
 | S-04       | missing-info-follow-up              | Parent receives follow-up for missing required data | no                    | Wait for F-02 and S-01. |
+| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | yes                   | F-01 is done; can run parallel with S-01. |
+| S-05       | eduvulcan-school-event-intake       | Automation forwards EduVulcan notifications as school entries | no          | Wait for S-01 and F-04. |
 
 ## Open Roadmap Questions
 
@@ -180,8 +211,10 @@ Foundations below assume these are present and do NOT re-scaffold them.
 ## Parked
 
 - **Custom audio recording or speech-to-text conversion** - Why parked: PRD Non-Goals; users may type or use phone keyboard dictation.
-- **External calendar, task, and source integrations** - Why parked: PRD Non-Goals; post-MVP extension.
-- **Read-only kiosk view or token authentication** - Why parked: PRD Non-Goals; post-MVP extension.
+- **External calendar, task, and source integrations (other than forwarded EduVulcan notifications)** - Why parked: PRD Non-Goals; post-MVP extension. EduVulcan intake moved into scope in PRD v2 (S-05).
+- **Read-only kiosk view, and token access beyond school intake** - Why parked: PRD Non-Goals; post-MVP extension. Automation tokens for school intake moved into scope in PRD v2 (F-04).
+- **In-app token management page for parents** - Why parked: PRD v2 Non-Goals; tokens are issued and revoked by the administrator.
+- **Reading EduVulcan directly (API/scraping)** - Why parked: PRD v2 Non-Goals; the product only receives notifications the parent's automation forwards.
 - **In-app family or role management and multiple-family support** - Why parked: PRD Non-Goals; the MVP uses one preconfigured five-person family.
 - **Explicit accessibility targets beyond default browser behavior** - Why parked: PRD Non-Goals; deferred requirement.
 - **Response-time target below 30 seconds** - Why parked: PRD Non-Goals; performance improvements are deferred beyond the MVP threshold.
