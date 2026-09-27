@@ -356,18 +356,18 @@ This adds one table (`entries 0001`) and no data migration. To roll back, unappl
 
 #### Automated
 
-- [ ] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
-- [ ] 1.3 Model tests pass: calendar event without date is rejected by the DB constraint; note/todo without date are accepted; an `eduvulcan` entry with no `submission_key` and no `created_by` saves (S-05 openness)
-- [ ] 1.4 Service tests pass: active parent creates an entry with `source=manual`, `family` and `created_by` set; child, inactive parent, inactive family, no membership and anonymous raise `PermissionDenied` and write nothing; assigning another family's member or an inactive member raises `ValidationError` and writes nothing
-- [ ] 1.5 Idempotency tests pass: the same `submission_key` twice returns `(same entry, False)` with one row; a second call with the same key but different values returns the original, unchanged entry; a key belonging to another family raises `ValidationError` and returns nothing
-- [ ] 1.6 `Entry.__str__` and `repr` contain no content text (sentinel test)
-- [ ] 1.7 Delete behaviour: deleting a Family with assigned entries cascades them; deleting an assigned FamilyMember or its User raises `RestrictedError` and leaves the entry
-- [ ] 1.8 Full suite passes: `uv run python manage.py test`
+- [x] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.2 Django checks pass: `uv run python manage.py check`
+- [x] 1.3 Model tests pass: calendar event without date is rejected by the DB constraint; note/todo without date are accepted; an `eduvulcan` entry with no `submission_key` and no `created_by` saves (S-05 openness)
+- [x] 1.4 Service tests pass: active parent creates an entry with `source=manual`, `family` and `created_by` set; child, inactive parent, inactive family, no membership and anonymous raise `PermissionDenied` and write nothing; assigning another family's member or an inactive member raises `ValidationError` and writes nothing
+- [x] 1.5 Idempotency tests pass: the same `submission_key` twice returns `(same entry, False)` with one row; a second call with the same key but different values returns the original, unchanged entry; a key belonging to another family raises `ValidationError` and returns nothing
+- [x] 1.6 `Entry.__str__` and `repr` contain no content text (sentinel test)
+- [x] 1.7 Delete behaviour: deleting a Family with assigned entries cascades them; deleting an assigned FamilyMember or its User raises `RestrictedError` and leaves the entry
+- [x] 1.8 Full suite passes: `uv run python manage.py test`
 
 #### Manual
 
-- [ ] 1.9 Entries appear in `/admin/` for a superuser with no content column in the list view
+- [x] 1.9 Entries appear in `/admin/` for a superuser with no content column in the list view
 
 ### Phase 2: UI Foundation (Pico CSS, Tokens, Base Template)
 
