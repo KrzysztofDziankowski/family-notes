@@ -409,10 +409,10 @@ This adds one table (`entries 0001`) and no data migration. To roll back, unappl
 
 #### Automated
 
-- [x] 4.1 With `DEBUG=False` `entries:states` returns 404; with `DEBUG=True` a parent gets 200 containing a marker for each of the six states, a child gets 403, and no `Entry` rows are created
-- [x] 4.2 Full suite passes: `uv run python manage.py test`
+- [x] 4.1 With `DEBUG=False` `entries:states` returns 404; with `DEBUG=True` a parent gets 200 containing a marker for each of the six states, a child gets 403, and no `Entry` rows are created — 9c9c380
+- [x] 4.2 Full suite passes: `uv run python manage.py test` — 9c9c380
 
 #### Manual
 
-- [x] 4.3 Kitchen-sink screenshot at 360 px shows all six states legibly: no horizontal scroll, invalid fields visibly marked, accent colour from tokens, Polish copy throughout
-- [x] 4.4 Screenshots are committed under `context/changes/first-school-event-capture/screenshots/`
+- [x] 4.3 Kitchen-sink screenshot at 360 px shows all six states legibly: no horizontal scroll, invalid fields visibly marked, accent colour from tokens, Polish copy throughout — 9c9c380
+- [x] 4.4 Screenshots are committed under `context/changes/first-school-event-capture/screenshots/` — 9c9c380
