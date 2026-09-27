@@ -42,12 +42,12 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | F-01 | identity-and-family-access-contract  | (foundation) family identity, roles, and scoped access contract exist      | -             | FR-001, FR-002, FR-008, Access Control, NFR family privacy | done        |
 | F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | done        |
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | done        |
-| F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token | F-01 | FR-009, Access Control, NFR token revocation | planning |
-| S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | proposed |
+| F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token, and its notifications are stored fast in a pre-events table | F-01 | FR-009, Access Control, NFR token revocation, NFR fast intake | planning |
+| S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | planning |
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | proposed |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | proposed |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
-| S-05 | eduvulcan-school-event-intake        | parent's automation can forward an EduVulcan notification and it is saved as a school entry | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic | proposed |
+| S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | proposed |
 
 ## Streams
 
@@ -138,7 +138,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** This is the first product proof; keeping it to the school-event case prevents the broader classification question from blocking the core flow.
-- **Status:** proposed
+- **Status:** planning
 
 ### S-02: Parent Family Entry Management
 
@@ -187,6 +187,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:**
   - Is the notification title set and message format stable enough for fixed rules, or will fallback classification carry most of the load? - Owner: user. Block: no (fallback to classification, then general note, covers drift).
+- **Intake split (2026-09-27):** F-04 owns the fast endpoint and the `InboundNotification` pre-events table (store + 202, dedup by id and same-day content). S-05 converts pending rows outside the request: fixed rules → LLM fallback → general note, via an in-process in-memory queue with no external dependency, with the DB row as the source of truth plus a restart sweep. See F-04 plan "S-05 Handoff".
 - **Risk:** Depends on the entry model shaped by S-01, which must allow a source marker and entries created without a confirmation step. Real sample notifications (gitignored `eduvulcan-queue/`) contain names, so fixtures must be anonymized before they enter the repo. The LLM fallback sends notification text through the F-02 privacy boundary.
 - **Status:** proposed
 

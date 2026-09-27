@@ -1,11 +1,12 @@
 <!-- PLAN-REVIEW-REPORT -->
-# Plan Review: Automation Token Access
+# Plan Review: Automation Token Access (v2, focus: Phase 3 fast intake)
 
 - **Plan**: context/changes/automation-token-access/plan.md
-- **Mode**: Deep (inline verification)
+- **Mode**: Deep
 - **Date**: 2026-09-27
 - **Verdict**: REVISE → SOUND after triage
-- **Findings**: 0 critical, 3 warnings, 3 observations
+- **Findings**: 0 critical, 2 warnings, 2 observations
+- **Previous review**: `reviews/plan-review-v1.md` (Phases 1–2)
 
 ## Verdicts
 
@@ -13,80 +14,70 @@
 |-----------|---------|
 | End-State Alignment | PASS |
 | Lean Execution | PASS |
-| Architectural Fitness | PASS |
+| Architectural Fitness | WARNING |
 | Blind Spots | WARNING |
 | Plan Completeness | WARNING |
 
 ## Grounding
-6/6 paths ✓, 2/2 symbols ✓ (is_parent, SuperuserAdminSite), brief↔plan ✓, Progress↔Phase ✓
+
+7/7 paths ✓, 3/3 symbols ✓ (`is_parent`, `Family`, `EntriesConfig`), brief↔plan ✓, Progress↔Phase ✓. Aggregate sample check over 45 `eduvulcan-queue` payloads (no content read): `notification_id` is a str of 56–57 chars and all 45 are unique; 39 distinct title+message values; max body 510 B; `captured_at_iso` carries a +02:00 offset.
 
 ## Findings
 
-### F1 — Deactivated Django user keeps a working token
+### F1 — Deduplicating by id catches none of the real duplicates
 
 - **Severity**: ⚠️ WARNING
-- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
+- **Impact**: 🔬 HIGH — architectural stakes; think carefully before deciding
 - **Dimension**: Blind Spots
-- **Location**: Phase 2 — Authentication helper
-- **Detail**: `is_parent()` (family_access/access.py:24) checks membership, family and role but not `member.user.is_active`. The token path bypasses the login check that refuses inactive users.
-- **Fix**: Also require `member.user.is_active`, select_related `member__user`, and add an inactive-user 401 case and test.
-- **Decision**: FIXED
+- **Location**: Phase 3 §1, S-05 Handoff
+- **Detail**: In the samples, every repeated notification has a new `notification_id`, so the (family, notification_id) constraint catches none of them. The per-process workers in the handoff could convert two copies at the same time and create duplicate entries, which breaks FR-011.
+- **Fix A ⭐ Recommended**: `content_hash` at intake (not unique), plus serialized conversion with windowed dedup in S-05.
+  - Strength: No rejection logic in the fast path; also caps LLM concurrency.
+  - Tradeoff: Serial conversion.
+  - Confidence: HIGH — the sample stats show the problem directly.
+  - Blind spot: Window length not set.
+- **Fix B**: Unique (family, content_hash, captured_date) at intake.
+  - Strength: Duplicates never reach the table.
+  - Tradeoff: Two genuinely identical texts on the same day are stored once.
+  - Confidence: MED — only 45 samples.
+  - Blind spot: Normalizing the text.
+- **Decision**: FIXED (Fix B). The accepted false-positive risk is recorded in plan Phase 3 §1 and the brief.
 
-### F2 — Refreshing the show-once page silently issues a second token
+### F2 — Phase 3 and S-01 both create entries/0001
 
 - **Severity**: ⚠️ WARNING
 - **Impact**: 🔎 MEDIUM — real tradeoff; pause to reason through it
-- **Dimension**: Blind Spots
-- **Location**: Phase 1 — Admin issuing; Critical Implementation Details
-- **Detail**: `response_add` renders the secret as the POST response, so a refresh re-submits the add form and issues another token.
-- **Fix A**: PRG, with the secret in the server-side session and removed on first display
-  - Strength: No duplicates.
-  - Tradeoff: The secret briefly sits in `django_session`; depends on the session engine staying server-side.
-  - Confidence: HIGH — standard PRG.
-  - Blind spot: A future switch to signed_cookies sessions would leak it.
-- **Fix B ⭐ Recommended**: Keep the rendered response; add a Polish no-refresh warning, and make duplicates visible and revocable
-  - Strength: The secret exists only in one response.
-  - Tradeoff: Accidental duplicates remain possible.
-  - Confidence: HIGH — a duplicate is an unused, revocable token.
+- **Dimension**: Architectural Fitness
+- **Location**: Phase 3 §1, Migration Notes
+- **Detail**: The S-01 plan creates `entries/0001_initial` and said F-04 doesn't touch `entries`. Phase 3 also created `entries/0001`, which would leave two leaf migrations.
+- **Fix A ⭐ Recommended**: Put the model in `family_access` (0003).
+  - Strength: No dependency on S-01.
+  - Tradeoff: Weaker domain placement.
+  - Confidence: HIGH
   - Blind spot: None significant.
-- **Decision**: FIXED (Fix B)
+- **Fix B**: Keep it in `entries` as `0002`, after S-01's `0001_initial`.
+  - Strength: Domain placement.
+  - Tradeoff: Phase 3 waits for S-01.
+  - Confidence: HIGH
+  - Blind spot: S-01's timeline.
+- **Decision**: FIXED (Fix B). The Phase 3 prerequisite is added, and the S-01 plan note (first-school-event-capture/plan.md:17) is updated.
 
-### F3 — CSRF-exemption test can't fail
+### F3 — The in-memory worker's startup isn't specified
 
-- **Severity**: ⚠️ WARNING
+- **Severity**: 💡 OBSERVATION
+- **Impact**: 🔎 MEDIUM — real tradeoff; pause to reason through it
+- **Dimension**: Blind Spots
+- **Location**: S-05 Handoff
+- **Detail**: `AppConfig.ready()` also runs under migrate, test and management commands; a thread started before a `--preload` fork is lost; and each Gunicorn worker adds another concurrent LLM caller on 2 GB RAM.
+- **Fix**: Start the worker from Gunicorn's `post_fork` hook or lazily, gated by a setting, with at most one conversion at a time (advisory lock).
+- **Decision**: FIXED
+
+### F4 — Small gaps in the plan's precision
+
+- **Severity**: 💡 OBSERVATION
 - **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
 - **Dimension**: Plan Completeness
-- **Location**: Phase 2 — Success Criteria 2.7
-- **Detail**: Django's test Client skips CSRF by default, so the check passes even without `csrf_exempt`.
-- **Fix**: Use `Client(enforce_csrf_checks=True)`.
-- **Decision**: FIXED
-
-### F4 — Can an admin reassign an existing token to another member?
-
-- **Severity**: 💡 OBSERVATION
-- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
-- **Dimension**: Plan Completeness
-- **Location**: Phase 1 — Admin change form
-- **Detail**: Which fields are editable was ambiguous; an editable `member` would move a live secret to another parent.
-- **Fix**: `member` read-only after creation; `name` and `expires_at` editable; test added (1.12).
-- **Decision**: FIXED
-
-### F5 — Expiry boundary undecided
-
-- **Severity**: 💡 OBSERVATION
-- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
-- **Dimension**: Blind Spots
-- **Location**: Phase 1 — is_expired(now)
-- **Detail**: Validity at `expires_at == now` was left to the implementation.
-- **Fix**: Expired means `expires_at <= now`; boundary test added (1.13).
-- **Decision**: FIXED
-
-### F6 — Info-level rejection logs will never be emitted
-
-- **Severity**: 💡 OBSERVATION
-- **Impact**: 🏃 LOW — quick decision; fix is obvious and narrowly scoped
-- **Dimension**: Blind Spots
-- **Location**: Phase 2 — Authentication helper
-- **Detail**: There's no LOGGING config, and the last-resort handler prints only WARNING and above.
-- **Fix**: Log rejections at WARNING with the reason and prefix, never the secret; `assertLogs` test added (2.12).
+- **Location**: Phase 2 §2, Phase 3
+- **Detail**: `notification_id` length was 64 while real ids are 56–57 chars; the patch target wasn't named; the README step had no criterion; the Phase 2 route wording disagreed with Phase 3.
+- **Fix**: CharField(255); patch `entries.classification.service.classify_for_parent`; manual item 3.12; Phase 2 wording aligned.
 - **Decision**: FIXED

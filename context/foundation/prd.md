@@ -123,6 +123,7 @@ Children read family information relevant to them but do not create, edit, or de
 - Data belonging to the configured family is not accessible to people outside that family.
 - Text submitted for classification is not used for any purpose other than producing and saving the requested family entry. This includes notification text sent to classification when the school notification rules cannot interpret it.
 - An automation token can be revoked, and a revoked token stops working immediately.
+- A notification submitted by a parent's automation is acknowledged immediately, without waiting for rules or classification. It is stored first and converted into an entry afterwards, and a stored notification is not lost if conversion is interrupted.
 
 ## Business Logic
 
