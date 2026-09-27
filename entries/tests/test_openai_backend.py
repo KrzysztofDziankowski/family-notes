@@ -10,7 +10,9 @@ import datetime
 import json
 import logging
 import os
+import runpy
 import traceback
+from unittest import mock
 
 import httpx2
 import openai
@@ -32,6 +34,7 @@ from entries.classification.openai_backend import (
     build_openai_backend,
 )
 from entries.classification.types import EntryType, SchoolItemKind, UnavailableReason
+from family_notes import settings as settings_module
 from family_notes.settings import env_number, validate_classification_settings
 
 MODEL = 'gpt-test-structured'
@@ -275,6 +278,15 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         (body,) = self.transport.bodies()
         self.assertEqual(set(body), ALLOWED_REQUEST_FIELDS)
         self.assertFalse(STATEFUL_FIELDS & set(body))
+
+    def test_reasoning_effort_is_sent_only_when_configured(self):
+        backend = self.make_backend([ok()], reasoning_effort='low')
+
+        backend.classify(make_request())
+
+        (body,) = self.transport.bodies()
+        self.assertEqual(body['reasoning'], {'effort': 'low'})
+        self.assertEqual(set(body), ALLOWED_REQUEST_FIELDS | {'reasoning'})
 
     def test_every_attempt_sends_store_false(self):
         backend = self.make_backend([(10.0, TIMEOUT), (1.0, ok())])
@@ -611,17 +623,31 @@ FULL_SETTINGS = dict(
     CLASSIFICATION_ENABLED=True,
     OPENAI_API_KEY=API_KEY_SENTINEL,
     OPENAI_CLASSIFICATION_MODEL=MODEL,
-    OPENAI_ZDR_ATTESTED=True,
+    OPENAI_REASONING_EFFORT='',
     CLASSIFICATION_DEADLINE_SECONDS=25.0,
     CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=10.0,
     CLASSIFICATION_MAX_RETRIES=1,
 )
 
 
+def default_classification_settings():
+    """Evaluate settings.py without a .env file or classification variables.
+
+    Django's live settings reflect the developer's local .env, so defaults are
+    read from a fresh evaluation instead.
+    """
+    with mock.patch('dotenv.load_dotenv'), mock.patch.dict(
+        os.environ, {'DJANGO_DEBUG': 'True'}, clear=True
+    ):
+        values = runpy.run_path(settings_module.__file__)
+    return {name: values[name] for name in FULL_SETTINGS}
+
+
 class BackendFactoryTests(SimpleTestCase):
     def test_default_settings_are_disabled(self):
-        with self.assertRaises(ClassificationBackendError) as caught:
-            build_openai_backend()
+        with override_settings(**default_classification_settings()):
+            with self.assertRaises(ClassificationBackendError) as caught:
+                build_openai_backend()
 
         self.assertEqual(caught.exception.reason, UnavailableReason.DISABLED)
 
@@ -630,7 +656,6 @@ class BackendFactoryTests(SimpleTestCase):
             ('CLASSIFICATION_ENABLED', False),
             ('OPENAI_API_KEY', ''),
             ('OPENAI_CLASSIFICATION_MODEL', ''),
-            ('OPENAI_ZDR_ATTESTED', False),
         ):
             for debug in (True, False):
                 with self.subTest(name, debug=debug), override_settings(
@@ -666,6 +691,20 @@ class BackendFactoryTests(SimpleTestCase):
 
         (body,) = transport.bodies()
         self.assertEqual(body['model'], MODEL)
+        self.assertNotIn('reasoning', body)
+
+    @override_settings(**{**FULL_SETTINGS, 'OPENAI_REASONING_EFFORT': 'minimal'})
+    def test_configured_reasoning_effort_reaches_the_request(self):
+        clock = FakeClock()
+        transport = ScriptedTransport(clock, [(1.0, ok())])
+
+        backend = build_openai_backend(
+            client=make_client(transport), clock=clock, sleep=clock.sleep
+        )
+        backend.classify(make_request())
+
+        (body,) = transport.bodies()
+        self.assertEqual(body['reasoning'], {'effort': 'minimal'})
 
 
 class ClassificationSettingsTests(SimpleTestCase):
@@ -675,7 +714,6 @@ class ClassificationSettingsTests(SimpleTestCase):
             debug=False,
             api_key=API_KEY_SENTINEL,
             model=MODEL,
-            zdr_attested=True,
             deadline_seconds=25.0,
             attempt_timeout_seconds=10.0,
             max_retries=1,
@@ -684,26 +722,30 @@ class ClassificationSettingsTests(SimpleTestCase):
         validate_classification_settings(**values)
 
     def test_defaults_are_disabled_and_match_policy(self):
-        self.assertFalse(settings.CLASSIFICATION_ENABLED)
-        self.assertFalse(settings.OPENAI_ZDR_ATTESTED)
-        self.assertEqual(settings.CLASSIFICATION_DEADLINE_SECONDS, 25.0)
-        self.assertEqual(settings.CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS, 10.0)
-        self.assertEqual(settings.CLASSIFICATION_MAX_RETRIES, 1)
+        defaults = default_classification_settings()
+
+        self.assertFalse(defaults['CLASSIFICATION_ENABLED'])
+        self.assertEqual(defaults['OPENAI_API_KEY'], '')
+        self.assertEqual(defaults['OPENAI_CLASSIFICATION_MODEL'], '')
+        self.assertEqual(defaults['OPENAI_REASONING_EFFORT'], '')
+        self.assertEqual(defaults['CLASSIFICATION_DEADLINE_SECONDS'], 25.0)
+        self.assertEqual(defaults['CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS'], 10.0)
+        self.assertEqual(defaults['CLASSIFICATION_MAX_RETRIES'], 1)
 
     def test_complete_production_configuration_passes(self):
         self.validate()
+        self.validate(reasoning_effort='low')
 
     def test_disabled_configuration_needs_no_credentials(self):
-        self.validate(enabled=False, api_key='', model='', zdr_attested=False)
+        self.validate(enabled=False, api_key='', model='')
 
     def test_debug_enabled_configuration_does_not_block_startup(self):
-        self.validate(debug=True, api_key='', model='', zdr_attested=False)
+        self.validate(debug=True, api_key='', model='')
 
     def test_production_enabled_configuration_fails_closed(self):
         for name, override in (
             ('OPENAI_API_KEY', dict(api_key='')),
             ('OPENAI_CLASSIFICATION_MODEL', dict(model='')),
-            ('OPENAI_ZDR_ATTESTED', dict(zdr_attested=False)),
         ):
             with self.subTest(name):
                 with self.assertRaises(ImproperlyConfigured) as caught:
@@ -720,6 +762,7 @@ class ClassificationSettingsTests(SimpleTestCase):
             dict(attempt_timeout_seconds=30.0),
             dict(max_retries=2),
             dict(max_retries=-1),
+            dict(reasoning_effort='extreme'),
         ):
             with self.subTest(override), self.assertRaises(ImproperlyConfigured):
                 self.validate(**override)

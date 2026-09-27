@@ -8,8 +8,7 @@ Privacy: every request sets ``store=False`` and sends only the instruction,
 allowed member names, reference date, locale, and fixed classification
 instructions. No conversations, response chaining, files, tools, background
 mode, metadata, or tracing are used. ``store=False`` does not replace Zero Data
-Retention; ``build_openai_backend`` refuses to build a client unless ZDR is
-attested in settings.
+Retention (ZDR), which is deferred until after the MVP.
 
 Timing: SDK retries are disabled. The adapter owns a single retry for
 transient failures (timeout, connection, rate limit, 5xx) and never starts an
@@ -147,6 +146,7 @@ class OpenAIClassificationBackend:
         max_retries: int = 1,
         retry_backoff_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS,
         max_output_tokens: int = DEFAULT_MAX_OUTPUT_TOKENS,
+        reasoning_effort: Optional[str] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
     ):
@@ -167,6 +167,7 @@ class OpenAIClassificationBackend:
         self._max_retries = max_retries
         self._retry_backoff_seconds = retry_backoff_seconds
         self._max_output_tokens = max_output_tokens
+        self._reasoning_effort = reasoning_effort or None
         self._clock = clock
         self._sleep = sleep
 
@@ -225,7 +226,7 @@ class OpenAIClassificationBackend:
 
     def request_kwargs(self, request: BackendRequest) -> dict:
         """Keyword arguments for ``responses.parse`` (without the timeout)."""
-        return {
+        kwargs = {
             'model': self._model,
             'instructions': INSTRUCTIONS,
             'input': build_input(request),
@@ -233,6 +234,10 @@ class OpenAIClassificationBackend:
             'store': False,
             'max_output_tokens': self._max_output_tokens,
         }
+        # Sent only when configured: non-reasoning models reject the parameter.
+        if self._reasoning_effort:
+            kwargs['reasoning'] = {'effort': self._reasoning_effort}
+        return kwargs
 
     def _attempt(self, request: BackendRequest, timeout: float) -> _Attempt:
         # Failures are returned, not raised, so no provider exception (whose
@@ -327,7 +332,7 @@ def build_openai_backend(
     """Build the configured backend, failing closed when not fully enabled.
 
     Raises ``ClassificationBackendError(DISABLED)`` unless classification is
-    enabled and the API key, model, and ZDR attestation are all present, in
+    enabled and both the API key and model are present, in
     every environment. ``client`` lets tests inject a fake without
     credentials.
     """
@@ -335,7 +340,6 @@ def build_openai_backend(
         getattr(settings, 'CLASSIFICATION_ENABLED', False)
         and getattr(settings, 'OPENAI_API_KEY', '')
         and getattr(settings, 'OPENAI_CLASSIFICATION_MODEL', '')
-        and getattr(settings, 'OPENAI_ZDR_ATTESTED', False)
     ):
         raise ClassificationBackendError(UnavailableReason.DISABLED)
     attempt_timeout = settings.CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS
@@ -351,6 +355,7 @@ def build_openai_backend(
         deadline_seconds=settings.CLASSIFICATION_DEADLINE_SECONDS,
         attempt_timeout_seconds=attempt_timeout,
         max_retries=settings.CLASSIFICATION_MAX_RETRIES,
+        reasoning_effort=getattr(settings, 'OPENAI_REASONING_EFFORT', ''),
         clock=clock,
         sleep=sleep,
     )

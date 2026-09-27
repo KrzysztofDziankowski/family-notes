@@ -379,8 +379,9 @@ GOOGLE_OAUTH_CLIENT_SECRET=<GOOGLE_OAUTH_CLIENT_SECRET>
 
 Register `https://<PUBLIC_HOST>/accounts/google/login/callback/` as the authorized
 Google OAuth redirect URI. Keep the real client ID and secret only in this
-protected file and the password manager. Do not add placeholder AI values; add
-those only when that integration exists. Before deploying authentication, confirm
+protected file and the password manager. Do not add placeholder AI values:
+natural-language classification stays disabled by default and its variables are
+added only through [Enable Classification](#enable-classification). Before deploying authentication, confirm
 that both Google variables are populated with the production web client values
 without printing them. Protect the file:
 
@@ -813,6 +814,135 @@ The release gate does not cover these items. Track each as separate work until a
 deployment record marks it complete: external uptime monitoring and alerting,
 recurring scheduled backups with off-provider copies, a disposable restore drill,
 an application rollback rehearsal, and VPS reboot verification.
+
+## Enable Classification
+
+Natural-language classification (OpenAI Responses API) ships disabled. Enabling
+it is a separate, operator-approved configuration change; it does not alter the
+release script, the Gunicorn worker count (`--workers 2`), the Gunicorn
+`--timeout 45`, or the nginx `proxy_read_timeout 50s`. The application enforces
+its own 25-second classification deadline inside those limits. No page uses
+classification yet, so until entry capture ships, the smoke check below is the
+only production caller.
+
+### 1. Accept the data-retention trade-off
+
+The application sends `store=False` on every request. **`store=False` does not
+replace Zero Data Retention (ZDR)**: it only prevents the response from being
+kept as retrievable application state, while standard API traffic may still be
+retained by OpenAI for abuse monitoring. ZDR is deferred until after the MVP
+(see the roadmap's post-MVP section), so enabling classification now accepts
+that retention.
+
+Record in the private operator record (password manager or deployment notes
+outside this repository), never the key itself: the date, the operator, the
+OpenAI organization and project used in production, and the selected
+structured-output-capable model name.
+
+### 2. Configure the protected environment
+
+Create a project-scoped API key for the production OpenAI project and store it
+in the password manager. As root in the provider console, add the variables to the
+protected environment file:
+
+```bash
+sudoedit /etc/family-notes/env
+```
+
+```dotenv
+CLASSIFICATION_ENABLED=True
+OPENAI_API_KEY=<OPENAI_API_KEY>
+OPENAI_CLASSIFICATION_MODEL=<OPENAI_CLASSIFICATION_MODEL>
+```
+
+| Variable | Meaning |
+| --- | --- |
+| `CLASSIFICATION_ENABLED` | Master switch; `False` disables every provider call. |
+| `OPENAI_API_KEY` | Project key of the production OpenAI project. Secret. |
+| `OPENAI_CLASSIFICATION_MODEL` | A model that supports Structured Outputs with the Responses API. |
+| `OPENAI_REASONING_EFFORT` | Required in practice for reasoning models (for example `low` for the gpt-5 family); leave empty for non-reasoning models. Otherwise `reason=incomplete_output`. |
+| `CLASSIFICATION_DEADLINE_SECONDS` | Optional; default `25`. Keep it at or below 25. |
+| `CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS` | Optional; default `10`. |
+| `CLASSIFICATION_MAX_RETRIES` | Optional; default `1` (`0` or `1` only). |
+
+Leave the three timing variables unset unless a reviewed change says otherwise.
+Never set `OPENAI_LOG=debug` or any provider tracing in production. Keep the file
+`root:root` mode `0600` and confirm the values are present without printing them:
+
+```bash
+stat -c '%U:%G %a %n' /etc/family-notes/env
+awk -F= '/^(CLASSIFICATION_ENABLED|OPENAI_API_KEY|OPENAI_CLASSIFICATION_MODEL)=/ { print $1, (length($2) ? "set" : "EMPTY") }' /etc/family-notes/env
+```
+
+With `DJANGO_DEBUG=False`, enabling classification without the key or model
+stops Django at startup, naming only the missing variables. As
+`deploy`, confirm the configuration passes that fail-closed check against the
+active release:
+
+```bash
+sudo -n /usr/local/sbin/family-notes-deploy check "$(basename "$(readlink -f /srv/family-notes/current)")"
+```
+
+The service reads the environment file only when it starts. Apply the change
+with the next approved release, or as root with
+`systemctl restart family-notes` followed by
+`sudo -n /usr/local/sbin/family-notes-deploy health` as `deploy`.
+
+### 3. Run the synthetic classification smoke check
+
+Run this after every release that is deployed with classification enabled. It
+sends one synthetic Polish school instruction (no family data, no database
+rows) through the configured provider, validation, and timing policy, and prints
+only safe fields. The instruction contains a fresh sentinel that the command
+never prints or logs. As root in the provider console:
+
+```bash
+SENTINEL="SMOKE-$(python3 -c 'import secrets; print(secrets.token_hex(8))')"
+SMOKE_STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
+( set -a; . /etc/family-notes/env; set +a
+  cd /srv/family-notes/current
+  runuser -u familynotes -- .venv/bin/python manage.py classification_smoke \
+    --sentinel "$SENTINEL" 2>&1 | systemd-cat -t family-notes-classification-smoke )
+journalctl -t family-notes-classification-smoke --since "$SMOKE_STARTED" --no-pager
+```
+
+The output is routed through journald on purpose, so the log inspection below
+covers it. Expected result, within 30 seconds (`elapsed_ms` at most `30000`):
+
+```text
+classification smoke outcome=proposal entry_type=calendar_event reference_date=<TODAY> date=<NEXT_MONDAY> member_resolved=yes elapsed_ms=<N> budget_s=30
+```
+
+`outcome=follow_up` is also acceptable. `outcome=unavailable reason=<CODE>` is a
+safe failure: it satisfies the timing requirement, but investigate the reason
+(for example `timeout`, `rate_limited`, or `provider_error`) before relying on
+classification. A `CommandError` about disabled configuration or the 30-second
+budget fails the check.
+
+### 4. Inspect logs for the sentinel
+
+The sentinel must not appear in application, journald, or nginx logs:
+
+```bash
+journalctl --since "$SMOKE_STARTED" --no-pager | grep -cF -- "$SENTINEL"
+journalctl -u family-notes --since "$SMOKE_STARTED" --no-pager | grep -cF -- "$SENTINEL"
+grep -rlF -- "$SENTINEL" /var/log/nginx/ || echo 'sentinel absent from nginx logs'
+```
+
+Both counts must be `0` and no nginx log file may be listed. The application's
+only classification log line has the form
+`classification provider=openai outcome=<CODE> status=<STATUS> request_id=<ID> elapsed_ms=<N> attempts=<N>`;
+any submitted text, member names, response content, provider payloads, or
+credentials in logs are a privacy incident. Record the smoke output line, the
+three sentinel results in the private operator record.
+
+### Disable classification
+
+If the smoke check fails or the sentinel appears in any log, set
+`CLASSIFICATION_ENABLED=False` in `/etc/family-notes/env`, restart the service as
+root, and confirm `health` as `deploy`. Classification stores no data, so
+disabling it (and, if needed, rolling back the application release) requires no
+data cleanup.
 
 ## 11. Roll Back the Application
 

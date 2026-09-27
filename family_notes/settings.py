@@ -43,16 +43,20 @@ def env_number(name, default, cast=float):
         raise ImproperlyConfigured(f'{name} must be a number.') from None
 
 
+# Empty means the request carries no reasoning parameter (non-reasoning models).
+OPENAI_REASONING_EFFORTS = frozenset({'', 'none', 'minimal', 'low', 'medium', 'high'})
+
+
 def validate_classification_settings(
     *,
     enabled,
     debug,
     api_key,
     model,
-    zdr_attested,
     deadline_seconds,
     attempt_timeout_seconds,
     max_retries,
+    reasoning_effort='',
 ):
     """Fail closed on unsafe classification configuration.
 
@@ -68,6 +72,11 @@ def validate_classification_settings(
         )
     if max_retries not in (0, 1):
         raise ImproperlyConfigured('CLASSIFICATION_MAX_RETRIES must be 0 or 1.')
+    if reasoning_effort not in OPENAI_REASONING_EFFORTS:
+        raise ImproperlyConfigured(
+            'OPENAI_REASONING_EFFORT must be empty or one of: '
+            f'{", ".join(sorted(OPENAI_REASONING_EFFORTS - {""}))}.'
+        )
 
     # Development may enable the flag without provider settings; the backend
     # factory still refuses to build a provider client until all are present.
@@ -78,7 +87,6 @@ def validate_classification_settings(
         for variable, present in (
             ('OPENAI_API_KEY', bool(api_key)),
             ('OPENAI_CLASSIFICATION_MODEL', bool(model)),
-            ('OPENAI_ZDR_ATTESTED', bool(zdr_attested)),
         )
         if not present
     ]
@@ -235,13 +243,15 @@ if not DEBUG and (not GOOGLE_OAUTH_CLIENT_ID or not GOOGLE_OAUTH_CLIENT_SECRET):
     )
 
 # Natural-language classification (OpenAI Responses API).
-# store=False is sent on every request but does not replace Zero Data
-# Retention: set OPENAI_ZDR_ATTESTED only after an operator confirms the
-# production OpenAI project is approved and configured for ZDR.
+# store=False is sent on every request. It does not replace Zero Data
+# Retention (ZDR), which is deferred until after the MVP; without ZDR OpenAI may
+# retain API traffic for abuse monitoring.
 CLASSIFICATION_ENABLED = env_bool('CLASSIFICATION_ENABLED', default=False)
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
 OPENAI_CLASSIFICATION_MODEL = os.getenv('OPENAI_CLASSIFICATION_MODEL', '')
-OPENAI_ZDR_ATTESTED = env_bool('OPENAI_ZDR_ATTESTED', default=False)
+# Reasoning models (e.g. gpt-5 family) count reasoning tokens against the
+# output limit; a low effort keeps the structured answer inside it.
+OPENAI_REASONING_EFFORT = os.getenv('OPENAI_REASONING_EFFORT', '').strip().lower()
 CLASSIFICATION_DEADLINE_SECONDS = env_number('CLASSIFICATION_DEADLINE_SECONDS', 25.0)
 CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS = env_number(
     'CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS', 10.0
@@ -253,10 +263,10 @@ validate_classification_settings(
     debug=DEBUG,
     api_key=OPENAI_API_KEY,
     model=OPENAI_CLASSIFICATION_MODEL,
-    zdr_attested=OPENAI_ZDR_ATTESTED,
     deadline_seconds=CLASSIFICATION_DEADLINE_SECONDS,
     attempt_timeout_seconds=CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS,
     max_retries=CLASSIFICATION_MAX_RETRIES,
+    reasoning_effort=OPENAI_REASONING_EFFORT,
 )
 
 SOCIALACCOUNT_PROVIDERS = {

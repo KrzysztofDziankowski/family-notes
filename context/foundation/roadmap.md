@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 1
 status: draft
 created: 2026-09-22
-updated: 2026-09-26
+updated: 2026-09-27
 prd_version: 1
 main_goal: speed
 top_blocker: capacity
@@ -185,6 +185,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **In-app family or role management and multiple-family support** - Why parked: PRD Non-Goals; the MVP uses one preconfigured five-person family.
 - **Explicit accessibility targets beyond default browser behavior** - Why parked: PRD Non-Goals; deferred requirement.
 - **Response-time target below 30 seconds** - Why parked: PRD Non-Goals; performance improvements are deferred beyond the MVP threshold.
+- **OpenAI Zero Data Retention (ZDR) for classification** - Why parked: owner decision 2026-09-27; the MVP ships classification with `store=False` and sanitized logs only, accepting OpenAI abuse-monitoring retention. Revisit after the MVP: obtain ZDR approval for the production OpenAI project and reintroduce a fail-closed attestation gate (removed from F-02 `classification-privacy-boundary`).
 
 ## Milestone History
 
