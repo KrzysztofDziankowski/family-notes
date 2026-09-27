@@ -378,23 +378,23 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 
 #### Automated
 
-- [ ] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
-- [ ] 1.3 Token model and admin tests pass: `uv run python manage.py test family_access`
-- [ ] 1.4 Issuing stores only the hash
-- [ ] 1.5 Model validation rejects a child member
-- [ ] 1.6 Admin add shows the secret once; change page does not contain it
-- [ ] 1.7 Revoke action sets `revoked_at` and leaves already-revoked tokens unchanged
-- [ ] 1.8 Non-superuser access to token admin is denied
-- [ ] 1.12 Change form keeps member read-only
-- [ ] 1.13 Expiry boundary: expires_at equal to now is rejected
+- [x] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.2 Django checks pass: `uv run python manage.py check`
+- [x] 1.3 Token model and admin tests pass: `uv run python manage.py test family_access`
+- [x] 1.4 Issuing stores only the hash
+- [x] 1.5 Model validation rejects a child member
+- [x] 1.6 Admin add shows the secret once; change page does not contain it
+- [x] 1.7 Revoke action sets `revoked_at` and leaves already-revoked tokens unchanged
+- [x] 1.8 Non-superuser access to token admin is denied
+- [x] 1.12 Change form keeps member read-only
+- [x] 1.13 Expiry boundary: expires_at equal to now is rejected
 
 #### Manual
 
-- [ ] 1.9 Local admin issue shows the secret once in Polish and never again
-- [ ] 1.10 Member choices exclude child members
-- [ ] 1.11 List status reflects revoked and expired tokens
-- [ ] 1.14 Refreshing the issued page creates a visible, revocable duplicate
+- [x] 1.9 Local admin issue shows the secret once in Polish and never again
+- [x] 1.10 Member choices exclude child members
+- [x] 1.11 List status reflects revoked and expired tokens
+- [x] 1.14 Refreshing the issued page creates a visible, revocable duplicate
 
 ### Phase 2: Bearer Token Authentication and Ping Endpoint
 

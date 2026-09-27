@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+{% load admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Start</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {{ token.name }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <p>Token <strong>{{ token.name }}</strong> dla: {{ token.member }}.</p>
+  <p>Skopiuj sekret teraz. <strong>Nie zostanie pokazany ponownie.</strong></p>
+  <p><code id="automation-token-secret" style="user-select: all;">{{ secret }}</code></p>
+  <p><strong>Nie odświeżaj tej strony</strong> — odświeżenie wyda kolejny token.
+     Zbędny duplikat możesz unieważnić na liście tokenów.</p>
+  <p><a href="{% url opts|admin_urlname:'changelist' %}">Wróć do listy tokenów</a></p>
+</div>
+{% endblock %}
