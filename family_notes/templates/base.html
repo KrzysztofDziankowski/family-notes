@@ -1,0 +1,28 @@
+{% load static %}<!doctype html>
+<html lang="pl" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{% endblock %} | FamilyNotes</title>
+    <link rel="stylesheet" href="{% static 'vendor/pico/pico.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+</head>
+<body>
+    <header class="container">
+        <nav aria-label="Główna nawigacja">
+            <ul>
+                <li><a class="fn-brand" href="{% url 'home' %}">FamilyNotes</a></li>
+            </ul>
+            <ul>
+                {% block nav %}
+                <li><a href="{% url 'account_status' %}">Konto</a></li>
+                <li><a href="{% url 'account_logout' %}">Wyloguj</a></li>
+                {% endblock %}
+            </ul>
+        </nav>
+    </header>
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

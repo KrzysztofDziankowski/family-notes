@@ -24,5 +24,6 @@ urlpatterns = [
     path('account/', include('family_access.urls')),
     path('accounts/', include('allauth.urls')),
     path('admin/', admin.site.urls),
+    path('entries/', include('entries.urls')),
     path('healthz/', healthz, name='healthz'),
 ]
