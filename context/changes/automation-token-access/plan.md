@@ -378,41 +378,41 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 
 #### Automated
 
-- [x] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
-- [x] 1.2 Django checks pass: `uv run python manage.py check`
-- [x] 1.3 Token model and admin tests pass: `uv run python manage.py test family_access`
-- [x] 1.4 Issuing stores only the hash
-- [x] 1.5 Model validation rejects a child member
-- [x] 1.6 Admin add shows the secret once; change page does not contain it
-- [x] 1.7 Revoke action sets `revoked_at` and leaves already-revoked tokens unchanged
-- [x] 1.8 Non-superuser access to token admin is denied
-- [x] 1.12 Change form keeps member read-only
-- [x] 1.13 Expiry boundary: expires_at equal to now is rejected
+- [x] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run` — 1b67e08
+- [x] 1.2 Django checks pass: `uv run python manage.py check` — 1b67e08
+- [x] 1.3 Token model and admin tests pass: `uv run python manage.py test family_access` — 1b67e08
+- [x] 1.4 Issuing stores only the hash — 1b67e08
+- [x] 1.5 Model validation rejects a child member — 1b67e08
+- [x] 1.6 Admin add shows the secret once; change page does not contain it — 1b67e08
+- [x] 1.7 Revoke action sets `revoked_at` and leaves already-revoked tokens unchanged — 1b67e08
+- [x] 1.8 Non-superuser access to token admin is denied — 1b67e08
+- [x] 1.12 Change form keeps member read-only — 1b67e08
+- [x] 1.13 Expiry boundary: expires_at equal to now is rejected — 1b67e08
 
 #### Manual
 
-- [x] 1.9 Local admin issue shows the secret once in Polish and never again
-- [x] 1.10 Member choices exclude child members
-- [x] 1.11 List status reflects revoked and expired tokens
-- [x] 1.14 Refreshing the issued page creates a visible, revocable duplicate
+- [x] 1.9 Local admin issue shows the secret once in Polish and never again — 1b67e08
+- [x] 1.10 Member choices exclude child members — 1b67e08
+- [x] 1.11 List status reflects revoked and expired tokens — 1b67e08
+- [x] 1.14 Refreshing the issued page creates a visible, revocable duplicate — 1b67e08
 
 ### Phase 2: Bearer Token Authentication and Ping Endpoint
 
 #### Automated
 
-- [ ] 2.1 The full test suite passes: `uv run python manage.py test`
-- [ ] 2.2 Django checks pass: `uv run python manage.py check`
-- [ ] 2.3 No missing migrations: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 2.4 Valid parent token gets 200 with only status and token, and last_used_at is set
-- [ ] 2.5 Every rejection path gets a uniform 401 with WWW-Authenticate: Bearer
-- [ ] 2.6 Signed-in session user without a token gets 401
-- [ ] 2.7 POST to ping gets 405 and the route is CSRF-exempt
-- [ ] 2.8 Revoke followed by an immediate request gets 401
-- [ ] 2.12 Rejection logged at WARNING without the secret
+- [x] 2.1 The full test suite passes: `uv run python manage.py test`
+- [x] 2.2 Django checks pass: `uv run python manage.py check`
+- [x] 2.3 No missing migrations: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 2.4 Valid parent token gets 200 with only status and token, and last_used_at is set
+- [x] 2.5 Every rejection path gets a uniform 401 with WWW-Authenticate: Bearer
+- [x] 2.6 Signed-in session user without a token gets 401
+- [x] 2.7 POST to ping gets 405 and the route is CSRF-exempt
+- [x] 2.8 Revoke followed by an immediate request gets 401
+- [x] 2.12 Rejection logged at WARNING without the secret
 
 #### Manual
 
-- [ ] 2.9 Local curl ping: 200, revoke, then 401
+- [x] 2.9 Local curl ping: 200, revoke, then 401
 - [ ] 2.10 Deployed proxy forwards Authorization and ping returns 200
 - [ ] 2.11 Real phone automation ping succeeds and last_used_at updates
 

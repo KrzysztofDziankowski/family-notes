@@ -94,6 +94,33 @@ Only active superusers may use `/admin/`. Family membership, including the
 `Parent` role, never grants admin access. Keep the operator account and all real
 OAuth credentials out of tracked files.
 
+### Issue an automation token
+
+A parent's phone automation (the script that forwards EduVulcan notifications)
+authenticates with a bearer token. Tokens are issued and revoked only in admin:
+
+1. Sign in to `/admin/` as the superuser and open **Family access → Tokeny
+   automatyzacji → Add**.
+2. Pick an active **parent** member, give the token a name (for example the
+   device it will live on) and optionally an expiry, then save.
+3. Copy the secret (it starts with `fnat_`) from the page that follows. It is
+   shown **once**: only its hash is stored, so it cannot be viewed again. Do not
+   refresh that page; a refresh issues a second token (revoke the duplicate).
+4. Store the secret only in the phone automation and your password manager.
+
+Check the token end to end:
+
+```bash
+curl -i -H "Authorization: Bearer fnat_..." http://localhost:20121/api/automation/ping/
+```
+
+A valid token returns `200 {"status": "ok", "token": "<name>"}` and updates
+**last used** in admin. Anything else returns `401 {"error": "invalid_token"}`.
+
+To revoke, select the token in the admin list and run **Unieważnij wybrane
+tokeny**. Revocation takes effect on the very next request. A token also stops
+working when it expires, or when its owner is no longer an active parent.
+
 With the local server running, verify these routes:
 
 - <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.

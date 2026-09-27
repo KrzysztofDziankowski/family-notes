@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 
 from .models import AutomationToken, Family, FamilyMember
@@ -207,3 +207,113 @@ class AutomationTokenAdminTests(AutomationFixtureMixin, TestCase):
             response,
             f"{reverse('admin:login')}?next={self.changelist_url}",
         )
+
+
+class AutomationPingTests(AutomationFixtureMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.token, self.secret = AutomationToken.issue(self.parent, 'Telefon')
+        self.url = reverse('automation_ping')
+
+    def ping(self, authorization=None, client=None):
+        headers = {} if authorization is None else {'HTTP_AUTHORIZATION': authorization}
+        return (client or self.client).get(self.url, **headers)
+
+    def assert_rejected(self, response):
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {'error': 'invalid_token'})
+        self.assertEqual(response['WWW-Authenticate'], 'Bearer')
+
+    def test_valid_parent_token_is_accepted_and_marks_last_use(self):
+        response = self.ping(f'Bearer {self.secret}')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'status': 'ok', 'token': 'Telefon'})
+        self.token.refresh_from_db()
+        self.assertIsNotNone(self.token.last_used_at)
+
+    def test_scheme_is_case_insensitive(self):
+        self.assertEqual(self.ping(f'bearer {self.secret}').status_code, 200)
+
+    def test_header_problems_are_rejected(self):
+        for authorization in (
+            None,
+            f'Basic {self.secret}',
+            'Bearer',
+            'Bearer ',
+            f'Bearer {self.secret} extra',
+            'Bearer fnat_unknown-secret',
+        ):
+            with self.subTest(authorization=authorization):
+                self.assert_rejected(self.ping(authorization))
+        self.token.refresh_from_db()
+        self.assertIsNone(self.token.last_used_at)
+
+    def test_revoked_token_is_rejected(self):
+        AutomationToken.objects.filter(pk=self.token.pk).update(revoked_at=timezone.now())
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_expired_token_is_rejected(self):
+        AutomationToken.objects.filter(pk=self.token.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1)
+        )
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_owner_that_became_child_is_rejected(self):
+        self.parent.role = FamilyMember.Role.CHILD
+        self.parent.save(update_fields=('role',))
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_inactive_membership_is_rejected(self):
+        self.parent.is_active = False
+        self.parent.save(update_fields=('is_active',))
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_inactive_family_is_rejected(self):
+        self.family.is_active = False
+        self.family.save(update_fields=('is_active',))
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_inactive_user_account_is_rejected(self):
+        user = self.parent.user
+        user.is_active = False
+        user.save(update_fields=('is_active',))
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_signed_in_session_without_token_is_rejected(self):
+        self.client.force_login(self.parent.user)
+
+        self.assert_rejected(self.ping())
+
+    def test_non_get_is_not_allowed_and_route_is_csrf_exempt(self):
+        client = self.client_class(enforce_csrf_checks=True)
+
+        response = client.post(self.url, HTTP_AUTHORIZATION=f'Bearer {self.secret}')
+
+        # CSRF middleware would answer 403 before the view if the route were not exempt.
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(resolve(self.url).func.csrf_exempt)
+
+    def test_revocation_takes_effect_immediately(self):
+        self.assertEqual(self.ping(f'Bearer {self.secret}').status_code, 200)
+
+        AutomationToken.objects.filter(pk=self.token.pk).update(revoked_at=timezone.now())
+
+        self.assert_rejected(self.ping(f'Bearer {self.secret}'))
+
+    def test_rejection_is_logged_without_secret(self):
+        AutomationToken.objects.filter(pk=self.token.pk).update(revoked_at=timezone.now())
+
+        with self.assertLogs('family_access.automation', level='WARNING') as logs:
+            self.ping(f'Bearer {self.secret}')
+
+        output = '\n'.join(logs.output)
+        self.assertIn('revoked token', output)
+        self.assertIn(self.token.prefix, output)
+        self.assertNotIn(self.secret, output)
