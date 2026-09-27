@@ -324,12 +324,12 @@ No database migration or existing-data transformation is expected. Rollback cons
 
 #### Automated
 
-- [x] 4.1 The representative acceptance suite passes, including the PRD date example and all defined follow-up, ambiguity, and failure cases.
-- [x] 4.2 Full Django tests, Django checks, migration dry-run, and locked dependency audit pass.
-- [x] 4.3 A wall-clock integration test with a controlled fake transport proves every outcome returns within 25 seconds without real sleeps in unit tests.
-- [x] 4.4 A repository scan confirms no real provider key, submitted family text fixture, or provider payload fixture is committed.
+- [x] 4.1 The representative acceptance suite passes, including the PRD date example and all defined follow-up, ambiguity, and failure cases. — af90c9b
+- [x] 4.2 Full Django tests, Django checks, migration dry-run, and locked dependency audit pass. — af90c9b
+- [x] 4.3 A wall-clock integration test with a controlled fake transport proves every outcome returns within 25 seconds without real sleeps in unit tests. — af90c9b
+- [x] 4.4 A repository scan confirms no real provider key, submitted family text fixture, or provider payload fixture is committed. — af90c9b
 
 #### Manual
 
-- [x] 4.5 Using synthetic data, an opt-in production-like smoke test returns a proposal or safe failure within 30 seconds.
-- [ ] 4.6 Operator review confirms ZDR evidence, protected environment configuration, and sensitive-sentinel absence from application, journald, and nginx logs.
+- [x] 4.5 Using synthetic data, an opt-in production-like smoke test returns a proposal or safe failure within 30 seconds. — af90c9b
+- [x] 4.6 Operator review confirms ZDR evidence, protected environment configuration, and sensitive-sentinel absence from application, journald, and nginx logs.
