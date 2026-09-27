@@ -1,23 +1,21 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Account status | FamilyNotes</title>
-</head>
-<body>
-    <main>
-        <h1>Account status</h1>
-        {% if membership %}
-            <p>{{ membership.display_name }}</p>
-            <p>Role: {{ membership.get_role_display }}</p>
-        {% else %}
-            <p>Your family membership is not configured yet.</p>
-        {% endif %}
-        <nav aria-label="Account actions">
-            <a href="{% url 'home' %}">Home</a>
-            <a href="{% url 'account_logout' %}">Log out</a>
-        </nav>
-    </main>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Status konta{% endblock %}
+
+{% block content %}
+<h1>Status konta</h1>
+{% if membership %}
+    <dl class="fn-details">
+        <dt>Osoba</dt>
+        <dd>{{ membership.display_name }}</dd>
+        <dt>Rola</dt>
+        <dd>{% if membership.role == "parent" %}Rodzic{% else %}Dziecko{% endif %}</dd>
+    </dl>
+    {% if membership.role == "parent" %}
+        <p><a role="button" href="{% url 'entries:capture' %}">Dodaj wpis</a></p>
+    {% endif %}
+{% else %}
+    <p>Twoje członkostwo w rodzinie nie jest jeszcze skonfigurowane.</p>
+{% endif %}
+<p><a href="{% url 'home' %}">Strona główna</a></p>
+{% endblock %}

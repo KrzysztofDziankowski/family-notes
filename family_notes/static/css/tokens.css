@@ -1,0 +1,125 @@
+/* Source of values: colours and font stack taken from the family_notes/templates/family_notes/home.html placeholder. */
+
+/* Semantic project tokens: the single source of design values for product views. */
+:root {
+  --fn-color-bg: #f7f8fa;
+  --fn-color-surface: #ffffff;
+  --fn-color-text: #20242a;
+  --fn-color-text-strong: #3d454d;
+  --fn-color-muted: #5d6670;
+  --fn-color-border: #d9dde2;
+  --fn-color-accent: #2f6f5e;
+  --fn-color-accent-hover: #255a4c;
+  --fn-color-accent-focus: rgba(47, 111, 94, 0.25);
+  --fn-color-accent-inverse: #ffffff;
+  --fn-color-danger: #b3261e;
+  --fn-color-danger-bg: #fdecea;
+  --fn-color-success: #2f6f5e;
+  --fn-color-success-bg: #e6f2ee;
+  --fn-color-notice-bg: #fff6e0;
+  --fn-color-notice-border: #d9a520;
+  --fn-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --fn-space-1: 0.25rem;
+  --fn-space-2: 0.5rem;
+  --fn-space-3: 1rem;
+  --fn-space-4: 1.5rem;
+  --fn-radius: 0.5rem;
+  --fn-accent-rule: 4px;
+}
+
+/* Map project tokens onto Pico. Light scheme only, matching the current app. */
+:root,
+[data-theme="light"],
+:root:not([data-theme="dark"]) {
+  color-scheme: light;
+  --pico-font-family: var(--fn-font-sans);
+  --pico-font-family-sans-serif: var(--fn-font-sans);
+  --pico-background-color: var(--fn-color-bg);
+  --pico-color: var(--fn-color-text);
+  --pico-muted-color: var(--fn-color-muted);
+  --pico-muted-border-color: var(--fn-color-border);
+  --pico-border-radius: var(--fn-radius);
+  --pico-primary: var(--fn-color-accent);
+  --pico-primary-background: var(--fn-color-accent);
+  --pico-primary-border: var(--fn-color-accent);
+  --pico-primary-underline: var(--fn-color-accent-focus);
+  --pico-primary-hover: var(--fn-color-accent-hover);
+  --pico-primary-hover-background: var(--fn-color-accent-hover);
+  --pico-primary-hover-border: var(--fn-color-accent-hover);
+  --pico-primary-focus: var(--fn-color-accent-focus);
+  --pico-primary-inverse: var(--fn-color-accent-inverse);
+  --pico-card-background-color: var(--fn-color-surface);
+  --pico-form-element-invalid-border-color: var(--fn-color-danger);
+  --pico-form-element-invalid-active-border-color: var(--fn-color-danger);
+  --pico-del-color: var(--fn-color-danger);
+  --pico-ins-color: var(--fn-color-success);
+}
+
+/* Shared component classes used by product templates. */
+.fn-brand {
+  font-weight: 700;
+  color: var(--fn-color-text);
+  text-decoration: none;
+}
+
+.fn-panel {
+  border-left: var(--fn-accent-rule) solid var(--fn-color-accent);
+  background: var(--fn-color-surface);
+  padding: var(--fn-space-3);
+  border-radius: 0 var(--fn-radius) var(--fn-radius) 0;
+  margin-bottom: var(--fn-space-4);
+}
+
+.fn-panel--success {
+  border-left-color: var(--fn-color-success);
+  background: var(--fn-color-success-bg);
+}
+
+.fn-panel--notice {
+  border-left-color: var(--fn-color-notice-border);
+  background: var(--fn-color-notice-bg);
+}
+
+.fn-panel--danger {
+  border-left-color: var(--fn-color-danger);
+  background: var(--fn-color-danger-bg);
+}
+
+.fn-panel > :last-child {
+  margin-bottom: 0;
+}
+
+.fn-muted {
+  color: var(--fn-color-muted);
+}
+
+.fn-field-error {
+  color: var(--fn-color-danger);
+}
+
+.fn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fn-space-2) var(--fn-space-3);
+  align-items: center;
+}
+
+.fn-actions > * {
+  margin-bottom: 0;
+}
+
+.fn-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--fn-space-1) var(--fn-space-3);
+  margin: 0 0 var(--fn-space-4);
+}
+
+.fn-details dt {
+  color: var(--fn-color-muted);
+}
+
+.fn-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

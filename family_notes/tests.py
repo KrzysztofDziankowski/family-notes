@@ -2,7 +2,8 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import DatabaseError
-from django.test import TestCase
+from django.conf import settings
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 
@@ -70,3 +71,10 @@ class HealthCheckTests(TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {'status': 'unavailable'})
+
+
+class LocaleSettingsTests(SimpleTestCase):
+    def test_project_uses_polish_locale_and_time(self):
+        self.assertEqual(settings.LANGUAGE_CODE, 'pl')
+        self.assertEqual(settings.TIME_ZONE, 'Europe/Warsaw')
+        self.assertTrue(settings.USE_TZ)
