@@ -299,10 +299,10 @@ No database migration or existing-data transformation is expected. Rollback cons
 
 #### Automated
 
-- [x] 2.1 Mocked adapter tests verify strict parsing, `store=False`, the minimal payload, configured model, and absence of stateful OpenAI features.
-- [x] 2.2 Deterministic clock/transport tests cover first-attempt success, eligible retry, insufficient retry budget, exact deadline, timeout, rate limit, connection failure, 5xx, refusal, malformed output, and non-retryable 4xx.
-- [x] 2.3 Log-capture tests use unique sensitive sentinels and prove submitted text, member names, response content, exception bodies, and credentials never appear.
-- [x] 2.4 Locked dependency audit and Django system checks pass.
+- [x] 2.1 Mocked adapter tests verify strict parsing, `store=False`, the minimal payload, configured model, and absence of stateful OpenAI features. — 4795a26
+- [x] 2.2 Deterministic clock/transport tests cover first-attempt success, eligible retry, insufficient retry budget, exact deadline, timeout, rate limit, connection failure, 5xx, refusal, malformed output, and non-retryable 4xx. — 4795a26
+- [x] 2.3 Log-capture tests use unique sensitive sentinels and prove submitted text, member names, response content, exception bodies, and credentials never appear. — 4795a26
+- [x] 2.4 Locked dependency audit and Django system checks pass. — 4795a26
 
 #### Manual
 
@@ -312,13 +312,13 @@ No database migration or existing-data transformation is expected. Rollback cons
 
 #### Automated
 
-- [ ] 3.1 The authorization matrix proves only an active parent can invoke the backend and unauthorized attempts make zero provider calls.
-- [ ] 3.2 Candidate and resolution tests prove only active same-family names are sent and ambiguous, unknown, inactive, or cross-family results never resolve to a membership.
-- [ ] 3.3 Database assertions prove classification success, follow-up, and failure create no persistent records.
+- [x] 3.1 The authorization matrix proves only an active parent can invoke the backend and unauthorized attempts make zero provider calls.
+- [x] 3.2 Candidate and resolution tests prove only active same-family names are sent and ambiguous, unknown, inactive, or cross-family results never resolve to a membership.
+- [x] 3.3 Database assertions prove classification success, follow-up, and failure create no persistent records.
 
 #### Manual
 
-- [ ] 3.4 Review one representative service call and confirm its outbound candidate list contains no database IDs or members from another family.
+- [x] 3.4 Review one representative service call and confirm its outbound candidate list contains no database IDs or members from another family.
 
 ### Phase 4: Verification and Release Contract
 

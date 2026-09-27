@@ -3,7 +3,7 @@ change_id: classification-privacy-boundary
 title: Classification privacy boundary
 status: impl_reviewed
 created: 2026-09-24
-updated: 2026-09-26
+updated: 2026-09-27
 archived_at: null
 ---
 
