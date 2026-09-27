@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import Q
 
-from family_access.models import Family, FamilyMember
+from family_access.models import AutomationToken, Family, FamilyMember
 
 from .classification.types import EntryType, SchoolItemKind
 
@@ -82,3 +82,63 @@ class Entry(models.Model):
 
     def __repr__(self):
         return f'<Entry: {self}>'
+
+
+class InboundNotification(models.Model):
+    """A forwarded EduVulcan notification stored unchanged, awaiting conversion by S-05."""
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Oczekuje'
+        PROCESSING = 'processing', 'Przetwarzanie'
+        PROCESSED = 'processed', 'Przetworzone'
+        FAILED = 'failed', 'Błąd'
+
+    family = models.ForeignKey(
+        Family,
+        on_delete=models.CASCADE,
+        related_name='inbound_notifications',
+        verbose_name='rodzina',
+    )
+    token = models.ForeignKey(
+        AutomationToken,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='inbound_notifications',
+        verbose_name='token',
+    )
+    notification_id = models.CharField('identyfikator powiadomienia', max_length=255)
+    title = models.CharField('tytuł', max_length=255)
+    message = models.TextField('treść')
+    captured_at = models.DateTimeField('przechwycono')
+    captured_date = models.DateField('dzień przechwycenia')
+    content_hash = models.CharField(max_length=64)
+    payload = models.JSONField('dane źródłowe')
+    status = models.CharField(
+        'status',
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    received_at = models.DateTimeField('odebrano', auto_now_add=True)
+    processed_at = models.DateTimeField('przetworzono', null=True, blank=True)
+    error = models.TextField('błąd', blank=True)
+
+    class Meta:
+        verbose_name = 'powiadomienie przychodzące'
+        verbose_name_plural = 'powiadomienia przychodzące'
+        constraints = [
+            models.UniqueConstraint(
+                fields=('family', 'notification_id'),
+                name='inbound_unique_notification_id_per_family',
+            ),
+            models.UniqueConstraint(
+                fields=('family', 'content_hash', 'captured_date'),
+                name='inbound_unique_content_per_family_day',
+            ),
+        ]
+
+    def __str__(self):
+        # Never include title or message: they name family members.
+        return f'notification #{self.pk} ({self.status})'

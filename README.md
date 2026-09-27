@@ -94,6 +94,53 @@ Only active superusers may use `/admin/`. Family membership, including the
 `Parent` role, never grants admin access. Keep the operator account and all real
 OAuth credentials out of tracked files.
 
+### Issue an automation token
+
+A parent's phone automation (the script that forwards EduVulcan notifications)
+authenticates with a bearer token. Tokens are issued and revoked only in admin:
+
+1. Sign in to `/admin/` as the superuser and open **Family access → Tokeny
+   automatyzacji → Add**.
+2. Pick an active **parent** member, give the token a name (for example the
+   device it will live on) and optionally an expiry, then save.
+3. Copy the secret (it starts with `fnat_`) from the page that follows. It is
+   shown **once**: only its hash is stored, so it cannot be viewed again. Do not
+   refresh that page; a refresh issues a second token (revoke the duplicate).
+4. Store the secret only in the phone automation and your password manager.
+
+Check the token end to end:
+
+```bash
+curl -i -H "Authorization: Bearer fnat_..." http://localhost:20121/api/automation/ping/
+```
+
+A valid token returns `200 {"status": "ok", "token": "<name>"}` and updates
+**last used** in admin. Anything else returns `401 {"error": "invalid_token"}`.
+
+To revoke, select the token in the admin list and run **Unieważnij wybrane
+tokeny**. Revocation takes effect on the very next request. A token also stops
+working when it expires, or when its owner is no longer an active parent.
+
+The phone automation forwards each EduVulcan notification to the intake
+endpoint with the same token. The endpoint only stores the notification and
+answers `202` straight away; it never classifies in the request:
+
+```bash
+curl -i -X POST \
+  -H "Authorization: Bearer fnat_..." \
+  -H "Content-Type: application/json" \
+  -d '{"notification_id": "0|pl.example.eduvulcan|1|anon-1", "title": "Sprawdzian", "message": "Jan Przykładowy: sprawdzian z biologii 28.09", "captured_at_iso": "2026-09-23T08:26:16+02:00"}' \
+  http://localhost:20121/api/automation/notifications/
+```
+
+A new notification returns `202 {"status": "accepted", "id": <row id>}`.
+Repeating the same `notification_id`, or the same title and message captured on
+the same day, returns `202` with the existing row's id and stores nothing new.
+An invalid body returns `400`, a body over 16 KB returns `413`. The row appears
+in admin under **Entries → Powiadomienia przychodzące** with status `pending`
+until EduVulcan processing (roadmap S-05) exists. Use only anonymized payloads
+for manual tests; real notifications name family members.
+
 With the local server running, verify these routes:
 
 - <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.

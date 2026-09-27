@@ -378,41 +378,41 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 
 #### Automated
 
-- [ ] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
-- [ ] 1.3 Token model and admin tests pass: `uv run python manage.py test family_access`
-- [ ] 1.4 Issuing stores only the hash
-- [ ] 1.5 Model validation rejects a child member
-- [ ] 1.6 Admin add shows the secret once; change page does not contain it
-- [ ] 1.7 Revoke action sets `revoked_at` and leaves already-revoked tokens unchanged
-- [ ] 1.8 Non-superuser access to token admin is denied
-- [ ] 1.12 Change form keeps member read-only
-- [ ] 1.13 Expiry boundary: expires_at equal to now is rejected
+- [x] 1.1 Migration is present and consistent: `uv run python manage.py makemigrations --check --dry-run` — 1b67e08
+- [x] 1.2 Django checks pass: `uv run python manage.py check` — 1b67e08
+- [x] 1.3 Token model and admin tests pass: `uv run python manage.py test family_access` — 1b67e08
+- [x] 1.4 Issuing stores only the hash — 1b67e08
+- [x] 1.5 Model validation rejects a child member — 1b67e08
+- [x] 1.6 Admin add shows the secret once; change page does not contain it — 1b67e08
+- [x] 1.7 Revoke action sets `revoked_at` and leaves already-revoked tokens unchanged — 1b67e08
+- [x] 1.8 Non-superuser access to token admin is denied — 1b67e08
+- [x] 1.12 Change form keeps member read-only — 1b67e08
+- [x] 1.13 Expiry boundary: expires_at equal to now is rejected — 1b67e08
 
 #### Manual
 
-- [ ] 1.9 Local admin issue shows the secret once in Polish and never again
-- [ ] 1.10 Member choices exclude child members
-- [ ] 1.11 List status reflects revoked and expired tokens
-- [ ] 1.14 Refreshing the issued page creates a visible, revocable duplicate
+- [x] 1.9 Local admin issue shows the secret once in Polish and never again — 1b67e08
+- [x] 1.10 Member choices exclude child members — 1b67e08
+- [x] 1.11 List status reflects revoked and expired tokens — 1b67e08
+- [x] 1.14 Refreshing the issued page creates a visible, revocable duplicate — 1b67e08
 
 ### Phase 2: Bearer Token Authentication and Ping Endpoint
 
 #### Automated
 
-- [ ] 2.1 The full test suite passes: `uv run python manage.py test`
-- [ ] 2.2 Django checks pass: `uv run python manage.py check`
-- [ ] 2.3 No missing migrations: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 2.4 Valid parent token gets 200 with only status and token, and last_used_at is set
-- [ ] 2.5 Every rejection path gets a uniform 401 with WWW-Authenticate: Bearer
-- [ ] 2.6 Signed-in session user without a token gets 401
-- [ ] 2.7 POST to ping gets 405 and the route is CSRF-exempt
-- [ ] 2.8 Revoke followed by an immediate request gets 401
-- [ ] 2.12 Rejection logged at WARNING without the secret
+- [x] 2.1 The full test suite passes: `uv run python manage.py test` — cda3c03
+- [x] 2.2 Django checks pass: `uv run python manage.py check` — cda3c03
+- [x] 2.3 No missing migrations: `uv run python manage.py makemigrations --check --dry-run` — cda3c03
+- [x] 2.4 Valid parent token gets 200 with only status and token, and last_used_at is set — cda3c03
+- [x] 2.5 Every rejection path gets a uniform 401 with WWW-Authenticate: Bearer — cda3c03
+- [x] 2.6 Signed-in session user without a token gets 401 — cda3c03
+- [x] 2.7 POST to ping gets 405 and the route is CSRF-exempt — cda3c03
+- [x] 2.8 Revoke followed by an immediate request gets 401 — cda3c03
+- [x] 2.12 Rejection logged at WARNING without the secret — cda3c03
 
 #### Manual
 
-- [ ] 2.9 Local curl ping: 200, revoke, then 401
+- [x] 2.9 Local curl ping: 200, revoke, then 401 — cda3c03
 - [ ] 2.10 Deployed proxy forwards Authorization and ping returns 200
 - [ ] 2.11 Real phone automation ping succeeds and last_used_at updates
 
@@ -420,18 +420,18 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 
 #### Automated
 
-- [ ] 3.1 The full test suite passes: `uv run python manage.py test`
-- [ ] 3.2 No missing migrations: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 3.3 Valid token and payload get 202 and one pending row bound to the family and token
-- [ ] 3.4 Request path bounded: pinned query count and no classification call
-- [ ] 3.5 Duplicate notification_id is idempotent per family
-- [ ] 3.6 Invalid payload gets 400, oversized gets 413, nothing stored
-- [ ] 3.7 Token rejection paths get 401, GET gets 405, route is CSRF-exempt
-- [ ] 3.8 InboundNotification admin is read-only and superuser-only
-- [ ] 3.11 Same-day identical content under a new notification_id is deduplicated
+- [x] 3.1 The full test suite passes: `uv run python manage.py test` — 30ae082
+- [x] 3.2 No missing migrations: `uv run python manage.py makemigrations --check --dry-run` — 30ae082
+- [x] 3.3 Valid token and payload get 202 and one pending row bound to the family and token — 30ae082
+- [x] 3.4 Request path bounded: pinned query count and no classification call — 30ae082
+- [x] 3.5 Duplicate notification_id is idempotent per family — 30ae082
+- [x] 3.6 Invalid payload gets 400, oversized gets 413, nothing stored — 30ae082
+- [x] 3.7 Token rejection paths get 401, GET gets 405, route is CSRF-exempt — 30ae082
+- [x] 3.8 InboundNotification admin is read-only and superuser-only — 30ae082
+- [x] 3.11 Same-day identical content under a new notification_id is deduplicated — 30ae082
 
 #### Manual
 
-- [ ] 3.9 Local curl POST returns 202 at once and the row is pending in admin
+- [x] 3.9 Local curl POST returns 202 at once and the row is pending in admin — 30ae082
 - [ ] 3.10 Real phone automation delivers to production with no duplicate rows
-- [ ] 3.12 README intake curl example returns 202 as written
+- [x] 3.12 README intake curl example returns 202 as written — 30ae082

@@ -433,9 +433,10 @@ class NoPersistenceTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(self._row_counts(), counts_before)
 
     def test_entries_app_models_hold_no_classification_drafts(self):
-        # S-01 adds the confirmed Entry; classification itself stores nothing.
+        # S-01 adds the confirmed Entry and F-04 the raw notification inbox;
+        # classification itself stores nothing.
         models = apps.get_app_config('entries').get_models()
-        self.assertEqual([model.__name__ for model in models], ['Entry'])
+        self.assertEqual([model.__name__ for model in models], ['Entry', 'InboundNotification'])
 
     def _row_counts(self):
         return {
