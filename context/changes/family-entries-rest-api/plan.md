@@ -250,10 +250,10 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Automated
 
-- [x] 3.1 `uv run python manage.py test` przechodzi.
-- [x] 3.2 `uv run python manage.py check` przechodzi.
-- [x] 3.3 `uv run python manage.py makemigrations --check --dry-run` nie wykrywa zmian modelu.
-- [x] 3.4 Przykłady i opis endpointu są obecne w `README.md`.
+- [x] 3.1 `uv run python manage.py test` przechodzi. — d1f58bf
+- [x] 3.2 `uv run python manage.py check` przechodzi. — d1f58bf
+- [x] 3.3 `uv run python manage.py makemigrations --check --dry-run` nie wykrywa zmian modelu. — d1f58bf
+- [x] 3.4 Przykłady i opis endpointu są obecne w `README.md`. — d1f58bf
 
 #### Manual
 
