@@ -151,6 +151,10 @@ class NotificationIntakeTests(AutomationFixtureMixin, TestCase):
             'non-string id': json.dumps(sample_payload(notification_id=5)),
             'bad date': json.dumps(sample_payload(captured_at_iso='wczoraj')),
             'missing date': json.dumps(sample_payload(captured_at_iso=None)),
+            'impossible day': json.dumps(sample_payload(captured_at_iso='2026-02-30T10:00:00+02:00')),
+            'impossible month': json.dumps(sample_payload(captured_at_iso='2026-13-01T10:00:00+02:00')),
+            'nul in title': json.dumps(sample_payload(title='Ocena\x00')),
+            'nul in extra field': json.dumps(sample_payload(tickerText='a\x00b')),
         }
         for name, raw in cases.items():
             with self.subTest(name):

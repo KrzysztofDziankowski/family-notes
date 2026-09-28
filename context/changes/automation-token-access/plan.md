@@ -306,6 +306,11 @@ The second one is needed because, in the captured samples, every repeated notifi
 
 **Implementation Note**: After completing this phase and all automated verification passes, pause here for manual confirmation from the human that the manual testing was successful.
 
+## Addendum (impl review 2026-09-28, F4)
+
+- Admin `save_model` issues the secret through `AutomationToken.assign_new_secret()` on the form's instance, not through `issue()`. Both share that helper, so the format, hash and prefix are identical. `issue()` remains the entry point for code paths.
+- Intake does not use `get_or_create`. As Phase 3 describes, it does a family-scoped `Q(notification_id) | Q(content_hash, captured_date)` lookup, then an `atomic()` create, then a re-lookup on `IntegrityError`. "Critical Implementation Details" wording is superseded by this.
+
 ## S-05 Handoff: Converting Pre-events
 
 These decisions were made here so S-05 plans against them. They are not built in this change.
@@ -413,8 +418,8 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 #### Manual
 
 - [x] 2.9 Local curl ping: 200, revoke, then 401 — cda3c03
-- [x] 2.10 Deployed proxy forwards Authorization and ping returns 200
-- [x] 2.11 Real phone automation ping succeeds and last_used_at updates
+- [x] 2.10 Deployed proxy forwards Authorization and ping returns 200 — verified manually on production 2026-09-27
+- [x] 2.11 Real phone automation ping succeeds and last_used_at updates — verified manually on production 2026-09-27
 
 ### Phase 3: Fast Notification Intake into the Pre-events Table
 
@@ -433,5 +438,5 @@ Phase 3 adds `entries 0002_inboundnotification` (a new table). It depends on S-0
 #### Manual
 
 - [x] 3.9 Local curl POST returns 202 at once and the row is pending in admin — 30ae082
-- [x] 3.10 Real phone automation delivers to production with no duplicate rows
+- [x] 3.10 Real phone automation delivers to production with no duplicate rows — verified manually on production 2026-09-27
 - [x] 3.12 README intake curl example returns 202 as written — 30ae082

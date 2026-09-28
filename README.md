@@ -94,6 +94,17 @@ Only active superusers may use `/admin/`. Family membership, including the
 `Parent` role, never grants admin access. Keep the operator account and all real
 OAuth credentials out of tracked files.
 
+With the local server running, verify these routes:
+
+- <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.
+- <http://localhost:20121/account/> requires authentication and shows the configured display name and role, or a generic not-configured state.
+- <http://localhost:20121/admin/> accepts the credentials created by `createsuperuser`; normal staff and family accounts are denied.
+- <http://localhost:20121/healthz/> returns `{"status": "ok"}` while the database is available.
+
+For production, register
+`https://YOUR_DOMAIN/accounts/google/login/callback/` separately and store the
+real credentials only in the protected server environment and password manager.
+
 ### Issue an automation token
 
 A parent's phone automation (the script that forwards EduVulcan notifications)
@@ -140,17 +151,6 @@ An invalid body returns `400`, a body over 16 KB returns `413`. The row appears
 in admin under **Entries → Powiadomienia przychodzące** with status `pending`
 until EduVulcan processing (roadmap S-05) exists. Use only anonymized payloads
 for manual tests; real notifications name family members.
-
-With the local server running, verify these routes:
-
-- <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.
-- <http://localhost:20121/account/> requires authentication and shows the configured display name and role, or a generic not-configured state.
-- <http://localhost:20121/admin/> accepts the credentials created by `createsuperuser`; normal staff and family accounts are denied.
-- <http://localhost:20121/healthz/> returns `{"status": "ok"}` while the database is available.
-
-For production, register
-`https://YOUR_DOMAIN/accounts/google/login/callback/` separately and store the
-real credentials only in the protected server environment and password manager.
 
 ## Verify the project
 

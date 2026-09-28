@@ -13,5 +13,5 @@
 
 - **Context**: messages visible to user/messages send to openAI
 - **Problem**: current application users will be Polish users, so they need to see pages in own language, moreover prompts to OpenAI should also use user language
-- **Rule**: source code must be in English, messages visible to user and messages send to openAI must be in Polish
+- **Rule**: source code must be in English, messages visible to user and messages send to openAI must be in Polish. Exception: the Django admin (`/admin/`, operator-only) stays in English, including custom admin templates and actions.
 - **Applies to**: implement, plan

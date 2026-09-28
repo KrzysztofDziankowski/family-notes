@@ -30,6 +30,16 @@ def content_hash(title, message):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 
+def _contains_nul(value):
+    if isinstance(value, str):
+        return '\x00' in value
+    if isinstance(value, dict):
+        return any(_contains_nul(k) or _contains_nul(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_contains_nul(item) for item in value)
+    return False
+
+
 def _invalid():
     return JsonResponse({'error': 'invalid_payload'}, status=400)
 
@@ -41,6 +51,9 @@ def _parse_payload(body):
         return None
     if not isinstance(payload, dict):
         return None
+    # PostgreSQL rejects NUL in text and jsonb columns; SQLite would accept it.
+    if _contains_nul(payload):
+        return None
     for name in REQUIRED_TEXT_FIELDS:
         value = payload.get(name)
         if not isinstance(value, str) or not value.strip():
@@ -48,7 +61,11 @@ def _parse_payload(body):
         if len(value) > MAX_FIELD_LENGTHS.get(name, len(value)):
             return None
     captured_iso = payload.get('captured_at_iso')
-    captured_at = parse_datetime(captured_iso) if isinstance(captured_iso, str) else None
+    try:
+        captured_at = parse_datetime(captured_iso) if isinstance(captured_iso, str) else None
+    except ValueError:
+        # Well-formed but impossible, e.g. 2026-02-30T10:00:00.
+        return None
     if captured_at is None:
         return None
     if timezone.is_naive(captured_at):
