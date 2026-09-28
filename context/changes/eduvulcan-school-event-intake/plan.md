@@ -320,10 +320,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [x] 1.1 Migration and model tests enforce lease, retry, pruning, and output-link constraints.
-- [x] 1.2 Fixed-rule tests cover every PRD category, Polish normalization, nearest-year boundaries, newest-ID child ties, missing children, and malformed input.
-- [x] 1.3 Multi-change tests produce ordered entries for valid segments plus one unassigned remainder note.
-- [x] 1.4 Family-scoped classification tests preserve privacy, active-family scoping, and general-note fallback.
+- [x] 1.1 Migration and model tests enforce lease, retry, pruning, and output-link constraints. — 94910bf
+- [x] 1.2 Fixed-rule tests cover every PRD category, Polish normalization, nearest-year boundaries, newest-ID child ties, missing children, and malformed input. — 94910bf
+- [x] 1.3 Multi-change tests produce ordered entries for valid segments plus one unassigned remainder note. — 94910bf
+- [x] 1.4 Family-scoped classification tests preserve privacy, active-family scoping, and general-note fallback. — 94910bf
 
 #### Manual
 
@@ -334,10 +334,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [ ] 2.1 Concurrent and repeated conversion calls create exactly one entry per output index; deleting an entry and retrying preserves its tombstone and does not recreate it.
-- [ ] 2.2 A simulated crash before commit leaves no entries or links; the next claim converts successfully.
-- [ ] 2.3 Retry timing, a three-provider-call maximum, three-attempt exhaustion, stale two-minute leases, fallback, and action-only admin requeue are covered.
-- [ ] 2.4 Ninety-day pruning uses the agreed empty sentinels while retaining deduplication and provenance behavior.
+- [x] 2.1 Concurrent and repeated conversion calls create exactly one entry per output index; deleting an entry and retrying preserves its tombstone and does not recreate it.
+- [x] 2.2 A simulated crash before commit leaves no entries or links; the next claim converts successfully.
+- [x] 2.3 Retry timing, a three-provider-call maximum, three-attempt exhaustion, stale two-minute leases, fallback, and action-only admin requeue are covered.
+- [x] 2.4 Ninety-day pruning uses the agreed empty sentinels while retaining deduplication and provenance behavior.
 
 #### Manual
 

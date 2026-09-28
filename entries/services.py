@@ -1,4 +1,4 @@
-"""Single write path for parent-confirmed family entries."""
+"""Write paths for family entries: parent-confirmed and automated EduVulcan."""
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
@@ -10,6 +10,7 @@ from family_access.access import (
     is_parent,
     scope_queryset_to_family,
 )
+from family_access.models import FamilyMember
 
 from .classification.service import MAX_SUBMITTED_TEXT_LENGTH
 from .classification.types import EntryType, MissingField, SchoolItemKind
@@ -80,8 +81,17 @@ def _existing_for_key(membership, submission_key):
 def _validate(
     membership, entry_type, date, assigned_member, school_item, *, kept_assignee_id=None
 ):
+    _validate_entry_invariants(
+        membership.family_id, entry_type, date, assigned_member, school_item,
+        kept_assignee_id=kept_assignee_id,
+    )
+
+
+def _validate_entry_invariants(
+    family_id, entry_type, date, assigned_member, school_item, *, kept_assignee_id=None
+):
     if assigned_member is not None and (
-        assigned_member.family_id != membership.family_id
+        assigned_member.family_id != family_id
         or (not assigned_member.is_active and assigned_member.pk != kept_assignee_id)
     ):
         raise ValidationError('Wybrana osoba nie należy do rodziny.')
@@ -244,3 +254,52 @@ def child_entries(user):
         family=membership.family,
         assigned_member=membership,
     ).select_related('assigned_member')
+
+
+# --- Automated EduVulcan entries (S-05) ---------------------------------------
+
+
+@sensitive_variables('content')
+def create_automated_entry(
+    family,
+    *,
+    entry_type,
+    content,
+    date=None,
+    time=None,
+    assigned_member_id=None,
+    school_item=None,
+):
+    """Create one EduVulcan entry in ``family``; the only automated write path.
+
+    The entry has ``source=eduvulcan`` and no creator or submission key. The
+    assignee must be an active member of ``family`` and the normal entry
+    invariants apply; any violation raises ``ValidationError`` before a row is
+    written. Callers own the surrounding transaction.
+    """
+    entry_type = EntryType(entry_type)
+    school_item = SchoolItemKind(school_item) if school_item else None
+    if not content or not content.strip():
+        raise ValidationError('Treść wpisu jest wymagana.')
+    if school_item is not None and school_item.entry_type != entry_type:
+        raise ValidationError('Element szkolny nie pasuje do rodzaju wpisu.')
+    assigned_member = None
+    if assigned_member_id is not None:
+        assigned_member = FamilyMember.objects.filter(
+            pk=assigned_member_id, family_id=family.pk, is_active=True
+        ).first()
+        if assigned_member is None:
+            raise ValidationError('Wybrana osoba nie należy do rodziny.')
+    _validate_entry_invariants(family.pk, entry_type, date, assigned_member, school_item)
+    return Entry.objects.create(
+        family=family,
+        entry_type=entry_type.value,
+        content=content,
+        date=date,
+        time=time,
+        assigned_member=assigned_member,
+        school_item=school_item.value if school_item else '',
+        source=Entry.Source.EDUVULCAN,
+        created_by=None,
+        submission_key=None,
+    )
