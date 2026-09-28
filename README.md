@@ -185,7 +185,8 @@ A new notification returns `202 {"status": "accepted", "id": <row id>}`.
 Repeating the same `notification_id`, or the same title and message captured on
 the same day, returns `202` with the existing row's id and stores nothing new.
 An invalid body returns `400`, a body over 16 KB returns `413`. The row appears
-in admin under **Entries → Powiadomienia przychodzące** with status `pending`.
+in admin under **Entries → Powiadomienia przychodzące** with status `pending`
+until the conversion worker picks it up (see below).
 Use only anonymized payloads for manual tests; real notifications name family
 members.
 
@@ -216,6 +217,111 @@ Two health checks exist:
   `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS`, and
   `503 {"status": "unavailable"}` otherwise. Intake keeps answering `202`
   either way.
+
+Neither health check returns notification data, counts, or error details.
+
+#### Inspect conversion status
+
+Each row in **Entries → Powiadomienia przychodzące** moves through these
+statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Stored and waiting for its first attempt, or for a scheduled retry (`next attempt at`). |
+| `processing` | One worker holds a lease (`lease expires at`) for the current attempt. |
+| `processed` | Its entries were saved; the inline lists every generated entry (a deleted entry leaves an empty link). |
+| `failed` | Attempts ran out or the row cannot be converted; it waits for an operator. |
+
+Filter the list by status. Use `attempt count` and `last error code` for
+diagnosis; the codes are safe categories such as `provider_timeout`,
+`database_busy`, `conversion_error`, `lease_expired`, or `attempts_exhausted`,
+never notification text or provider responses. A `processed` row may also keep
+a `provider_*` code when repeated provider outages made it fall back to a
+general family note.
+
+Fixed school rules convert the known categories (for example the PRD example
+`Sprawdzian` becomes a dated calendar entry for the named child). Anything the
+rules do not recognise goes to classification, and if that cannot place it, it
+becomes an unassigned family note with the notification text, so nothing is
+dropped.
+
+#### Requeue failed rows
+
+After fixing the cause (for example a database or provider outage), select the
+`failed` rows in the admin list and run **Requeue selected failed
+notifications** (superusers only). They return to `pending` with a fresh
+attempt budget; other statuses are ignored, and outputs already created are
+never duplicated. The next sweep or restart converts them.
+
+#### Retention and restarts
+
+Raw title, message, and payload of `processed` rows are scrubbed after
+`EDUVULCAN_RAW_RETENTION_DAYS` (default 90); admin then shows `Raw data
+pruned` while IDs, content hashes (for duplicate detection), and output links
+remain. `pending`, `processing`, and `failed` rows are never scrubbed. A
+restart loses nothing: rows live in the database, the startup sweep converts
+pending rows, and a stale `processing` lease is reclaimed once it expires.
+
+#### Troubleshoot without exposing family data
+
+Logs and error codes name only notification IDs, attempt numbers, and codes.
+When reporting a problem, quote those, never the admin's title, message, or
+payload values, and never a token secret. Only `WARNING` and above reach the
+service logs by default, so a healthy conversion is silent; check the admin
+status instead.
+
+Neither health check returns notification data, counts, or error details.
+
+#### Inspect conversion status
+
+Each row in **Entries → Powiadomienia przychodzące** moves through these
+statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `pending` | Stored and waiting for its first attempt, or for a scheduled retry (`next attempt at`). |
+| `processing` | One worker holds a lease (`lease expires at`) for the current attempt. |
+| `processed` | Its entries were saved; the inline lists every generated entry (a deleted entry leaves an empty link). |
+| `failed` | Attempts ran out or the row cannot be converted; it waits for an operator. |
+
+Filter the list by status. Use `attempt count` and `last error code` for
+diagnosis; the codes are safe categories such as `provider_timeout`,
+`database_busy`, `conversion_error`, `lease_expired`, or `attempts_exhausted`,
+never notification text or provider responses. A `processed` row may also keep
+a `provider_*` code when repeated provider outages made it fall back to a
+general family note.
+
+Fixed school rules convert the known categories (for example the PRD example
+`Sprawdzian` becomes a dated calendar entry for the named child). Anything the
+rules do not recognise goes to classification, and if that cannot place it, it
+becomes an unassigned family note with the notification text, so nothing is
+dropped.
+
+#### Requeue failed rows
+
+After fixing the cause (for example a database or provider outage), select the
+`failed` rows in the admin list and run **Requeue selected failed
+notifications** (superusers only). They return to `pending` with a fresh
+attempt budget; other statuses are ignored, and outputs already created are
+never duplicated. The next sweep or restart converts them.
+
+#### Retention and restarts
+
+Raw title, message, and payload of `processed` rows are scrubbed after
+`EDUVULCAN_RAW_RETENTION_DAYS` (default 90); admin then shows
+`[pruned]`-style placeholders while IDs, content hashes (for duplicate
+detection), and output links remain. `pending`, `processing`, and `failed` rows
+are never scrubbed. A restart loses nothing: rows live in the database, the
+startup sweep converts pending rows, and a stale `processing` lease is
+reclaimed once it expires.
+
+#### Troubleshoot without exposing family data
+
+Logs and error codes name only notification IDs, attempt numbers, and codes.
+When reporting a problem, quote those, never the admin's title, message, or
+payload columns, and never a token secret. Only `WARNING` and above reach the
+service logs by default, so a healthy conversion is silent; check the admin
+status instead.
 
 ## Verify the project
 

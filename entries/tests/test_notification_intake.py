@@ -12,9 +12,9 @@ from django.utils import timezone
 from entries import api_views
 from entries.models import InboundNotification
 from family_access.models import AutomationToken, Family, FamilyMember
-from family_access.test_automation import AutomationFixtureMixin
+from family_access.tests.test_automation import AutomationFixtureMixin
 
-URL = reverse('automation_notification_submit')
+URL = reverse('automation:notification_submit')
 
 
 def sample_payload(**overrides):

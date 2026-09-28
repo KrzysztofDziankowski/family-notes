@@ -5,14 +5,14 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
-from .access import (
+from family_access.access import (
     can_read_assigned_child,
     get_active_membership,
     is_parent,
     require_active_membership,
     scope_queryset_to_family,
 )
-from .models import Family, FamilyMember
+from family_access.models import Family, FamilyMember
 
 
 class FamilyModelTests(TestCase):

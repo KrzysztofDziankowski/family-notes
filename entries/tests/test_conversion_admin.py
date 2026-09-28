@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from entries.eduvulcan.conversion import convert_notification, prune_raw_notifications
 from entries.models import InboundNotification, NotificationConversionOutput
-from family_access.test_automation import AutomationFixtureMixin
+from family_access.tests.test_automation import AutomationFixtureMixin
 
 from .test_conversion_models import make_notification
 
