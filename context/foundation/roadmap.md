@@ -42,7 +42,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | F-01 | identity-and-family-access-contract  | (foundation) family identity, roles, and scoped access contract exist      | -             | FR-001, FR-002, FR-008, Access Control, NFR family privacy | done        |
 | F-02 | classification-privacy-boundary      | (foundation) classification can run inside the privacy boundary            | -             | FR-004, Non-Functional Requirements, Business Logic | done        |
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | done        |
-| F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token, and its notifications are stored fast in a pre-events table | F-01 | FR-009, Access Control, NFR token revocation, NFR fast intake | in-progress |
+| F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token, and its notifications are stored fast in a pre-events table | F-01 | FR-009, Access Control, NFR token revocation, NFR fast intake | done        |
 | S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | in-progress |
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | planning |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | proposed |
@@ -125,7 +125,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:** -
 - **Risk:** The token is a second authentication path beside the signed-in session; the risk is letting it reach anything other than school intake. Kept admin-only (no parent-facing page) to stay inside the MVP's no-in-app-administration stance.
 - **Progress (2026-09-28):** All three phases are implemented and merged to master. Production ping and real-phone intake were verified on 2026-09-27. Impl-reviewed 2026-09-28 (`reviews/impl-review.md`), and triage fixes landed in `9c74c0c`. Intake now answers 400 for impossible dates and NUL characters. Next: `/10x-archive`.
-- **Status:** in-progress
+- **Status:** done
 
 ## Slices
 
@@ -209,7 +209,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | S-02       | parent-family-entry-management      | Parent manages saved family entries                 | no                    | Planning started; formally ready once S-01 is archived. |
 | S-03       | child-assigned-entry-view           | Child sees only assigned entries                    | no                    | Ready once S-01 is archived. |
 | S-04       | missing-info-follow-up              | Parent receives follow-up for missing required data | no                    | Ready once S-01 is archived. |
-| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | n/a                   | Implemented and impl-reviewed 2026-09-28; archive next. |
+| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | n/a                   | done                                                    |
 | S-05       | eduvulcan-school-event-intake       | Automation forwards EduVulcan notifications as school entries | no          | Ready once S-01 and F-04 are archived; plan against F-04 "S-05 Handoff". |
 
 ## Open Roadmap Questions
@@ -235,3 +235,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **F-01: (foundation) family members can be represented with external identity, preassigned parent/child roles, and a single-family access boundary.** — Archived 2026-09-26 → `context/archive/2026-09-23-identity-and-family-access-contract/`. Lesson: —.
 - **F-03: (foundation) the app has a minimal release health gate for database-backed readiness before family data is trusted in production.** — Archived 2026-09-26 → `context/archive/2026-09-24-production-health-release-gate/`. Lesson: —.
 - **F-02: (foundation) classification requests can be made while limiting submitted text to producing and saving the requested family entry.** — Archived 2026-09-27 → `context/archive/2026-09-24-classification-privacy-boundary/`. Lesson: —.
+- **F-04: (foundation) a parent's automation can authenticate with a token issued and revoked by the administrator, and the token acts only on behalf of that parent's family; its notifications are stored fast in a pre-events table (`InboundNotification`, 202 with no classification in the request).** — Archived 2026-09-28 → `context/archive/2026-09-27-automation-token-access/`. Lesson: —.

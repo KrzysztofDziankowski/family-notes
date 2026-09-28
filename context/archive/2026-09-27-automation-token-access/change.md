@@ -1,10 +1,10 @@
 ---
 change_id: automation-token-access
 title: Automation token access
-status: impl_reviewed
+status: archived
 created: 2026-09-27
 updated: 2026-09-28
-archived_at: null
+archived_at: 2026-09-28T05:24:23Z
 ---
 
 ## Notes
