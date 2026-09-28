@@ -47,7 +47,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | done     |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | done     |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
-| S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | proposed |
+| S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | planning |
 
 ## Streams
 
@@ -196,7 +196,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
   - EduVulcan entries assigned to a child make that member RESTRICT-protected, so deactivate rather than delete.
   - When S-05 next touches these files, move `family_access/test_automation.py` into a `tests/` package and pick one namespace for the `api/automation/` URLs.
 - **Risk:** Depends on the entry model shaped by S-01, which must allow a source marker and entries created without a confirmation step. Real sample notifications (gitignored `eduvulcan-queue/`) contain names, so fixtures must be anonymized before they enter the repo. The LLM fallback sends notification text through the F-02 privacy boundary.
-- **Status:** proposed
+- **Status:** planning
 
 ## Backlog Handoff
 
