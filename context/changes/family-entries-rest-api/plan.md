@@ -234,12 +234,12 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Automated
 
-- [x] 2.1 Aktywny token rodzica otrzymuje wyłącznie wpisy swojej rodziny.
-- [x] 2.2 Brakujący, błędny, cofnięty i wygasły token oraz nieaktywny rodzic, użytkownik lub rodzina otrzymują istniejący kontrakt 401.
-- [x] 2.3 Wpis obcej rodziny nigdy nie pojawia się w `results` ani nie zwiększa `count`.
-- [x] 2.4 POST, PUT, PATCH i DELETE nie zmieniają danych i zwracają 405.
-- [x] 2.5 Filtry, paginacja, kolejność i envelope zachowują uzgodniony kontrakt.
-- [x] 2.6 Istniejące testy tokenu, intake’u, zarządzania wpisami i widoku dziecka pozostają zielone.
+- [x] 2.1 Aktywny token rodzica otrzymuje wyłącznie wpisy swojej rodziny. — 6da84b7
+- [x] 2.2 Brakujący, błędny, cofnięty i wygasły token oraz nieaktywny rodzic, użytkownik lub rodzina otrzymują istniejący kontrakt 401. — 6da84b7
+- [x] 2.3 Wpis obcej rodziny nigdy nie pojawia się w `results` ani nie zwiększa `count`. — 6da84b7
+- [x] 2.4 POST, PUT, PATCH i DELETE nie zmieniają danych i zwracają 405. — 6da84b7
+- [x] 2.5 Filtry, paginacja, kolejność i envelope zachowują uzgodniony kontrakt. — 6da84b7
+- [x] 2.6 Istniejące testy tokenu, intake’u, zarządzania wpisami i widoku dziecka pozostają zielone. — 6da84b7
 
 #### Manual
 
@@ -250,10 +250,10 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Automated
 
-- [ ] 3.1 `uv run python manage.py test` przechodzi.
-- [ ] 3.2 `uv run python manage.py check` przechodzi.
-- [ ] 3.3 `uv run python manage.py makemigrations --check --dry-run` nie wykrywa zmian modelu.
-- [ ] 3.4 Przykłady i opis endpointu są obecne w `README.md`.
+- [x] 3.1 `uv run python manage.py test` przechodzi.
+- [x] 3.2 `uv run python manage.py check` przechodzi.
+- [x] 3.3 `uv run python manage.py makemigrations --check --dry-run` nie wykrywa zmian modelu.
+- [x] 3.4 Przykłady i opis endpointu są obecne w `README.md`.
 
 #### Manual
 

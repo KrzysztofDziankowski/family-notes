@@ -189,6 +189,130 @@ in admin under **Entries → Powiadomienia przychodzące** with status `pending`
 Use only anonymized payloads for manual tests; real notifications name family
 members.
 
+### Read family entries
+
+The same token can also read the entries of its owner's family through
+`GET /api/automation/entries/`. The family always comes from the token; the
+client cannot pick one. The endpoint is read-only: `POST`, `PUT`, `PATCH`, and
+`DELETE` return `405` and change nothing.
+
+> **Operator note:** since S-06 every active parent token, including tokens
+> issued earlier only for notification intake, can read **all** entries of the
+> family. Review the tokens under **Family access → Tokeny automatyzacji** and
+> revoke any token whose automation should not have that access.
+
+Keep the token out of shell history, tracked files, and logs. Read it into an
+environment variable without echoing it, and always use the variable instead
+of pasting the secret into a command:
+
+```bash
+read -rs FAMILY_NOTES_TOKEN && export FAMILY_NOTES_TOKEN
+```
+
+Fetch the first page of all entries (dated and undated):
+
+```bash
+curl -sS -H "Authorization: Bearer $FAMILY_NOTES_TOKEN" \
+  "http://localhost:20121/api/automation/entries/"
+```
+
+Fetch the entries from today to four weeks ahead (both bounds inclusive). With
+a date bound, entries without a date are left out unless you add
+`include_undated=true`:
+
+```bash
+curl -sS -H "Authorization: Bearer $FAMILY_NOTES_TOKEN" \
+  "http://localhost:20121/api/automation/entries/?date_from=$(date -I)&date_to=$(date -I -d '+28 days')"
+
+curl -sS -H "Authorization: Bearer $FAMILY_NOTES_TOKEN" \
+  "http://localhost:20121/api/automation/entries/?date_from=$(date -I)&date_to=$(date -I -d '+28 days')&include_undated=true"
+```
+
+Query parameters (all optional; unknown parameters are ignored):
+
+| Parameter | Values | Default |
+| --- | --- | --- |
+| `limit` | integer `1`–`500` | `100` |
+| `offset` | integer `0` or more | `0` |
+| `date_from` | ISO date `YYYY-MM-DD`, inclusive | no lower bound |
+| `date_to` | ISO date `YYYY-MM-DD`, inclusive | no upper bound |
+| `include_undated` | `true` or `false`, case-insensitive | `true` without date bounds, `false` with at least one bound |
+
+Either bound may be given alone. Without bounds, `include_undated=false`
+returns only dated entries.
+
+Results are ordered by `created_at`, then `id`, both ascending. A `200`
+response looks like this (fictional data):
+
+```json
+{
+  "count": 2,
+  "limit": 100,
+  "offset": 0,
+  "results": [
+    {
+      "id": 41,
+      "entry_type": "calendar_event",
+      "content": "Sprawdzian z biologii",
+      "date": "2026-10-02",
+      "time": null,
+      "assigned_member": {"display_name": "Jan"},
+      "school_item": "test",
+      "source": "eduvulcan",
+      "created_at": "2026-09-28T06:12:03.512345+00:00",
+      "updated_at": "2026-09-28T06:12:03.512345+00:00"
+    },
+    {
+      "id": 42,
+      "entry_type": "todo",
+      "content": "Kupić blok techniczny",
+      "date": null,
+      "time": null,
+      "assigned_member": null,
+      "school_item": null,
+      "source": "manual",
+      "created_at": "2026-09-28T07:40:11.004211+00:00",
+      "updated_at": "2026-09-28T07:40:11.004211+00:00"
+    }
+  ]
+}
+```
+
+- `entry_type` is `todo`, `calendar_event`, or `note`; `source` is `manual` or
+  `eduvulcan`.
+- `date` is `YYYY-MM-DD`, `time` is `HH:MM:SS`, and `created_at` /
+  `updated_at` are ISO 8601 timestamps with a UTC offset.
+- A missing date, time, assigned member, or school item is `null`.
+  `assigned_member` contains only `display_name`.
+
+`count` is the number of all entries matching the filters, before `limit` and
+`offset`. To read everything, repeat the request with `offset` increased by
+`limit` until `offset` reaches `count` (or `results` comes back empty):
+
+```bash
+curl -sS -H "Authorization: Bearer $FAMILY_NOTES_TOKEN" \
+  "http://localhost:20121/api/automation/entries/?limit=100&offset=100"
+```
+
+Pages are not a snapshot. New entries are always added at the end, so they do
+not shift earlier pages. Deleting an entry, or editing its date so it no longer
+matches the filters, shifts the later entries one position back, and one of
+them may then be missed in the current pass; `count` can also change between
+requests. Deduplicate by `id` and, when completeness matters, repeat the read.
+
+Errors:
+
+- `400 {"error": "invalid_query"}` for a bad parameter: out-of-range `limit`,
+  negative or non-numeric `offset`, a malformed or nonexistent date (for
+  example `2026-02-30`), `date_from` after `date_to`, or an `include_undated`
+  value other than `true`/`false` (`1`, `0`, `yes`, and an empty value are
+  rejected).
+- `401 {"error": "invalid_token"}` with the header `WWW-Authenticate: Bearer`
+  for a missing, invalid, revoked, or expired token, or when the token owner is
+  no longer an active parent of an active family. Revocation takes effect on
+  the next request.
+- `405` for any method other than `GET`.
+
 ### Convert notifications locally
 
 A `202` means the notification is stored, not that it is already converted.
