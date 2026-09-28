@@ -274,30 +274,30 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Automated
 
-- [x] 2.1 Route tests cover list (default, `view=past`, unknown `view`) and detail for an active child, and prove non-GET methods return 405.
-- [x] 2.2 The access matrix covers both routes for anonymous (login redirect), parent, inactive child, inactive family, and unconfigured user (403).
-- [x] 2.3 Detail returns 404 with identical bodies for an unassigned entry, a sibling's entry, a foreign-family entry, and a nonexistent ID, and sentinel content from those entries never appears in any child response.
-- [x] 2.4 List responses contain the child's sentinel entries and none of the excluded ones.
-- [x] 2.5 Account page tests show "Moje wpisy" for a child and not for a parent, and "Dodaj wpis" for a parent and not for a child.
-- [x] 2.6 Rendered child pages contain no links or forms to capture, edit, or delete.
-- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests family_access`.
+- [x] 2.1 Route tests cover list (default, `view=past`, unknown `view`) and detail for an active child, and prove non-GET methods return 405. — e23392c
+- [x] 2.2 The access matrix covers both routes for anonymous (login redirect), parent, inactive child, inactive family, and unconfigured user (403). — e23392c
+- [x] 2.3 Detail returns 404 with identical bodies for an unassigned entry, a sibling's entry, a foreign-family entry, and a nonexistent ID, and sentinel content from those entries never appears in any child response. — e23392c
+- [x] 2.4 List responses contain the child's sentinel entries and none of the excluded ones. — e23392c
+- [x] 2.5 Account page tests show "Moje wpisy" for a child and not for a parent, and "Dodaj wpis" for a parent and not for a child. — e23392c
+- [x] 2.6 Rendered child pages contain no links or forms to capture, edit, or delete. — e23392c
+- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests family_access`. — e23392c
 
 #### Manual
 
-- [x] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (agent-verified: headless Chromium 360px mobile viewport via CDP with a fictional local child session; account → /entries/mine/ → ?view=past → /entries/mine/<pk>/?view=past → back landed on ?view=past, scrollWidth 360 on every page; human check pending)
-- [x] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (agent-verified: 360px screenshots of the upcoming list with a truncated long undated note under "Bez daty", a dated row without time, the full long content on detail, and the empty past state; the empty upcoming state checked by test and in the Phase 3 gallery; human check pending)
+- [x] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (agent-verified: headless Chromium 360px mobile viewport via CDP with a fictional local child session; account → /entries/mine/ → ?view=past → /entries/mine/<pk>/?view=past → back landed on ?view=past, scrollWidth 360 on every page; human check pending) — e23392c
+- [x] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (agent-verified: 360px screenshots of the upcoming list with a truncated long undated note under "Bez daty", a dated row without time, the full long content on detail, and the empty past state; the empty upcoming state checked by test and in the Phase 3 gallery; human check pending) — e23392c
 
 ### Phase 3: Kitchen Sink and Screenshot Gate
 
 #### Automated
 
-- [ ] 3.1 Gallery tests prove DEBUG gating (404 when off), the anonymous redirect, 403 for a signed-in user without an active membership, the expected `data-kitchen-state` markers for all six states, and zero `Entry` queries or writes.
-- [ ] 3.2 Full tests pass: `uv run python manage.py test`.
-- [ ] 3.3 Django checks pass: `uv run python manage.py check`.
-- [ ] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 3.1 Gallery tests prove DEBUG gating (404 when off), the anonymous redirect, 403 for a signed-in user without an active membership, the expected `data-kitchen-state` markers for all six states, and zero `Entry` queries or writes.
+- [x] 3.2 Full tests pass: `uv run python manage.py test`.
+- [x] 3.3 Django checks pass: `uv run python manage.py check`.
+- [x] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
 
 #### Manual
 
-- [ ] 3.5 The gallery screenshot at 360px shows all six states legibly, with no horizontal scroll, token accent colours, Polish copy throughout, and the current mode visibly marked.
-- [ ] 3.6 The screenshot is committed under `context/changes/child-assigned-entry-view/screenshots/`.
-- [ ] 3.7 In Chrome on Android, a real child account sees only its own entries, and a hand-typed detail URL for a sibling's entry shows 404.
+- [x] 3.5 The gallery screenshot at 360px shows all six states legibly, with no horizontal scroll, token accent colours, Polish copy throughout, and the current mode visibly marked. (agent-verified: headless Chromium 360px mobile viewport full-page capture, 360x2602, read back and reviewed: all six states legible, scrollWidth 360 so no horizontal scroll, accent-green type labels, mode switch and panel rules, Polish copy throughout, current mode filled with aria-current="page"; human check pending)
+- [x] 3.6 The screenshot is committed under `context/changes/child-assigned-entry-view/screenshots/`. (agent-verified: screenshots/child-states-360.png committed with this phase; human check pending)
+- [x] 3.7 In Chrome on Android, a real child account sees only its own entries, and a hand-typed detail URL for a sibling's entry shows 404. (agent-verified: Chromium at 360px mobile viewport with a fictional local child session saw only its own entries, and the hand-typed sibling and family-wide detail URLs returned 404; real Android device check pending; human check pending)

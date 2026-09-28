@@ -246,10 +246,15 @@ def _use_synthetic_members(form):
 from django.shortcuts import get_object_or_404  # noqa: E402
 from django.views.decorators.http import require_GET  # noqa: E402
 
+from family_access.access import require_active_membership  # noqa: E402
+
 from .listing import (  # noqa: E402
     PAST,
+    SECTION_DATED,
+    SECTION_PAST,
     SECTION_UNDATED,
     UPCOMING,
+    EntrySection,
     normalize_list_mode,
     partition_entries,
     with_effective_date,
@@ -300,3 +305,80 @@ def child_detail(request, pk):
         'entries/child_detail.html',
         {'entry': entry, 'back_mode': normalize_list_mode(request.GET.get('view'))},
     )
+
+
+def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school_item='',
+                        source=Entry.Source.MANUAL, effective_date=None):
+    """Unsaved fictional entry for the child gallery; never written."""
+    entry = Entry(
+        pk=pk,
+        entry_type=entry_type.value,
+        content=content,
+        date=date,
+        time=time,
+        school_item=school_item,
+        source=source,
+        assigned_member=FamilyMember(display_name=STATES_MEMBER_CHOICES[1][1]),
+        updated_at=timezone.make_aware(datetime.datetime.combine(STATES_DATE, datetime.time(7, 0))),
+    )
+    entry.effective_date = effective_date or date
+    return entry
+
+
+@require_GET
+def child_states(request):
+    """DEBUG-only gallery of every child-view state from unsaved synthetic data."""
+    if not settings.DEBUG:
+        raise Http404
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+    require_active_membership(request.user)
+
+    day = datetime.timedelta(days=1)
+    test = _child_states_entry(
+        9001, 'Sprawdzian z matematyki: ułamki zwykłe i dziesiętne', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE, time=datetime.time(8, 0), school_item=SchoolItemKind.TEST.value,
+    )
+    grade = _child_states_entry(
+        9002, 'Ocena 5 z języka polskiego za wypracowanie', EntryType.NOTE,
+        school_item=SchoolItemKind.GRADE.value, effective_date=STATES_DATE,
+    )
+    todo = _child_states_entry(
+        9003, 'Przynieść strój na WF', EntryType.TODO, date=STATES_DATE + day,
+    )
+    undated = _child_states_entry(
+        9004,
+        'Wycieczka do muzeum: zabrać drugie śniadanie, picie, legitymację, wygodne buty, '
+        'kurtkę przeciwdeszczową i pieniądze na bilety oraz pamiątki. Zbiórka przy bramie '
+        'szkoły, powrót około godziny piętnastej.',
+        EntryType.NOTE,
+    )
+    quiz = _child_states_entry(
+        9005, 'Kartkówka z przyrody', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE - 3 * day, time=datetime.time(10, 15),
+        school_item=SchoolItemKind.QUIZ.value, source=Entry.Source.EDUVULCAN,
+    )
+    returned = _child_states_entry(
+        9006, 'Oddać książkę do biblioteki', EntryType.TODO, date=STATES_DATE - 5 * day,
+    )
+
+    def list_state(name, label, mode, sections):
+        return {'name': name, 'label': label, 'list': _child_list_context(mode, sections)}
+
+    sections = [
+        list_state('upcoming', 'Nadchodzące', UPCOMING, [
+            EntrySection(SECTION_DATED, [test, grade, todo]),
+            EntrySection(SECTION_UNDATED, [undated]),
+        ]),
+        list_state('past', 'Minione', PAST, [EntrySection(SECTION_PAST, [quiz, returned])]),
+        list_state('upcoming_empty', 'Brak nadchodzących', UPCOMING, [
+            EntrySection(SECTION_DATED, []),
+            EntrySection(SECTION_UNDATED, []),
+        ]),
+        list_state('past_empty', 'Brak minionych', PAST, [EntrySection(SECTION_PAST, [])]),
+        {'name': 'detail_manual', 'label': 'Szczegóły wpisu ręcznego',
+         'entry': undated, 'back_mode': UPCOMING},
+        {'name': 'detail_eduvulcan', 'label': 'Szczegóły wpisu z EduVulcan',
+         'entry': quiz, 'back_mode': PAST},
+    ]
+    return render(request, 'entries/child_states.html', {'sections': sections})
