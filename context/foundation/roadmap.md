@@ -44,7 +44,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | F-03 | production-health-release-gate       | (foundation) release health can be checked before family data is trusted   | -             | Non-Functional Requirements, `context/foundation/infrastructure.md` | done        |
 | F-04 | automation-token-access              | (foundation) a parent's automation can authenticate with an admin-issued, revocable token, and its notifications are stored fast in a pre-events table | F-01 | FR-009, Access Control, NFR token revocation, NFR fast intake | done        |
 | S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | done        |
-| S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | planning |
+| S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | done     |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | done     |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
 | S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | proposed |
@@ -153,7 +153,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** Sequenced after the first capture flow so CRUD is grounded in real entry data instead of becoming a separate management surface.
-- **Status:** planning
+- **Status:** done
 
 ### S-03: Child Assigned Entry View
 
@@ -238,3 +238,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **F-04: (foundation) a parent's automation can authenticate with a token issued and revoked by the administrator, and the token acts only on behalf of that parent's family; its notifications are stored fast in a pre-events table (`InboundNotification`, 202 with no classification in the request).** — Archived 2026-09-28 → `context/archive/2026-09-27-automation-token-access/`. Lesson: —.
 - **S-01: parent can classify, review, correct, and save one school event from natural-language text.** — Archived 2026-09-28 → `context/archive/2026-09-27-first-school-event-capture/`. Lesson: —.
 - **S-03: child can read only entries assigned to that child in a personal view.** — Archived 2026-09-28 → `context/archive/2026-09-28-child-assigned-entry-view/`. Lesson: —.
+- **S-02: parent can create, read, update, and delete saved family entries in a shared family view.** — Archived 2026-09-28 → `context/archive/2026-09-28-parent-family-entry-management/`. Lesson: —.
