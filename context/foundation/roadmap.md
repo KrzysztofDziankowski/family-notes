@@ -205,11 +205,11 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | F-01       | identity-and-family-access-contract | Establish identity, roles, and family access guard  | yes                   | Unlocks the first capture slice and all family-data paths. |
 | F-02       | classification-privacy-boundary     | Establish privacy boundary for classification       | yes                   | Unlocks classified proposal behavior. |
 | F-03       | production-health-release-gate      | Establish production health release gate            | yes                   | Can run in parallel with product foundations. |
-| S-01       | first-school-event-capture          | Parent captures first school event from text        | n/a                   | done                                                    |
+| S-01       | first-school-event-capture          | Parent captures first school event from text        | n/a                   | Archived 2026-09-28. |
 | S-02       | parent-family-entry-management      | Parent manages saved family entries                 | no                    | Planning started; formally ready once S-01 is archived. |
 | S-03       | child-assigned-entry-view           | Child sees only assigned entries                    | no                    | Ready once S-01 is archived. |
 | S-04       | missing-info-follow-up              | Parent receives follow-up for missing required data | no                    | Ready once S-01 is archived. |
-| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | n/a                   | done                                                    |
+| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | n/a                   | Archived 2026-09-28. |
 | S-05       | eduvulcan-school-event-intake       | Automation forwards EduVulcan notifications as school entries | no          | Ready once S-01 and F-04 are archived; plan against F-04 "S-05 Handoff". |
 
 ## Open Roadmap Questions
