@@ -362,10 +362,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [x] 4.1 Focused EduVulcan, classification, access, intake, worker, and health tests pass.
-- [x] 4.2 Full Django tests and system checks pass.
-- [x] 4.3 Migration consistency check reports no missing migrations.
-- [x] 4.4 Existing public automation paths and response bodies remain compatible.
+- [x] 4.1 Focused EduVulcan, classification, access, intake, worker, and health tests pass. — 1eeeb2c
+- [x] 4.2 Full Django tests and system checks pass. — 1eeeb2c
+- [x] 4.3 Migration consistency check reports no missing migrations. — 1eeeb2c
+- [x] 4.4 Existing public automation paths and response bodies remain compatible. — 1eeeb2c
 
 #### Manual
 
