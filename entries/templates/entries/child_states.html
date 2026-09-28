@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Stany ekranu „Moje wpisy”{% endblock %}
+
+{% block content %}
+<h1>Stany ekranu „Moje wpisy”</h1>
+<p class="fn-muted">Strona tylko dla trybu DEBUG. Dane są fikcyjne i nic nie jest zapisywane.</p>
+{% for section in sections %}
+<section data-kitchen-state="{{ section.name }}">
+    <hr>
+    <p class="fn-muted"><small>Stan: {{ section.label }} ({{ section.name }})</small></p>
+    {% if section.list %}
+        {% include "entries/_child_list_body.html" with mode=section.list.mode sections=section.list.sections detail_query=section.list.detail_query empty_message=section.list.empty_message only %}
+    {% else %}
+        {% include "entries/_child_entry_detail.html" with entry=section.entry back_mode=section.back_mode only %}
+    {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

@@ -109,6 +109,8 @@ Deliver the shared index, stable detail pages, structured creation, editing, inl
 
 **Contract**: Upcoming dated entries include the application-local date and future dates, ordered by date ascending, time ascending with missing times last, then primary key. Undated entries follow and order by `updated_at` descending, then primary key descending. Past entries use dates before today and order by date descending, time descending with missing times last, then primary key descending. Ordering tests assert these exact sequences. The index switches clearly between “Nadchodzące” and “Minione” and has distinct empty states. No pagination is introduced.
 
+*Note from S-03 (`child-assigned-entry-view`) plan review: reuse `entries/listing.py` (list modes, partition, and ordering) and `entries/templates/entries/_entry_row.html` from S-03 instead of implementing ordering in `entries/views.py`. If S-03 hasn't landed yet, create them to S-03's contract. The shared contract also hides `lucky_number` entries from lists and dates an undated `grade` by the local day of its `created_at`.*
+
 #### 3. Templates and navigation
 
 **File**: `entries/templates/entries/`, relevant parent navigation templates

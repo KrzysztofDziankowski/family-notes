@@ -1,0 +1,26 @@
+{% comment %}
+Child entry detail body (S-03), shared by child_detail.html and the child_states gallery.
+Parameters: entry (with the effective_date annotation when loaded from the database),
+back_mode ("upcoming"/"past", already normalized).
+{% endcomment %}
+<article class="fn-panel" data-entry-detail="{{ entry.pk }}">
+    <dl class="fn-details">
+        <dt>Rodzaj</dt>
+        <dd>{{ entry.get_entry_type_display }}</dd>
+        <dt>Treść</dt>
+        <dd>{{ entry.content|linebreaksbr }}</dd>
+        <dt>Data</dt>
+        <dd>{% if entry.date %}{{ entry.date|date:"l, j E Y"|lower }}{% elif entry.effective_date %}{{ entry.effective_date|date:"l, j E Y"|lower }}{% else %}Bez daty{% endif %}</dd>
+        {% if entry.time %}
+            <dt>Godzina</dt>
+            <dd>{{ entry.time|time:"H:i" }}</dd>
+        {% endif %}
+        {% if entry.school_item %}
+            <dt>Szkoła</dt>
+            <dd>{{ entry.get_school_item_display }}</dd>
+        {% endif %}
+        <dt>Źródło</dt>
+        <dd>{{ entry.get_source_display }}</dd>
+    </dl>
+</article>
+<p><a href="{% url 'entries:child_list' %}{% if back_mode == "past" %}?view=past{% endif %}" data-back-link>Wróć do listy</a></p>

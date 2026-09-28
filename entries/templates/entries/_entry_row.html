@@ -1,0 +1,22 @@
+{% comment %}
+Shared entry row (S-02 parent list, S-03 child list). Render inside <ul class="fn-entry-list">.
+Parameters:
+  entry            -- Entry to show (select_related('assigned_member') recommended). An undated
+                      grade shows its effective_date annotation from entries.listing when present.
+  detail_url_name  -- URL name reversed with entry.pk for the row link.
+  hide_assignee    -- optional; true hides the "Dla kogo" line (e.g. the child's own list).
+  edit_url_name    -- optional; when set, adds an "Edytuj" link reversed with entry.pk.
+  detail_query     -- optional; query string (without "?") appended to the detail link,
+                      e.g. "view=past" so the detail page can link back to the same list mode.
+{% endcomment %}
+<li class="fn-entry-row" data-entry-row="{{ entry.pk }}">
+    <a class="fn-entry-link" href="{% url detail_url_name entry.pk %}{% if detail_query %}?{{ detail_query }}{% endif %}">
+        <span class="fn-entry-type">{{ entry.get_entry_type_display }}</span>
+        <span class="fn-entry-content">{{ entry.content|truncatechars:120 }}</span>
+    </a>
+    <p class="fn-entry-meta fn-muted">
+        {% if entry.date %}<span>{{ entry.date|date:"l, j E Y"|lower }}{% if entry.time %}, {{ entry.time|time:"H:i" }}{% endif %}</span>{% elif entry.effective_date %}<span>{{ entry.effective_date|date:"l, j E Y"|lower }}</span>{% else %}<span>Bez daty</span>{% endif %}
+        {% if not hide_assignee %}<span>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Cała rodzina{% endif %}</span>{% endif %}
+        {% if edit_url_name %}<a href="{% url edit_url_name entry.pk %}">Edytuj</a>{% endif %}
+    </p>
+</li>
