@@ -17,12 +17,13 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from family_access.automation import automation_token_required
 
 from .eduvulcan.worker import schedule_wakeup
 from .models import InboundNotification
+from .services import automation_family_entries
 
 MAX_BODY_BYTES = 16 * 1024
 REQUIRED_TEXT_FIELDS = ('title', 'message', 'notification_id')
@@ -235,3 +236,19 @@ def entries_page(queryset, query):
         'offset': query.offset,
         'results': [serialize_entry(entry) for entry in page],
     }
+
+
+@require_GET
+@automation_token_required
+def list_family_entries(request):
+    query = parse_entries_query(request.GET)
+    if query is None:
+        return JsonResponse({'error': 'invalid_query'}, status=400)
+    # The family comes only from the authenticated token, never from the client.
+    queryset = automation_family_entries(
+        request.automation_membership,
+        date_from=query.date_from,
+        date_to=query.date_to,
+        include_undated=query.include_undated,
+    )
+    return JsonResponse(entries_page(queryset, query))

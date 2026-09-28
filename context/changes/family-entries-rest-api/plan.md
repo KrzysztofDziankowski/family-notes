@@ -225,21 +225,21 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Automated
 
-- [x] 1.1 Testy parsera potwierdzają wartości domyślne, granice `limit`, nieujemny `offset`, format ISO dat i nieistniejący dzień (`2026-02-30`), boolean bez rozróżniania wielkości liter z odrzuceniem `1`/`0`/pustej wartości oraz odwrócony zakres.
-- [x] 1.2 Testy filtrowania potwierdzają obie włączne granice, granice jednostronne i zachowanie `include_undated`, także jawne `false` bez granic dat (tylko wpisy datowane).
-- [x] 1.3 Testy serializacji potwierdzają pola domenowe, wartości `null`, nieaktywną historyczną osobę oraz brak pól wewnętrznych.
-- [x] 1.4 Testy kolejności potwierdzają `created_at ASC, id ASC`, także przy remisie czasu, oraz że wpis dodany między stronami nie powtarza się na kolejnej stronie.
+- [x] 1.1 Testy parsera potwierdzają wartości domyślne, granice `limit`, nieujemny `offset`, format ISO dat i nieistniejący dzień (`2026-02-30`), boolean bez rozróżniania wielkości liter z odrzuceniem `1`/`0`/pustej wartości oraz odwrócony zakres. — e17cfb7
+- [x] 1.2 Testy filtrowania potwierdzają obie włączne granice, granice jednostronne i zachowanie `include_undated`, także jawne `false` bez granic dat (tylko wpisy datowane). — e17cfb7
+- [x] 1.3 Testy serializacji potwierdzają pola domenowe, wartości `null`, nieaktywną historyczną osobę oraz brak pól wewnętrznych. — e17cfb7
+- [x] 1.4 Testy kolejności potwierdzają `created_at ASC, id ASC`, także przy remisie czasu, oraz że wpis dodany między stronami nie powtarza się na kolejnej stronie. — e17cfb7
 
 ### Phase 2: Endpoint i bezpieczeństwo
 
 #### Automated
 
-- [ ] 2.1 Aktywny token rodzica otrzymuje wyłącznie wpisy swojej rodziny.
-- [ ] 2.2 Brakujący, błędny, cofnięty i wygasły token oraz nieaktywny rodzic, użytkownik lub rodzina otrzymują istniejący kontrakt 401.
-- [ ] 2.3 Wpis obcej rodziny nigdy nie pojawia się w `results` ani nie zwiększa `count`.
-- [ ] 2.4 POST, PUT, PATCH i DELETE nie zmieniają danych i zwracają 405.
-- [ ] 2.5 Filtry, paginacja, kolejność i envelope zachowują uzgodniony kontrakt.
-- [ ] 2.6 Istniejące testy tokenu, intake’u, zarządzania wpisami i widoku dziecka pozostają zielone.
+- [x] 2.1 Aktywny token rodzica otrzymuje wyłącznie wpisy swojej rodziny.
+- [x] 2.2 Brakujący, błędny, cofnięty i wygasły token oraz nieaktywny rodzic, użytkownik lub rodzina otrzymują istniejący kontrakt 401.
+- [x] 2.3 Wpis obcej rodziny nigdy nie pojawia się w `results` ani nie zwiększa `count`.
+- [x] 2.4 POST, PUT, PATCH i DELETE nie zmieniają danych i zwracają 405.
+- [x] 2.5 Filtry, paginacja, kolejność i envelope zachowują uzgodniony kontrakt.
+- [x] 2.6 Istniejące testy tokenu, intake’u, zarządzania wpisami i widoku dziecka pozostają zielone.
 
 #### Manual
 

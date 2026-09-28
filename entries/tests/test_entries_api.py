@@ -2,6 +2,7 @@ import datetime
 
 from django.http import QueryDict
 from django.test import TestCase
+from django.urls import resolve, reverse
 from django.utils import timezone
 
 from entries.api_views import (
@@ -15,7 +16,7 @@ from entries.api_views import (
 from entries.classification.types import EntryType, SchoolItemKind
 from entries.models import Entry
 from entries.services import automation_family_entries
-from family_access.models import Family, FamilyMember
+from family_access.models import AutomationToken, Family, FamilyMember
 from family_access.test_automation import AutomationFixtureMixin
 
 FOREIGN_SENTINEL = 'SENTINEL-obca-rodzina'
@@ -363,3 +364,278 @@ class EntriesOrderingAndPaginationTests(EntriesApiDataMixin, TestCase):
             page = self.page(limit=10, offset=0)
 
         self.assertEqual(len(page['results']), 3)
+
+
+class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse('automation_entries_list')
+        self.token, self.secret = AutomationToken.issue(self.parent, 'Telefon')
+        self.foreign_token, self.foreign_secret = AutomationToken.issue(
+            self.other_parent, 'Obcy telefon'
+        )
+        self.dated = self.entry(
+            'Sprawdzian z biologii',
+            datetime.date(2026, 9, 28),
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            time=datetime.time(8, 30),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+        )
+        self.todo = self.entry('Kupić zeszyt', entry_type=EntryType.TODO.value)
+        self.note = self.entry('Notatka rodzica', datetime.date(2026, 10, 5))
+        self.foreign_dated = self.entry(
+            FOREIGN_SENTINEL, datetime.date(2026, 9, 28), family=self.other_family
+        )
+        self.foreign_undated = self.entry(FOREIGN_SENTINEL, family=self.other_family)
+
+    def get(self, secret=None, authorization=None, **params):
+        if authorization is None:
+            authorization = f'Bearer {secret or self.secret}'
+        headers = {} if authorization is False else {'HTTP_AUTHORIZATION': authorization}
+        return self.client.get(self.url, params, **headers)
+
+    def assert_rejected(self, response):
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {'error': 'invalid_token'})
+        self.assertEqual(response['WWW-Authenticate'], 'Bearer')
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+        self.assertNotIn(self.dated.content, response.content.decode())
+
+    def ids(self, response):
+        return [record['id'] for record in response.json()['results']]
+
+    # --- 200 contract ---------------------------------------------------------
+
+    def test_route_is_under_automation_prefix(self):
+        self.assertEqual(self.url, '/api/automation/entries/')
+        self.assertTrue(resolve(self.url).func.csrf_exempt)
+
+    def test_active_parent_token_reads_own_family_entries_only(self):
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        body = response.json()
+        self.assertEqual(set(body), {'count', 'limit', 'offset', 'results'})
+        self.assertEqual(body['count'], 3)
+        self.assertEqual(body['limit'], 100)
+        self.assertEqual(body['offset'], 0)
+        self.assertEqual(self.ids(response), [self.dated.pk, self.todo.pk, self.note.pk])
+        for record in body['results']:
+            self.assertEqual(set(record), EXPECTED_FIELDS)
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+
+    def test_records_carry_all_types_sources_and_undated_entries(self):
+        records = {record['id']: record for record in self.get().json()['results']}
+
+        self.assertEqual(
+            {record['entry_type'] for record in records.values()},
+            {'calendar_event', 'todo', 'note'},
+        )
+        self.assertEqual({record['source'] for record in records.values()}, {'eduvulcan', 'manual'})
+        self.assertEqual(
+            records[self.dated.pk],
+            {
+                'id': self.dated.pk,
+                'entry_type': 'calendar_event',
+                'content': 'Sprawdzian z biologii',
+                'date': '2026-09-28',
+                'time': '08:30:00',
+                'assigned_member': {'display_name': 'Child'},
+                'school_item': SchoolItemKind.TEST.value,
+                'source': 'eduvulcan',
+                'created_at': records[self.dated.pk]['created_at'],
+                'updated_at': records[self.dated.pk]['updated_at'],
+            },
+        )
+        undated = records[self.todo.pk]
+        self.assertIsNone(undated['date'])
+        self.assertIsNone(undated['time'])
+        self.assertIsNone(undated['assigned_member'])
+        self.assertIsNone(undated['school_item'])
+
+    def test_foreign_family_sees_only_its_own_entries(self):
+        response = self.get(secret=self.foreign_secret)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 2)
+        self.assertEqual(
+            self.ids(response), [self.foreign_dated.pk, self.foreign_undated.pk]
+        )
+        self.assertNotIn(self.dated.content, response.content.decode())
+
+    def test_foreign_entry_never_counts_even_on_matching_filters(self):
+        response = self.get(date_from='2026-09-28', date_to='2026-09-28', include_undated='true')
+
+        self.assertEqual(response.json()['count'], 2)
+        self.assertEqual(self.ids(response), [self.dated.pk, self.todo.pk])
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+
+    def test_client_cannot_select_another_family(self):
+        response = self.get(family=str(self.other_family.pk), family_id=str(self.other_family.pk))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['count'], 3)
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+
+    def test_date_range_excludes_undated_by_default(self):
+        response = self.get(date_from='2026-09-01', date_to='2026-09-30')
+
+        self.assertEqual(response.json()['count'], 1)
+        self.assertEqual(self.ids(response), [self.dated.pk])
+
+    def test_explicit_false_without_bounds_returns_dated_only(self):
+        response = self.get(include_undated='FALSE')
+
+        self.assertEqual(self.ids(response), [self.dated.pk, self.note.pk])
+
+    def test_pagination_counts_before_paging(self):
+        response = self.get(limit='1', offset='1')
+
+        body = response.json()
+        self.assertEqual(body['count'], 3)
+        self.assertEqual(body['limit'], 1)
+        self.assertEqual(body['offset'], 1)
+        self.assertEqual(self.ids(response), [self.todo.pk])
+
+    def test_offset_past_end_returns_empty_page(self):
+        response = self.get(offset='50')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 3, 'limit': 100, 'offset': 50, 'results': []})
+
+    def test_family_without_entries_returns_empty_page(self):
+        Entry.objects.filter(family=self.family).delete()
+
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'count': 0, 'limit': 100, 'offset': 0, 'results': []})
+
+    def test_order_is_created_at_then_id(self):
+        Entry.objects.filter(pk=self.dated.pk).update(
+            created_at=timezone.now() + datetime.timedelta(hours=1)
+        )
+
+        self.assertEqual(self.ids(self.get()), [self.todo.pk, self.note.pk, self.dated.pk])
+
+    def test_response_never_echoes_token_secret(self):
+        response = self.get()
+
+        content = response.content.decode()
+        self.assertNotIn(self.secret, content)
+        self.assertNotIn(self.token.prefix, content)
+        self.assertNotIn('Telefon', content)
+
+    # --- 400 contract ---------------------------------------------------------
+
+    def test_invalid_query_returns_400_without_entries(self):
+        for params in (
+            {'limit': '0'},
+            {'limit': '501'},
+            {'limit': 'abc'},
+            {'offset': '-1'},
+            {'date_from': '2026-02-30'},
+            {'date_to': '28.09.2026'},
+            {'date_from': '2026-09-02', 'date_to': '2026-09-01'},
+            {'include_undated': '1'},
+            {'include_undated': ''},
+        ):
+            with self.subTest(params=params):
+                response = self.get(**params)
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json(), {'error': 'invalid_query'})
+                self.assertNotIn(self.dated.content, response.content.decode())
+
+    def test_invalid_token_wins_over_invalid_query(self):
+        self.assert_rejected(self.get(authorization=False, limit='0'))
+
+    # --- 401 contract ---------------------------------------------------------
+
+    def test_header_problems_are_rejected(self):
+        for authorization in (
+            False,
+            f'Basic {self.secret}',
+            'Bearer',
+            f'Bearer {self.secret} extra',
+            'Bearer fnat_unknown-secret',
+        ):
+            with self.subTest(authorization=authorization):
+                self.assert_rejected(self.get(authorization=authorization))
+
+    def test_revoked_token_is_rejected(self):
+        AutomationToken.objects.filter(pk=self.token.pk).update(revoked_at=timezone.now())
+
+        self.assert_rejected(self.get())
+
+    def test_revocation_takes_effect_immediately(self):
+        self.assertEqual(self.get().status_code, 200)
+
+        AutomationToken.objects.filter(pk=self.token.pk).update(revoked_at=timezone.now())
+
+        self.assert_rejected(self.get())
+
+    def test_expired_token_is_rejected(self):
+        AutomationToken.objects.filter(pk=self.token.pk).update(
+            expires_at=timezone.now() - datetime.timedelta(seconds=1)
+        )
+
+        self.assert_rejected(self.get())
+
+    def test_owner_that_became_child_is_rejected(self):
+        self.parent.role = FamilyMember.Role.CHILD
+        self.parent.save(update_fields=('role',))
+
+        self.assert_rejected(self.get())
+
+    def test_inactive_parent_membership_is_rejected(self):
+        self.parent.is_active = False
+        self.parent.save(update_fields=('is_active',))
+
+        self.assert_rejected(self.get())
+
+    def test_inactive_user_account_is_rejected(self):
+        user = self.parent.user
+        user.is_active = False
+        user.save(update_fields=('is_active',))
+
+        self.assert_rejected(self.get())
+
+    def test_inactive_family_is_rejected(self):
+        self.family.is_active = False
+        self.family.save(update_fields=('is_active',))
+
+        self.assert_rejected(self.get())
+
+    def test_signed_in_session_without_token_is_rejected(self):
+        self.client.force_login(self.parent.user)
+
+        self.assert_rejected(self.get(authorization=False))
+
+    # --- 405 contract ---------------------------------------------------------
+
+    def snapshot(self):
+        return list(Entry.objects.order_by('pk').values())
+
+    def test_mutating_methods_are_not_allowed_and_change_nothing(self):
+        before = self.snapshot()
+        payload = '{"content": "Nowy wpis", "entry_type": "note"}'
+        client = self.client_class(enforce_csrf_checks=True)
+
+        for method in ('post', 'put', 'patch', 'delete'):
+            for headers in ({'HTTP_AUTHORIZATION': f'Bearer {self.secret}'}, {}):
+                with self.subTest(method=method, authenticated=bool(headers)):
+                    response = getattr(client, method)(
+                        self.url, data=payload, content_type='application/json', **headers
+                    )
+
+                    self.assertEqual(response.status_code, 405)
+                    self.assertEqual(response['Allow'], 'GET')
+
+        self.assertEqual(self.snapshot(), before)
+        self.token.refresh_from_db()
+        # 405 is answered before authentication, so the token is never touched.
+        self.assertIsNone(self.token.last_used_at)
