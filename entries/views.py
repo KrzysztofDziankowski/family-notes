@@ -239,3 +239,64 @@ def states(request):
 
 def _use_synthetic_members(form):
     form.fields['assigned_member'].choices = STATES_MEMBER_CHOICES
+
+
+# --- Child assigned entry view (S-03) ---
+# Imports stay inside this block so the S-02 merge does not touch the header.
+from django.shortcuts import get_object_or_404  # noqa: E402
+from django.views.decorators.http import require_GET  # noqa: E402
+
+from .listing import (  # noqa: E402
+    PAST,
+    SECTION_UNDATED,
+    UPCOMING,
+    normalize_list_mode,
+    partition_entries,
+    with_effective_date,
+)
+from .services import child_entries  # noqa: E402
+
+CHILD_EMPTY_MESSAGES = {
+    UPCOMING: 'Nie masz żadnych nadchodzących wpisów.',
+    PAST: 'Nie masz żadnych minionych wpisów.',
+}
+
+
+def _child_list_context(mode, sections):
+    """Template context for the child list body; ``sections`` are evaluated here."""
+    sections = [
+        {
+            'key': section.key,
+            'undated': section.key == SECTION_UNDATED,
+            'entries': list(section.entries),
+        }
+        for section in sections
+    ]
+    return {
+        'mode': mode,
+        'detail_query': 'view=past' if mode == PAST else '',
+        'sections': [section for section in sections if section['entries']],
+        'empty_message': CHILD_EMPTY_MESSAGES[mode],
+    }
+
+
+@require_GET
+@login_required
+def child_list(request):
+    """The signed-in child's own entries, upcoming (default) or past."""
+    entries = child_entries(request.user)
+    mode = normalize_list_mode(request.GET.get('view'))
+    sections = partition_entries(entries, mode, timezone.localdate())
+    return render(request, 'entries/child_list.html', _child_list_context(mode, sections))
+
+
+@require_GET
+@login_required
+def child_detail(request, pk):
+    """One entry assigned to the signed-in child; any other ID is a plain 404."""
+    entry = get_object_or_404(with_effective_date(child_entries(request.user)), pk=pk)
+    return render(
+        request,
+        'entries/child_detail.html',
+        {'entry': entry, 'back_mode': normalize_list_mode(request.GET.get('view'))},
+    )

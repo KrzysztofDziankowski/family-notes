@@ -180,3 +180,18 @@
   margin: var(--fn-space-1) 0 0;
   font-size: 0.875em;
 }
+
+/* Child view (S-03) */
+.fn-child-modes {
+  margin-bottom: var(--fn-space-4);
+}
+
+.fn-child-modes [role="group"] {
+  margin-bottom: 0;
+}
+
+.fn-child-section-title {
+  font-size: 1rem;
+  color: var(--fn-color-text-strong);
+  margin: 0 0 var(--fn-space-2);
+}

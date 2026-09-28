@@ -262,30 +262,30 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Automated
 
-- [x] 1.1 Listing tests prove the exact upcoming/undated/past boundaries (yesterday, today, tomorrow, undated) and deterministic ordering, including missing times and equal-date ties.
-- [x] 1.2 Mode normalization maps unknown, empty, and missing values to `upcoming`.
-- [x] 1.3 Service tests prove an active child sees only their own entries: an unassigned entry, a sibling's entry, and a foreign-family entry are all excluded.
-- [x] 1.4 Service tests prove a parent, an inactive child, a child in an inactive family, an unconfigured user, and an anonymous user all raise `PermissionDenied`.
-- [x] 1.5 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_listing entries.tests.test_child_entries`.
-- [x] 1.6 Listing tests prove lucky-number entries are absent from both upcoming and past.
-- [x] 1.7 Listing tests prove an undated grade created today appears in upcoming, and one created yesterday appears in past, ordered by its creation day among dated entries, with its stored `date` still empty.
+- [x] 1.1 Listing tests prove the exact upcoming/undated/past boundaries (yesterday, today, tomorrow, undated) and deterministic ordering, including missing times and equal-date ties. — e37e56b
+- [x] 1.2 Mode normalization maps unknown, empty, and missing values to `upcoming`. — e37e56b
+- [x] 1.3 Service tests prove an active child sees only their own entries: an unassigned entry, a sibling's entry, and a foreign-family entry are all excluded. — e37e56b
+- [x] 1.4 Service tests prove a parent, an inactive child, a child in an inactive family, an unconfigured user, and an anonymous user all raise `PermissionDenied`. — e37e56b
+- [x] 1.5 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_listing entries.tests.test_child_entries`. — e37e56b
+- [x] 1.6 Listing tests prove lucky-number entries are absent from both upcoming and past. — e37e56b
+- [x] 1.7 Listing tests prove an undated grade created today appears in upcoming, and one created yesterday appears in past, ordered by its creation day among dated entries, with its stored `date` still empty. — e37e56b
 
 ### Phase 2: Child Routes and UI
 
 #### Automated
 
-- [ ] 2.1 Route tests cover list (default, `view=past`, unknown `view`) and detail for an active child, and prove non-GET methods return 405.
-- [ ] 2.2 The access matrix covers both routes for anonymous (login redirect), parent, inactive child, inactive family, and unconfigured user (403).
-- [ ] 2.3 Detail returns 404 with identical bodies for an unassigned entry, a sibling's entry, a foreign-family entry, and a nonexistent ID, and sentinel content from those entries never appears in any child response.
-- [ ] 2.4 List responses contain the child's sentinel entries and none of the excluded ones.
-- [ ] 2.5 Account page tests show "Moje wpisy" for a child and not for a parent, and "Dodaj wpis" for a parent and not for a child.
-- [ ] 2.6 Rendered child pages contain no links or forms to capture, edit, or delete.
-- [ ] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests family_access`.
+- [x] 2.1 Route tests cover list (default, `view=past`, unknown `view`) and detail for an active child, and prove non-GET methods return 405.
+- [x] 2.2 The access matrix covers both routes for anonymous (login redirect), parent, inactive child, inactive family, and unconfigured user (403).
+- [x] 2.3 Detail returns 404 with identical bodies for an unassigned entry, a sibling's entry, a foreign-family entry, and a nonexistent ID, and sentinel content from those entries never appears in any child response.
+- [x] 2.4 List responses contain the child's sentinel entries and none of the excluded ones.
+- [x] 2.5 Account page tests show "Moje wpisy" for a child and not for a parent, and "Dodaj wpis" for a parent and not for a child.
+- [x] 2.6 Rendered child pages contain no links or forms to capture, edit, or delete.
+- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests family_access`.
 
 #### Manual
 
-- [ ] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode.
-- [ ] 2.9 Long content, undated entries, missing times, and both empty states remain readable.
+- [x] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (agent-verified: headless Chromium 360px mobile viewport via CDP with a fictional local child session; account → /entries/mine/ → ?view=past → /entries/mine/<pk>/?view=past → back landed on ?view=past, scrollWidth 360 on every page; human check pending)
+- [x] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (agent-verified: 360px screenshots of the upcoming list with a truncated long undated note under "Bez daty", a dated row without time, the full long content on detail, and the empty past state; the empty upcoming state checked by test and in the Phase 3 gallery; human check pending)
 
 ### Phase 3: Kitchen Sink and Screenshot Gate
 

@@ -6,9 +6,11 @@ Parameters:
   detail_url_name  -- URL name reversed with entry.pk for the row link.
   hide_assignee    -- optional; true hides the "Dla kogo" line (e.g. the child's own list).
   edit_url_name    -- optional; when set, adds an "Edytuj" link reversed with entry.pk.
+  detail_query     -- optional; query string (without "?") appended to the detail link,
+                      e.g. "view=past" so the detail page can link back to the same list mode.
 {% endcomment %}
 <li class="fn-entry-row" data-entry-row="{{ entry.pk }}">
-    <a class="fn-entry-link" href="{% url detail_url_name entry.pk %}">
+    <a class="fn-entry-link" href="{% url detail_url_name entry.pk %}{% if detail_query %}?{{ detail_query }}{% endif %}">
         <span class="fn-entry-type">{{ entry.get_entry_type_display }}</span>
         <span class="fn-entry-content">{{ entry.content|truncatechars:120 }}</span>
     </a>
