@@ -23,4 +23,22 @@
     {% endif %}
 </section>
 {% endfor %}
+{% if manage_sections %}
+<h1>Stany zarządzania wpisami</h1>
+{% for state in manage_sections %}
+<section data-manage-state="{{ state.name }}">
+    <hr>
+    <p class="fn-muted"><small>Stan: {{ state.label }} ({{ state.name }})</small></p>
+    {% if state.list %}
+        {% include "entries/_manage_list.html" with mode=state.list.mode modes=state.list.modes sections=state.list.sections is_empty=state.list.is_empty empty_message=state.list.empty_message %}
+    {% endif %}
+    {% if state.detail %}
+        {% include "entries/_manage_detail.html" with entry=state.detail.entry list_mode=state.detail.list_mode delete_open=state.detail.delete_open %}
+    {% endif %}
+    {% if state.form %}
+        {% include "entries/_manage_form.html" with form=state.form.form entry=state.form.entry %}
+    {% endif %}
+</section>
+{% endfor %}
+{% endif %}
 {% endblock %}

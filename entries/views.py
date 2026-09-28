@@ -234,7 +234,11 @@ def states(request):
             'capture_form': CaptureForm(),
         },
     ]
-    return render(request, 'entries/states.html', {'sections': sections})
+    return render(
+        request,
+        'entries/states.html',
+        {'sections': sections, 'manage_sections': _manage_state_sections(membership)},
+    )
 
 
 def _use_synthetic_members(form):
@@ -249,6 +253,7 @@ from django.contrib import messages  # noqa: E402
 from .forms import EntryCreateForm, EntryEditForm  # noqa: E402
 from .listing import (  # noqa: E402
     LIST_MODES,
+    EntrySection,
     PAST,
     SECTION_DATED,
     SECTION_PAST,
@@ -429,3 +434,144 @@ def delete(request, pk):
         raise Http404 from None
     messages.success(request, ENTRY_DELETED_MESSAGE)
     return redirect(_index_url(request.POST.get('view', '')))
+
+
+# Fictional management kitchen-sink data (DEBUG gallery): unsaved rows only.
+STATES_ENTRY_PK = 900001
+
+
+def _synthetic_entry(offset, **fields):
+    """An unsaved entry with explicit provenance; the pk only feeds URL reversing."""
+    created_at = timezone.make_aware(datetime.datetime(2026, 9, 21, 18, 40))
+    values = dict(
+        pk=STATES_ENTRY_PK + offset,
+        entry_type=EntryType.TODO.value,
+        source=Entry.Source.MANUAL,
+        created_at=created_at,
+        updated_at=created_at + datetime.timedelta(days=1, minutes=5),
+    )
+    values.update(fields)
+    member = values.pop('member', None)
+    entry = Entry(**values)
+    if member:
+        entry.assigned_member = FamilyMember(display_name=member)
+    return entry
+
+
+def _synthetic_list(mode, sections):
+    return _index_context(
+        mode,
+        [EntrySection(key, entries) for key, entries in sections],
+    )
+
+
+def _manage_state_sections(membership):
+    """Management states for the DEBUG gallery; no family data is read or written."""
+    test_entry = _synthetic_entry(
+        1,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Sprawdzian z historii o średniowieczu',
+        date=STATES_DATE,
+        time=datetime.time(8, 0),
+        school_item=SchoolItemKind.TEST.value,
+        member='Kasia',
+    )
+    trip = _synthetic_entry(
+        2,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Wycieczka klasowa do muzeum techniki',
+        date=STATES_DATE + datetime.timedelta(days=2),
+        member='Tymek',
+    )
+    long_note = _synthetic_entry(
+        3,
+        entry_type=EntryType.NOTE.value,
+        content=(
+            'Bardzo długa notatka: '
+            + 'Konstantynopolitańczykowianeczka' * 3
+            + ' oraz opis, który musi się zawinąć na wąskim ekranie telefonu.'
+        ),
+    )
+    undated = _synthetic_entry(4, content='Oddać książkę do biblioteki')
+    past_entry = _synthetic_entry(
+        5,
+        content='Zapłacić za obiady',
+        date=STATES_DATE - datetime.timedelta(days=14),
+        time=datetime.time(7, 45),
+    )
+    eduvulcan_entry = _synthetic_entry(
+        6,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Kartkówka z matematyki — ułamki',
+        date=STATES_DATE + datetime.timedelta(days=1),
+        time=datetime.time(9, 50),
+        school_item=SchoolItemKind.QUIZ.value,
+        source=Entry.Source.EDUVULCAN,
+        member='Tymek',
+    )
+
+    create_form = EntryCreateForm(membership)
+    _use_synthetic_members(create_form)
+
+    invalid_form = EntryCreateForm(
+        membership,
+        {
+            'entry_type': EntryType.NOTE.value,
+            'content': '',
+            'date': '',
+            'time': '',
+            'assigned_member': '',
+            'school_item': SchoolItemKind.TEST.value,
+            'submission_key': str(uuid.uuid4()),
+        },
+    )
+    _use_synthetic_members(invalid_form)
+    invalid_form.is_valid()
+    _mark_invalid_fields(invalid_form)
+
+    edit_form = EntryEditForm(membership, entry=test_entry)
+    _use_synthetic_members(edit_form)
+    edit_form.initial['assigned_member'] = 's1'
+
+    return [
+        {
+            'name': 'list_upcoming',
+            'label': 'Lista: nadchodzące',
+            'list': _synthetic_list(
+                UPCOMING,
+                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, long_note])],
+            ),
+        },
+        {
+            'name': 'list_past',
+            'label': 'Lista: minione',
+            'list': _synthetic_list(PAST, [(SECTION_PAST, [past_entry])]),
+        },
+        {
+            'name': 'list_empty',
+            'label': 'Lista: pusta',
+            'list': _synthetic_list(UPCOMING, [(SECTION_DATED, []), (SECTION_UNDATED, [])]),
+        },
+        {
+            'name': 'detail_manual',
+            'label': 'Szczegóły: wpis ręczny',
+            'detail': _detail_context(test_entry, UPCOMING),
+        },
+        {
+            'name': 'detail_eduvulcan',
+            'label': 'Szczegóły: wpis z EduVulcan',
+            'detail': _detail_context(eduvulcan_entry, UPCOMING),
+        },
+        {'name': 'create', 'label': 'Nowy wpis', 'form': _form_context(create_form)},
+        {'name': 'invalid', 'label': 'Błędy w formularzu', 'form': _form_context(invalid_form)},
+        {
+            'name': 'edit',
+            'label': 'Edycja wpisu',
+            'form': _form_context(edit_form, entry=test_entry),
+        },
+        {
+            'name': 'delete_open',
+            'label': 'Otwarte potwierdzenie usunięcia',
+            'detail': _detail_context(past_entry, PAST, delete_open=True),
+        },
+    ]

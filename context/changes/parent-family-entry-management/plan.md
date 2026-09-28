@@ -257,32 +257,32 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Automated
 
-- [x] 2.1 Route tests cover index, detail, create, edit, and POST-only delete.
-- [x] 2.2 Index tests prove exact upcoming, undated, and past boundaries and deterministic ordering.
-- [x] 2.3 Parent list/detail responses contain only entries from the parent's family.
-- [x] 2.4 Foreign and nonexistent IDs return the same status and reveal no sentinel content.
-- [x] 2.5 Successful create/update/delete redirects are correct and preserve only an allowlisted list mode.
-- [x] 2.6 Template tests confirm structured-create, capture, edit, and delete actions are present.
-- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests`.
+- [x] 2.1 Route tests cover index, detail, create, edit, and POST-only delete. — b8c94b2
+- [x] 2.2 Index tests prove exact upcoming, undated, and past boundaries and deterministic ordering. — b8c94b2
+- [x] 2.3 Parent list/detail responses contain only entries from the parent's family. — b8c94b2
+- [x] 2.4 Foreign and nonexistent IDs return the same status and reveal no sentinel content. — b8c94b2
+- [x] 2.5 Successful create/update/delete redirects are correct and preserve only an allowlisted list mode. — b8c94b2
+- [x] 2.6 Template tests confirm structured-create, capture, edit, and delete actions are present. — b8c94b2
+- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests`. — b8c94b2
 
 #### Manual
 
-- [x] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it. (agent-verified: headless Chromium at 360px mobile viewport on a fictional dev family drove index → Minione → invalid create → create → detail → edit → detail → delete → upcoming list; screenshots in screenshots/phase2-360-*.png; human check pending)
-- [x] 2.9 The inline delete disclosure is clear and usable without JavaScript. (agent-verified: Chromium at 360px with script execution disabled, real mouse events opened the <details> and submitted the CSRF form, redirecting to the list with "Usunięto wpis."; page ships no <script>; human check pending)
-- [x] 2.10 Long content, undated entries, missing times, and empty list states remain readable. (agent-verified: 360px screenshots show wrapped unbroken long content, "Bez daty" section, untimed rows, and the Minione empty state with no horizontal overflow (scrollWidth 360); fixed Pico nav margins clipping the list-mode tabs; human check pending)
+- [x] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it. (agent-verified: headless Chromium at 360px mobile viewport on a fictional dev family drove index → Minione → invalid create → create → detail → edit → detail → delete → upcoming list; screenshots in screenshots/phase2-360-*.png; human check pending) — b8c94b2
+- [x] 2.9 The inline delete disclosure is clear and usable without JavaScript. (agent-verified: Chromium at 360px with script execution disabled, real mouse events opened the <details> and submitted the CSRF form, redirecting to the list with "Usunięto wpis."; page ships no <script>; human check pending) — b8c94b2
+- [x] 2.10 Long content, undated entries, missing times, and empty list states remain readable. (agent-verified: 360px screenshots show wrapped unbroken long content, "Bez daty" section, untimed rows, and the Minione empty state with no horizontal overflow (scrollWidth 360); fixed Pico nav margins clipping the list-mode tabs; human check pending) — b8c94b2
 
 ### Phase 3: Security, Lifecycle, and Visual Verification
 
 #### Automated
 
-- [ ] 3.1 Full tests pass: `uv run python manage.py test`.
-- [ ] 3.2 Django checks pass: `uv run python manage.py check`.
-- [ ] 3.3 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 3.4 State-gallery tests prove DEBUG gating, parent-only access, expected state markers, and zero database writes.
-- [ ] 3.5 Existing capture, classification, notification-intake, and family-access tests remain green.
+- [x] 3.1 Full tests pass: `uv run python manage.py test`.
+- [x] 3.2 Django checks pass: `uv run python manage.py check`.
+- [x] 3.3 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 3.4 State-gallery tests prove DEBUG gating, parent-only access, expected state markers, and zero database writes.
+- [x] 3.5 Existing capture, classification, notification-intake, and family-access tests remain green.
 
 #### Manual
 
-- [ ] 3.6 The management state gallery is reviewed at 360px width with no clipping, unreadable metadata, or inaccessible actions.
-- [ ] 3.7 Chrome on Android completes list → detail → edit and detail → delete flows.
-- [ ] 3.8 A final check confirms a parent cannot infer the existence of a foreign-family entry.
+- [x] 3.6 The management state gallery is reviewed at 360px width with no clipping, unreadable metadata, or inaccessible actions. (agent-verified: headless Chromium at a 360px mobile viewport rendered /entries/_states/; each of the 9 management states was captured separately (screenshots/phase3-360-gallery-*.png) and inspected — no horizontal overflow (scrollWidth 360), metadata wraps legibly, all actions visible; human check pending)
+- [x] 3.7 Chrome on Android completes list → detail → edit and detail → delete flows. (agent-verified: Chromium at a 360px mobile viewport with real mouse events went list → detail → Edytuj → save ("Zapisano zmiany.") → open disclosure → "Usuń na stałe" → upcoming list ("Usunięto wpis."); real Android device check pending)
+- [x] 3.8 A final check confirms a parent cannot infer the existence of a foreign-family entry. (agent-verified: as a parent on the dev server, a foreign-family entry ID and a nonexistent ID both returned 404 with bodies identical apart from the echoed path and no sentinel text; automated tests assert byte-identical 404s for detail/edit/delete; human check pending)
