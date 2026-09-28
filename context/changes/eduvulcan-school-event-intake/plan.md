@@ -320,10 +320,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [ ] 1.1 Migration and model tests enforce lease, retry, pruning, and output-link constraints.
-- [ ] 1.2 Fixed-rule tests cover every PRD category, Polish normalization, nearest-year boundaries, newest-ID child ties, missing children, and malformed input.
-- [ ] 1.3 Multi-change tests produce ordered entries for valid segments plus one unassigned remainder note.
-- [ ] 1.4 Family-scoped classification tests preserve privacy, active-family scoping, and general-note fallback.
+- [x] 1.1 Migration and model tests enforce lease, retry, pruning, and output-link constraints.
+- [x] 1.2 Fixed-rule tests cover every PRD category, Polish normalization, nearest-year boundaries, newest-ID child ties, missing children, and malformed input.
+- [x] 1.3 Multi-change tests produce ordered entries for valid segments plus one unassigned remainder note.
+- [x] 1.4 Family-scoped classification tests preserve privacy, active-family scoping, and general-note fallback.
 
 #### Manual
 

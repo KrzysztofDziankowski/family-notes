@@ -695,6 +695,21 @@ class BackendFactoryTests(SimpleTestCase):
         self.assertEqual(backend._max_retries, 1)
 
     @override_settings(**FULL_SETTINGS)
+    def test_max_retries_override_disables_backend_retry(self):
+        clock = FakeClock()
+        transport = ScriptedTransport(clock, [(10.0, TIMEOUT), (1.0, ok())])
+
+        backend = build_openai_backend(
+            client=make_client(transport), clock=clock, sleep=clock.sleep, max_retries=0
+        )
+        with self.assertRaises(ClassificationBackendError) as caught:
+            backend.classify(make_request())
+
+        self.assertEqual(caught.exception.reason, UnavailableReason.TIMEOUT)
+        self.assertEqual(len(transport.requests), 1)
+        self.assertEqual(backend._max_retries, 0)
+
+    @override_settings(**FULL_SETTINGS)
     def test_injected_client_is_used(self):
         clock = FakeClock()
         transport = ScriptedTransport(clock, [(1.0, ok())])

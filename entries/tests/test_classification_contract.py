@@ -62,7 +62,8 @@ class EntriesAppTests(SimpleTestCase):
 
         self.assertEqual(config.name, 'entries')
         self.assertEqual(
-            [model.__name__ for model in config.get_models()], ['Entry', 'InboundNotification']
+            [model.__name__ for model in config.get_models()],
+            ['Entry', 'InboundNotification', 'NotificationConversionOutput'],
         )
 
     def test_entry_type_values(self):

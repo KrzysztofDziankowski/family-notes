@@ -338,13 +338,15 @@ def build_openai_backend(
     client: Any = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    max_retries: Optional[int] = None,
 ) -> OpenAIClassificationBackend:
     """Build the configured backend, failing closed when not fully enabled.
 
     Raises ``ClassificationBackendError(DISABLED)`` unless classification is
     enabled and both the API key and model are present, in
     every environment. ``client`` lets tests inject a fake without
-    credentials.
+    credentials. ``max_retries`` overrides ``CLASSIFICATION_MAX_RETRIES`` for
+    callers that own their retry policy, such as automated conversion.
     """
     if not (
         getattr(settings, 'CLASSIFICATION_ENABLED', False)
@@ -364,7 +366,9 @@ def build_openai_backend(
         model=settings.OPENAI_CLASSIFICATION_MODEL,
         deadline_seconds=settings.CLASSIFICATION_DEADLINE_SECONDS,
         attempt_timeout_seconds=attempt_timeout,
-        max_retries=settings.CLASSIFICATION_MAX_RETRIES,
+        max_retries=(
+            settings.CLASSIFICATION_MAX_RETRIES if max_retries is None else max_retries
+        ),
         reasoning_effort=getattr(settings, 'OPENAI_REASONING_EFFORT', ''),
         clock=clock,
         sleep=sleep,

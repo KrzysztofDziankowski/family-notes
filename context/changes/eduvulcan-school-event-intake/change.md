@@ -1,7 +1,7 @@
 ---
 change_id: eduvulcan-school-event-intake
 title: EduVulcan school event intake
-status: plan_reviewed
+status: implementing
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null

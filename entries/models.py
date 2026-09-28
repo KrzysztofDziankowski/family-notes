@@ -4,6 +4,7 @@ from django.db.models import Q
 from family_access.models import AutomationToken, Family, FamilyMember
 
 from .classification.types import EntryType, SchoolItemKind
+from .eduvulcan.types import OutputKind
 
 ENTRY_TYPE_LABELS = {
     EntryType.TODO: 'Zadanie',
@@ -85,7 +86,12 @@ class Entry(models.Model):
 
 
 class InboundNotification(models.Model):
-    """A forwarded EduVulcan notification stored unchanged, awaiting conversion by S-05."""
+    """A forwarded EduVulcan notification and its conversion lifecycle.
+
+    ``failed`` is terminal until an operator requeues the row. A lease is held
+    only while ``processing``; a retry is scheduled only while ``pending``; raw
+    title, message, and payload are pruned only from ``processed`` rows.
+    """
 
     class Status(models.TextChoices):
         PENDING = 'pending', 'Oczekuje'
@@ -124,6 +130,14 @@ class InboundNotification(models.Model):
     received_at = models.DateTimeField('odebrano', auto_now_add=True)
     processed_at = models.DateTimeField('przetworzono', null=True, blank=True)
     error = models.TextField('błąd', blank=True)
+    # Conversion lifecycle (S-05). Admin-only metadata, so labels are English.
+    # ``last_error_code`` holds a safe category code only, never notification
+    # text, provider responses, or tokens.
+    attempt_count = models.PositiveSmallIntegerField('attempt count', default=0)
+    next_attempt_at = models.DateTimeField('next attempt at', null=True, blank=True)
+    lease_expires_at = models.DateTimeField('lease expires at', null=True, blank=True)
+    last_error_code = models.CharField('last error code', max_length=64, blank=True)
+    raw_pruned_at = models.DateTimeField('raw data pruned at', null=True, blank=True)
 
     class Meta:
         verbose_name = 'powiadomienie przychodzące'
@@ -137,8 +151,80 @@ class InboundNotification(models.Model):
                 fields=('family', 'content_hash', 'captured_date'),
                 name='inbound_unique_content_per_family_day',
             ),
+            models.CheckConstraint(
+                condition=Q(status='processing', lease_expires_at__isnull=False)
+                | (~Q(status='processing') & Q(lease_expires_at__isnull=True)),
+                name='inbound_lease_only_while_processing',
+            ),
+            models.CheckConstraint(
+                condition=Q(status='pending') | Q(next_attempt_at__isnull=True),
+                name='inbound_retry_only_while_pending',
+            ),
+            models.CheckConstraint(
+                condition=Q(raw_pruned_at__isnull=True)
+                | Q(status='processed', title='', message=''),
+                name='inbound_prune_only_processed_raw_data',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=('status', 'next_attempt_at'), name='inbound_status_retry_idx'
+            ),
+            models.Index(
+                fields=('status', 'lease_expires_at'), name='inbound_status_lease_idx'
+            ),
         ]
 
     def __str__(self):
         # Never include title or message: they name family members.
         return f'notification #{self.pk} ({self.status})'
+
+
+class NotificationConversionOutput(models.Model):
+    """Provenance of one entry generated from a notification.
+
+    ``output_index`` is stable within a notification, so a retry recognises
+    completed outputs. Deleting the entry nulls ``entry`` but keeps this
+    non-sensitive tombstone, so a retry never recreates a deleted entry.
+    Admin-only metadata, so labels are English.
+    """
+
+    KIND_CHOICES = [(kind.value, kind.label) for kind in OutputKind]
+
+    notification = models.ForeignKey(
+        InboundNotification,
+        on_delete=models.CASCADE,
+        related_name='conversion_outputs',
+        verbose_name='notification',
+    )
+    output_index = models.PositiveSmallIntegerField('output index')
+    kind = models.CharField('kind', max_length=20, choices=KIND_CHOICES)
+    # One output link owns a generated entry; several tombstones may hold NULL.
+    entry = models.OneToOneField(
+        Entry,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='conversion_output',
+        verbose_name='entry',
+    )
+    created_at = models.DateTimeField('created at', auto_now_add=True)
+    updated_at = models.DateTimeField('updated at', auto_now=True)
+
+    class Meta:
+        verbose_name = 'notification conversion output'
+        verbose_name_plural = 'notification conversion outputs'
+        ordering = ('notification', 'output_index')
+        constraints = [
+            models.UniqueConstraint(
+                fields=('notification', 'output_index'),
+                name='conversion_output_unique_index_per_notification',
+            ),
+            models.CheckConstraint(
+                condition=Q(kind__in=[kind.value for kind in OutputKind]),
+                name='conversion_output_known_kind',
+            ),
+        ]
+
+    def __str__(self):
+        return f'notification #{self.notification_id} output {self.output_index} ({self.kind})'
