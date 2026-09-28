@@ -1,7 +1,7 @@
 ---
 change_id: family-entries-rest-api
 title: Family entries REST API
-status: implementing
+status: impl_reviewed
 created: 2026-09-28
 updated: 2026-09-28
 archived_at: null
