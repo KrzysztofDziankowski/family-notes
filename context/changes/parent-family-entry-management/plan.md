@@ -255,7 +255,7 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Manual
 
-- [ ] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels. (agent-verified by rendering forms; human visual check pending) — 8cd1ba1
+- [x] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels. (confirmed by user 2026-09-28) — 8cd1ba1
 
 ### Phase 2: Parent CRUD Routes and UI
 
@@ -271,9 +271,9 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Manual
 
-- [ ] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it. (agent-verified: headless Chromium at 360px mobile viewport on a fictional dev family drove index → Minione → invalid create → create → detail → edit → detail → delete → upcoming list; screenshots in screenshots/phase2-360-*.png; human check pending) — b8c94b2
-- [ ] 2.9 The inline delete disclosure is clear and usable without JavaScript. (agent-verified: Chromium at 360px with script execution disabled, real mouse events opened the <details> and submitted the CSRF form, redirecting to the list with "Usunięto wpis."; page ships no <script>; human check pending) — b8c94b2
-- [ ] 2.10 Long content, undated entries, missing times, and empty list states remain readable. (agent-verified: 360px screenshots show wrapped unbroken long content, "Bez daty" section, untimed rows, and the Minione empty state with no horizontal overflow (scrollWidth 360); fixed Pico nav margins clipping the list-mode tabs; human check pending) — b8c94b2
+- [x] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it. (confirmed by user 2026-09-28) — b8c94b2
+- [x] 2.9 The inline delete disclosure is clear and usable without JavaScript. (confirmed by user 2026-09-28) — b8c94b2
+- [x] 2.10 Long content, undated entries, missing times, and empty list states remain readable. (confirmed by user 2026-09-28) — b8c94b2
 
 ### Phase 3: Security, Lifecycle, and Visual Verification
 
@@ -287,6 +287,6 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Manual
 
-- [ ] 3.6 The management state gallery is reviewed at 360px width with no clipping, unreadable metadata, or inaccessible actions. (agent-verified: headless Chromium at a 360px mobile viewport rendered /entries/_states/; each of the 9 management states was captured separately (screenshots/phase3-360-gallery-*.png) and inspected — no horizontal overflow (scrollWidth 360), metadata wraps legibly, all actions visible; human check pending)
-- [ ] 3.7 Chrome on Android completes list → detail → edit and detail → delete flows. (agent-verified: Chromium at a 360px mobile viewport with real mouse events went list → detail → Edytuj → save ("Zapisano zmiany.") → open disclosure → "Usuń na stałe" → upcoming list ("Usunięto wpis."); real Android device check pending)
-- [ ] 3.8 A final check confirms a parent cannot infer the existence of a foreign-family entry. (agent-verified: as a parent on the dev server, a foreign-family entry ID and a nonexistent ID both returned 404 with bodies identical apart from the echoed path and no sentinel text; automated tests assert byte-identical 404s for detail/edit/delete; human check pending)
+- [x] 3.6 The management state gallery is reviewed at 360px width with no clipping, unreadable metadata, or inaccessible actions. (confirmed by user 2026-09-28)
+- [x] 3.7 Chrome on Android completes list → detail → edit and detail → delete flows. (confirmed by user 2026-09-28)
+- [x] 3.8 A final check confirms a parent cannot infer the existence of a foreign-family entry. (confirmed by user 2026-09-28)

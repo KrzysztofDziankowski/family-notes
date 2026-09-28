@@ -77,4 +77,4 @@ A trial merge with `feature/parent-family-entry-management` then passed 351 test
 - **Location**: plan.md Progress 2.8, 2.9, 3.5, 3.6, 3.7
 - **Detail**: The manual rows are `[x]` with the note "agent-verified …; human check pending". The evidence is a headless-Chromium 360px screenshot (`screenshots/child-states-360.png`) and scripted flows. Nobody has checked the flow on a real Android device (3.7) or reviewed it as a person.
 - **Fix**: Have a person run 2.8 and 3.7 on a phone, then remove the "human check pending" notes. If anything fails, reopen the row.
-- **Decision**: FIXED differently — the manual Progress rows (2.8, 2.9, 3.5–3.7) are unchecked until a person verifies them; the agent-evidence notes are kept.
+- **Decision**: FIXED differently — the manual Progress rows (2.8, 2.9, 3.5–3.7) are unchecked until a person verifies them; the agent-evidence notes are kept. Manual verification confirmed by user on 2026-09-28; rows re-ticked.

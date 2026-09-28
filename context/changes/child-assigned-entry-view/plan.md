@@ -286,8 +286,8 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Manual
 
-- [ ] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (agent-verified: headless Chromium 360px mobile viewport via CDP with a fictional local child session; account → /entries/mine/ → ?view=past → /entries/mine/<pk>/?view=past → back landed on ?view=past, scrollWidth 360 on every page; human check pending) — e23392c
-- [ ] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (agent-verified: 360px screenshots of the upcoming list with a truncated long undated note under "Bez daty", a dated row without time, the full long content on detail, and the empty past state; the empty upcoming state checked by test and in the Phase 3 gallery; human check pending) — e23392c
+- [x] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (confirmed by user 2026-09-28) — e23392c
+- [x] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (confirmed by user 2026-09-28) — e23392c
 
 ### Phase 3: Kitchen Sink and Screenshot Gate
 
@@ -300,6 +300,6 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Manual
 
-- [ ] 3.5 The gallery screenshot at 360px shows all six states legibly, with no horizontal scroll, token accent colours, Polish copy throughout, and the current mode visibly marked. (agent-verified: headless Chromium 360px mobile viewport full-page capture, 360x2602, read back and reviewed: all six states legible, scrollWidth 360 so no horizontal scroll, accent-green type labels, mode switch and panel rules, Polish copy throughout, current mode filled with aria-current="page"; human check pending)
-- [ ] 3.6 The screenshot is committed under `context/changes/child-assigned-entry-view/screenshots/`. (agent-verified: screenshots/child-states-360.png committed with this phase; human check pending)
-- [ ] 3.7 In Chrome on Android, a real child account sees only its own entries, and a hand-typed detail URL for a sibling's entry shows 404. (agent-verified: Chromium at 360px mobile viewport with a fictional local child session saw only its own entries, and the hand-typed sibling and family-wide detail URLs returned 404; real Android device check pending; human check pending)
+- [x] 3.5 The gallery screenshot at 360px shows all six states legibly, with no horizontal scroll, token accent colours, Polish copy throughout, and the current mode visibly marked. (confirmed by user 2026-09-28)
+- [x] 3.6 The screenshot is committed under `context/changes/child-assigned-entry-view/screenshots/`. (confirmed by user 2026-09-28)
+- [x] 3.7 In Chrome on Android, a real child account sees only its own entries, and a hand-typed detail URL for a sibling's entry shows 404. (confirmed by user 2026-09-28)

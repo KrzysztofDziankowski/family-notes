@@ -112,4 +112,4 @@ The review covers S-02's own diff (`e37e56b..HEAD`), which reuses `entries/listi
 - **Location**: plan.md Progress 1.7, 2.8-2.10, 3.6-3.8
 - **Detail**: The manual rows are `[x]` with the note "agent-verified …; human check pending". The evidence is 14 headless-Chromium 360px screenshots and scripted flows (no-JS delete, edit, 404 parity). Nobody has done the check on a real Android device (3.7) or reviewed it as a person. Screenshots show en-US date inputs, which is a headless-locale artifact.
 - **Fix**: Have a person run 2.8 and 3.7 on a phone, then remove the "human check pending" notes.
-- **Decision**: FIXED differently — the manual Progress rows (1.7, 2.8–2.10, 3.6–3.8) are unchecked until a person verifies them; the agent-evidence notes are kept.
+- **Decision**: FIXED differently — the manual Progress rows (1.7, 2.8–2.10, 3.6–3.8) are unchecked until a person verifies them; the agent-evidence notes are kept. Manual verification confirmed by user on 2026-09-28; rows re-ticked.
