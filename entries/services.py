@@ -4,7 +4,12 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.views.decorators.debug import sensitive_variables
 
-from family_access.access import get_active_membership, is_parent, scope_queryset_to_family
+from family_access.access import (
+    can_read_assigned_child,
+    get_active_membership,
+    is_parent,
+    scope_queryset_to_family,
+)
 
 from .classification.service import MAX_SUBMITTED_TEXT_LENGTH
 from .classification.types import EntryType, MissingField, SchoolItemKind
@@ -210,3 +215,19 @@ def delete_family_entry(user, entry_id):
     with transaction.atomic():
         entry = _family_entries(membership).select_for_update().get(pk=entry_id)
         entry.delete()
+
+
+def child_entries(user):
+    """Return the entries an active child may read: only those assigned to them.
+
+    Authorization is checked here, independently of the view. Unassigned
+    ("Cała rodzina") entries, other children's entries and other families'
+    entries are never included.
+    """
+    membership = get_active_membership(user)
+    if not can_read_assigned_child(membership, membership):
+        raise PermissionDenied('An active child membership is required.')
+    return Entry.objects.filter(
+        family=membership.family,
+        assigned_member=membership,
+    ).select_related('assigned_member')

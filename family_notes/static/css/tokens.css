@@ -138,3 +138,45 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+/* Entry lists (shared by S-02/S-03) */
+.fn-entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--fn-space-4);
+}
+
+.fn-entry-row {
+  list-style: none;
+  background: var(--fn-color-surface);
+  border: 1px solid var(--fn-color-border);
+  border-radius: var(--fn-radius);
+  padding: var(--fn-space-2) var(--fn-space-3);
+  margin-bottom: var(--fn-space-2);
+}
+
+.fn-entry-link {
+  display: block;
+  color: var(--fn-color-text);
+  text-decoration: none;
+}
+
+.fn-entry-type {
+  display: block;
+  color: var(--fn-color-accent);
+  font-size: 0.875em;
+  font-weight: 600;
+}
+
+.fn-entry-content {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.fn-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fn-space-1) var(--fn-space-3);
+  margin: var(--fn-space-1) 0 0;
+  font-size: 0.875em;
+}

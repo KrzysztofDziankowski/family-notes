@@ -262,13 +262,13 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Automated
 
-- [ ] 1.1 Listing tests prove the exact upcoming/undated/past boundaries (yesterday, today, tomorrow, undated) and deterministic ordering, including missing times and equal-date ties.
-- [ ] 1.2 Mode normalization maps unknown, empty, and missing values to `upcoming`.
-- [ ] 1.3 Service tests prove an active child sees only their own entries: an unassigned entry, a sibling's entry, and a foreign-family entry are all excluded.
-- [ ] 1.4 Service tests prove a parent, an inactive child, a child in an inactive family, an unconfigured user, and an anonymous user all raise `PermissionDenied`.
-- [ ] 1.5 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_listing entries.tests.test_child_entries`.
-- [ ] 1.6 Listing tests prove lucky-number entries are absent from both upcoming and past.
-- [ ] 1.7 Listing tests prove an undated grade created today appears in upcoming, and one created yesterday appears in past, ordered by its creation day among dated entries, with its stored `date` still empty.
+- [x] 1.1 Listing tests prove the exact upcoming/undated/past boundaries (yesterday, today, tomorrow, undated) and deterministic ordering, including missing times and equal-date ties.
+- [x] 1.2 Mode normalization maps unknown, empty, and missing values to `upcoming`.
+- [x] 1.3 Service tests prove an active child sees only their own entries: an unassigned entry, a sibling's entry, and a foreign-family entry are all excluded.
+- [x] 1.4 Service tests prove a parent, an inactive child, a child in an inactive family, an unconfigured user, and an anonymous user all raise `PermissionDenied`.
+- [x] 1.5 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_listing entries.tests.test_child_entries`.
+- [x] 1.6 Listing tests prove lucky-number entries are absent from both upcoming and past.
+- [x] 1.7 Listing tests prove an undated grade created today appears in upcoming, and one created yesterday appears in past, ordered by its creation day among dated entries, with its stored `date` still empty.
 
 ### Phase 2: Child Routes and UI
 
