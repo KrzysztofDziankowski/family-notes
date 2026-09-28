@@ -253,6 +253,28 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
                 self.assertFalse(form.is_valid())
                 self.assertIn('assigned_member', form.errors)
 
+    def test_edit_keeps_current_inactive_assignee_selectable(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.TODO.value,
+            content='Oddać książkę',
+            assigned_member=self.inactive_child,
+        )
+
+        form = EntryEditForm(self.parent, entry=entry)
+        html = str(form['assigned_member'])
+        self.assertIn(f'<option value="{self.inactive_child.pk}" selected>', html)
+        self.assertIn('(nieaktywne konto)', html)
+
+        bound = EntryEditForm(
+            self.parent,
+            self.data(entry_type=EntryType.TODO.value, school_item='', date='', time='',
+                      assigned_member=str(self.inactive_child.pk)),
+            entry=entry,
+        )
+        self.assertTrue(bound.is_valid(), bound.errors)
+        self.assertEqual(bound.cleaned_data['assigned_member'], self.inactive_child)
+
     def test_content_is_required_stripped_and_bounded(self):
         for form in self.each_form(content='   '):
             self.assertFalse(form.is_valid())

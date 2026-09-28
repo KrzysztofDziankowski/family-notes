@@ -499,6 +499,16 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
                     self.update(self.manual, assigned_member=member)
         self.assertEqual(self.snapshot(), before)
 
+    def test_unchanged_inactive_assignee_is_kept(self):
+        self.manual.assigned_member = self.inactive_child
+        self.manual.save(update_fields=('assigned_member',))
+
+        updated = self.update(self.manual, content='Poprawiony tytuł', assigned_member=self.inactive_child)
+
+        updated.refresh_from_db()
+        self.assertEqual(updated.assigned_member, self.inactive_child)
+        self.assertEqual(updated.content, 'Poprawiony tytuł')
+
     def test_invalid_values_are_rejected_without_mutation(self):
         before = self.snapshot()
         cases = {

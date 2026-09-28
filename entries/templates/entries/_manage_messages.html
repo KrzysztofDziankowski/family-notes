@@ -1,5 +1,9 @@
 {% if messages %}
-<div class="fn-panel fn-panel--success" role="status" data-state-part="messages">
-    {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+<div data-state-part="messages">
+    {% for message in messages %}
+    <div class="fn-panel {% if 'error' in message.tags %}fn-panel--danger{% elif 'success' in message.tags %}fn-panel--success{% else %}fn-panel--notice{% endif %}" role="{% if 'error' in message.tags %}alert{% else %}status{% endif %}">
+        <p>{{ message }}</p>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}

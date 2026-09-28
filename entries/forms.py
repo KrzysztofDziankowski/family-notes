@@ -2,6 +2,7 @@ import datetime
 import uuid
 
 from django import forms
+from django.db.models import Q
 
 from family_access.access import scope_queryset_to_family
 from family_access.models import FamilyMember
@@ -32,8 +33,13 @@ class CaptureForm(forms.Form):
     )
 
 
+INACTIVE_MEMBER_SUFFIX = ' (nieaktywne konto)'
+
+
 class FamilyMemberChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, member):
+        if not member.is_active:
+            return f'{member.display_name}{INACTIVE_MEMBER_SUFFIX}'
         return member.display_name
 
 
@@ -192,6 +198,15 @@ class EntryEditForm(ManagedEntryForm):
             initial.update(kwargs.pop('initial', None) or {})
             kwargs['initial'] = initial
         super().__init__(membership, *args, **kwargs)
+        if entry is not None and entry.assigned_member_id is not None:
+            # Keep a since-deactivated assignee selectable so an unrelated edit
+            # does not silently reassign the entry to the whole family.
+            self.fields['assigned_member'].queryset = scope_queryset_to_family(
+                FamilyMember.objects.filter(
+                    Q(is_active=True) | Q(pk=entry.assigned_member_id)
+                ),
+                membership,
+            ).order_by('pk')
 
 
 def review_form_from_classification(membership, outcome, submitted_text):

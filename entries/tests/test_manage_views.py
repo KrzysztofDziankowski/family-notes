@@ -8,12 +8,16 @@ import datetime
 import re
 import uuid
 
+from django.contrib.messages import constants
+from django.contrib.messages.storage.base import Message
+from django.template.loader import render_to_string
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from entries.classification.types import EntryType, SchoolItemKind
 from entries.models import Entry
+from family_access.models import FamilyMember
 
 from .test_classification_service import FamilyFixtureMixin
 
@@ -230,6 +234,17 @@ class DetailTests(ManageViewMixin, TestCase):
         self.assertNotContains(response, str(entry.submission_key))
         self.assertNotContains(response, 'Ewa')
 
+    def test_detail_hides_creator_and_submission_key_of_a_manual_entry(self):
+        creator = self._member('parent2', FamilyMember.Role.PARENT, 'Tomasz')
+        key = uuid.uuid4()
+        entry = self.entry('Zebranie', created_by=creator, submission_key=key)
+
+        response = self.client.get(detail_url(entry.pk))
+
+        self.assertContains(response, 'Zebranie')
+        self.assertNotContains(response, 'Tomasz')
+        self.assertNotContains(response, str(key))
+
     def test_detail_links_back_to_the_list_the_entry_belongs_to(self):
         past_entry = self.entry(date=self.days(-3))
         undated = self.entry()
@@ -347,6 +362,28 @@ class EditTests(ManageViewMixin, TestCase):
         self.assertContains(response, f'action="{edit_url(entry.pk)}"')
         self.assertContains(response, f'href="{detail_url(entry.pk)}"')
 
+    def test_editing_title_keeps_deactivated_assignee(self):
+        entry = self.entry('Oddać książkę', assigned_member=self.inactive_child)
+
+        response = self.client.get(edit_url(entry.pk))
+        self.assertContains(response, f'<option value="{self.inactive_child.pk}" selected>')
+
+        response = self.client.post(
+            edit_url(entry.pk),
+            self.form_data(
+                entry_type=EntryType.TODO.value,
+                content='Oddać dwie książki',
+                date='',
+                time='',
+                assigned_member=str(self.inactive_child.pk),
+            ),
+        )
+
+        self.assertRedirects(response, detail_url(entry.pk))
+        entry.refresh_from_db()
+        self.assertEqual(entry.content, 'Oddać dwie książki')
+        self.assertEqual(entry.assigned_member, self.inactive_child)
+
     def test_invalid_edit_rerenders_without_mutation(self):
         entry = self.entry('Bez zmian')
 
@@ -426,3 +463,20 @@ class ManagementTemplateTests(ManageViewMixin, TestCase):
         self.client.force_login(self.child.user)
 
         self.assertNotContains(self.client.get(reverse('account_status')), f'href="{INDEX_URL}"')
+
+
+class MessagesPartialTests(TestCase):
+    def test_message_level_selects_panel_style(self):
+        cases = {
+            constants.SUCCESS: ('fn-panel--success', 'role="status"'),
+            constants.WARNING: ('fn-panel--notice', 'role="status"'),
+            constants.ERROR: ('fn-panel--danger', 'role="alert"'),
+        }
+        for level, (panel_class, role) in cases.items():
+            with self.subTest(level=level):
+                html = render_to_string(
+                    'entries/_manage_messages.html', {'messages': [Message(level, 'Komunikat')]}
+                )
+                self.assertIn(panel_class, html)
+                self.assertIn(role, html)
+                self.assertIn('Komunikat', html)
