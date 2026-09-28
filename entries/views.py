@@ -325,7 +325,6 @@ def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school
     return entry
 
 
-@require_GET
 def child_states(request):
     """DEBUG-only gallery of every child-view state from unsaved synthetic data."""
     if not settings.DEBUG:

@@ -165,6 +165,14 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
         super().setUp()
         self.client.force_login(self.child.user)
 
+    def test_entry_content_is_escaped_in_list_and_detail(self):
+        entry = self._entry('<script>alert(1)</script>', self.child)
+
+        for response in (self.client.get(LIST_URL), self.client.get(detail_url(entry.pk))):
+            with self.subTest(path=response.request['PATH_INFO']):
+                self.assertNotContains(response, '<script>alert(1)</script>')
+                self.assertContains(response, '&lt;script&gt;alert(1)&lt;/script&gt;')
+
     def test_detail_shows_full_data_without_internal_fields(self):
         self.own_upcoming.content = 'SENTINEL-OWN-UPCOMING ' + 'długa treść ' * 30
         self.own_upcoming.save()

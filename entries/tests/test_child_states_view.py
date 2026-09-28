@@ -31,6 +31,15 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
 
         self.assertEqual(self.client.get(CHILD_STATES_URL).status_code, 404)
 
+    @override_settings(DEBUG=False)
+    def test_every_method_is_not_found_without_debug(self):
+        self.client.force_login(self.child.user)
+
+        for method in ('post', 'put', 'delete'):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(CHILD_STATES_URL)
+                self.assertEqual(response.status_code, 404)
+
     @override_settings(DEBUG=True)
     def test_anonymous_is_redirected_to_login(self):
         response = self.client.get(CHILD_STATES_URL)

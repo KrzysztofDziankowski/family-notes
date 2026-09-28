@@ -76,6 +76,8 @@ The helper never filters by family, role, or assignee. Scoping is the caller's j
 
 **Contract**: The partial takes `entry` and `detail_url_name`. It shows the type label, content (`truncatechars:120` in the row, never truncated in detail), the date formatted like `_saved_panel.html` with the time when present, and the assignee or "Cała rodzina", and it links to `detail_url_name` with `entry.pk`. The child list passes a flag to hide the redundant assignee. Any new layout class (for example `.fn-entry-list`) is added to `tokens.css` using existing tokens only. No new colour or spacing values.
 
+*Addendum (impl-review F2, 2026-09-28):* The partial also takes two optional parameters. `edit_url_name` adds an "Edytuj" link to that URL with `entry.pk`; it was added at coordinator request so S-02 can reuse the partial, and child templates never pass it. `detail_query` is a constant query string (`view=past`) appended to the detail link so the back link can return to the same mode. Leaving either one out changes nothing.
+
 #### 3. Child-scoped read service
 
 **File**: `entries/services.py`
@@ -284,8 +286,8 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Manual
 
-- [x] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (agent-verified: headless Chromium 360px mobile viewport via CDP with a fictional local child session; account → /entries/mine/ → ?view=past → /entries/mine/<pk>/?view=past → back landed on ?view=past, scrollWidth 360 on every page; human check pending) — e23392c
-- [x] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (agent-verified: 360px screenshots of the upcoming list with a truncated long undated note under "Bez daty", a dated row without time, the full long content on detail, and the empty past state; the empty upcoming state checked by test and in the Phase 3 gallery; human check pending) — e23392c
+- [ ] 2.8 Signed in as a child at phone width: account → "Moje wpisy" → switch to "Minione" → open a row → back returns to the same mode. (agent-verified: headless Chromium 360px mobile viewport via CDP with a fictional local child session; account → /entries/mine/ → ?view=past → /entries/mine/<pk>/?view=past → back landed on ?view=past, scrollWidth 360 on every page; human check pending) — e23392c
+- [ ] 2.9 Long content, undated entries, missing times, and both empty states remain readable. (agent-verified: 360px screenshots of the upcoming list with a truncated long undated note under "Bez daty", a dated row without time, the full long content on detail, and the empty past state; the empty upcoming state checked by test and in the Phase 3 gallery; human check pending) — e23392c
 
 ### Phase 3: Kitchen Sink and Screenshot Gate
 
@@ -298,6 +300,6 @@ No schema change or data migration. To roll back, remove the new routes, templat
 
 #### Manual
 
-- [x] 3.5 The gallery screenshot at 360px shows all six states legibly, with no horizontal scroll, token accent colours, Polish copy throughout, and the current mode visibly marked. (agent-verified: headless Chromium 360px mobile viewport full-page capture, 360x2602, read back and reviewed: all six states legible, scrollWidth 360 so no horizontal scroll, accent-green type labels, mode switch and panel rules, Polish copy throughout, current mode filled with aria-current="page"; human check pending)
-- [x] 3.6 The screenshot is committed under `context/changes/child-assigned-entry-view/screenshots/`. (agent-verified: screenshots/child-states-360.png committed with this phase; human check pending)
-- [x] 3.7 In Chrome on Android, a real child account sees only its own entries, and a hand-typed detail URL for a sibling's entry shows 404. (agent-verified: Chromium at 360px mobile viewport with a fictional local child session saw only its own entries, and the hand-typed sibling and family-wide detail URLs returned 404; real Android device check pending; human check pending)
+- [ ] 3.5 The gallery screenshot at 360px shows all six states legibly, with no horizontal scroll, token accent colours, Polish copy throughout, and the current mode visibly marked. (agent-verified: headless Chromium 360px mobile viewport full-page capture, 360x2602, read back and reviewed: all six states legible, scrollWidth 360 so no horizontal scroll, accent-green type labels, mode switch and panel rules, Polish copy throughout, current mode filled with aria-current="page"; human check pending)
+- [ ] 3.6 The screenshot is committed under `context/changes/child-assigned-entry-view/screenshots/`. (agent-verified: screenshots/child-states-360.png committed with this phase; human check pending)
+- [ ] 3.7 In Chrome on Android, a real child account sees only its own entries, and a hand-typed detail URL for a sibling's entry shows 404. (agent-verified: Chromium at 360px mobile viewport with a fictional local child session saw only its own entries, and the hand-typed sibling and family-wide detail URLs returned 404; real Android device check pending; human check pending)
