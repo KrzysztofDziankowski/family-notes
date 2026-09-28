@@ -230,6 +230,19 @@ class AccountStatusRouteTests(TestCase):
         self.assertTemplateUsed(response, 'family_access/account_status.html')
         self.assertTemplateUsed(response, 'base.html')
 
+    def test_nav_logout_is_a_post_form_that_signs_out(self):
+        user = self._create_member('parent', FamilyMember.Role.PARENT, 'Alex')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('account_status'))
+
+        self.assertContains(
+            response, f'<form method="post" action="{reverse("account_logout")}"'
+        )
+        self.assertNotContains(response, f'href="{reverse("account_logout")}"')
+        self.client.post(reverse('account_logout'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+
     def test_configured_child_sees_display_name_and_role(self):
         user = self._create_member('child', FamilyMember.Role.CHILD, 'Sam')
         self.client.force_login(user)

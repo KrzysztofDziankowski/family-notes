@@ -94,6 +94,11 @@ Only active superusers may use `/admin/`. Family membership, including the
 `Parent` role, never grants admin access. Keep the operator account and all real
 OAuth credentials out of tracked files.
 
+To remove someone's access, untick **Active** on their `Family member` (or on the
+user). Do not delete users or members: an entry assigned to a member protects it
+(`on_delete=RESTRICT`), so admin refuses the delete with a list of the blocking
+entries. Deactivation takes effect immediately and keeps those entries attributed.
+
 With the local server running, verify these routes:
 
 - <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.

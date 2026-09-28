@@ -334,6 +334,11 @@ Render every capture state on one page from synthetic data and screenshot it at 
 
 The flow is synchronous: one classification call per submit, bounded by the 25 s application deadline, inside the 45 s Gunicorn and 50 s nginx timeouts. With 2 sync workers, one in-flight classification occupies half the capacity and two overlapping ones stall other requests; this is the existing infrastructure risk (`context/foundation/infrastructure.md`, concurrency row), not addressed in this slice. The idempotent confirm step keeps retries after a slow response from creating duplicates, a risk named in `context/foundation/infrastructure.md`. The `(family, date)` index serves S-02/S-03 listings later.
 
+## Addendum (impl review 2026-09-28)
+
+- **F1, deactivate and never delete:** `Entry.assigned_member` stays `RESTRICT`. Removing a person means deactivating their `FamilyMember` (or `User`), not deleting it. Deleting a user whose membership is assigned on any entry fails by design, and a child's account becomes undeletable once a parent assigns an entry to it. This is documented in README "Create the initial family". A future "delete my account" flow must reassign or delete that user's entries first.
+- **F4, idempotency before validation:** `save_confirmed_entry` now looks up an existing `submission_key` before re-validating. A repeat returns the stored entry even if its member has since been deactivated.
+
 ## Migration Notes
 
 This adds one table (`entries 0001`) and no data migration. To roll back, unapply `entries 0001`, which drops saved entries. Do this only before real family data exists. Changing `TIME_ZONE`/`LANGUAGE_CODE` needs no data migration, because `USE_TZ=True` keeps stored datetimes in UTC.

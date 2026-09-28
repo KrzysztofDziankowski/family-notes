@@ -34,11 +34,13 @@ def save_confirmed_entry(
 
     entry_type = EntryType(entry_type)
     school_item = SchoolItemKind(school_item) if school_item else None
-    _validate(membership, entry_type, date, assigned_member, school_item)
 
+    # A repeat returns the saved entry even if its values no longer validate.
     existing = _existing_for_key(membership, submission_key)
     if existing is not None:
         return existing, False
+
+    _validate(membership, entry_type, date, assigned_member, school_item)
 
     try:
         with transaction.atomic():

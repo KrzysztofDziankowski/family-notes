@@ -1,4 +1,10 @@
-/* Source of values: colours and font stack taken from the family_notes/templates/family_notes/home.html placeholder. */
+/* Source of values:
+   - Taken from the family_notes/templates/family_notes/home.html placeholder: bg #f7f8fa, text #20242a,
+     text-strong #3d454d, muted #5d6670, accent #2f6f5e (also used as success), Inter font stack.
+   - Derived for first-school-event-capture, with no external source: surface and accent-inverse #ffffff,
+     border #d9dde2, accent-hover #255a4c (darkened accent), accent-focus (accent at 25% alpha),
+     danger #b3261e / #fdecea, success-bg #e6f2ee (accent tint), notice #fff6e0 / #d9a520,
+     spacing, radius and the accent rule width. */
 
 /* Semantic project tokens: the single source of design values for product views. */
 :root {
@@ -60,6 +66,15 @@
   font-weight: 700;
   color: var(--fn-color-text);
   text-decoration: none;
+}
+
+.fn-nav-form,
+.fn-nav-form button {
+  margin: 0;
+}
+
+.fn-nav-form button {
+  padding: var(--fn-space-1) var(--fn-space-3);
 }
 
 .fn-panel {

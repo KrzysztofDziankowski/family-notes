@@ -16,7 +16,12 @@
             <ul>
                 {% block nav %}
                 <li><a href="{% url 'account_status' %}">Konto</a></li>
-                <li><a href="{% url 'account_logout' %}">Wyloguj</a></li>
+                <li>
+                    <form method="post" action="{% url 'account_logout' %}" class="fn-nav-form">
+                        {% csrf_token %}
+                        <button type="submit" class="secondary outline">Wyloguj</button>
+                    </form>
+                </li>
                 {% endblock %}
             </ul>
         </nav>

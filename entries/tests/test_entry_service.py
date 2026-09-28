@@ -155,6 +155,18 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
             self.save(assigned_member=None)
         self.assertFalse(Entry.objects.exists())
 
+    def test_repeat_key_returns_existing_entry_after_member_deactivated(self):
+        key = uuid.uuid4()
+        first, _ = self.save(submission_key=key)
+        self.child.is_active = False
+        self.child.save(update_fields=('is_active',))
+
+        second, created = self.save(submission_key=key)
+
+        self.assertFalse(created)
+        self.assertEqual(second.pk, first.pk)
+        self.assertEqual(Entry.objects.count(), 1)
+
     def test_same_key_twice_returns_original_unchanged_entry(self):
         key = uuid.uuid4()
         first, first_created = self.save(submission_key=key)
