@@ -115,15 +115,16 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ### F-04: Automation Token Access
 
-- **Outcome:** (foundation) a parent's automation can authenticate with a token issued and revoked by the administrator, and the token acts only on behalf of that parent's family.
+- **Outcome:** (foundation) a parent's automation can authenticate with a token issued and revoked by the administrator, and the token acts only on behalf of that parent's family; its notifications are stored fast in a pre-events table (`InboundNotification`, 202 with no classification in the request).
 - **Change ID:** automation-token-access
-- **PRD refs:** FR-009, Access Control, NFR token revocation
+- **PRD refs:** FR-009, Access Control, NFR token revocation, NFR fast intake
 - **Unlocks:** S-05; access tests for a valid token, a revoked token, a missing/unknown token, and a token owned by a child or inactive member
 - **Prerequisites:** F-01
 - **Parallel with:** S-01, S-02, S-03, S-04
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** The token is a second authentication path beside the signed-in session; the risk is letting it reach anything other than school intake. Kept admin-only (no parent-facing page) to stay inside the MVP's no-in-app-administration stance.
+- **Progress (2026-09-28):** All three phases are implemented and merged to master. Production ping and real-phone intake were verified on 2026-09-27. Impl-reviewed 2026-09-28 (`reviews/impl-review.md`), and triage fixes landed in `9c74c0c`. Intake now answers 400 for impossible dates and NUL characters. Next: `/10x-archive`.
 - **Status:** in-progress
 
 ## Slices
@@ -138,6 +139,8 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Blockers:** -
 - **Unknowns:** -
 - **Risk:** This is the first product proof; keeping it to the school-event case prevents the broader classification question from blocking the core flow.
+- **Progress (2026-09-28):** All four phases are implemented and merged to master. This adds the `Entry` model (with a `source` marker, open to S-05), vendored Pico CSS, `tokens.css` and `base.html`. Impl-reviewed 2026-09-28 (`reviews/impl-review.md`), and triage fixes landed in `173ac3a`. Next: `/10x-archive`, which unblocks S-02, S-03, S-04 and S-05.
+- **Decision for later slices:** `Entry.assigned_member` is `RESTRICT`. People are deactivated, never deleted (README "Create the initial family"). S-02 deletes entries, not members.
 - **Status:** in-progress
 
 ### S-02: Parent Family Entry Management
@@ -188,6 +191,10 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - Is the notification title set and message format stable enough for fixed rules, or will fallback classification carry most of the load? - Owner: user. Block: no (fallback to classification, then general note, covers drift).
 - **Intake split (2026-09-27):** F-04 owns the fast endpoint and the `InboundNotification` pre-events table (store + 202, dedup by id and same-day content). S-05 converts pending rows outside the request: fixed rules → LLM fallback → general note, via an in-process in-memory queue with no external dependency, with the DB row as the source of truth plus a restart sweep. See F-04 plan "S-05 Handoff".
+- **Inherited from F-04/S-01 review (2026-09-28):**
+  - `/admin/` stays in English (lessons.md), so the Polish copy in the token/intake admin is to be translated as a follow-up.
+  - EduVulcan entries assigned to a child make that member RESTRICT-protected, so deactivate rather than delete.
+  - When S-05 next touches these files, move `family_access/test_automation.py` into a `tests/` package and pick one namespace for the `api/automation/` URLs.
 - **Risk:** Depends on the entry model shaped by S-01, which must allow a source marker and entries created without a confirmation step. Real sample notifications (gitignored `eduvulcan-queue/`) contain names, so fixtures must be anonymized before they enter the repo. The LLM fallback sends notification text through the F-02 privacy boundary.
 - **Status:** proposed
 
@@ -198,12 +205,12 @@ Foundations below assume these are present and do NOT re-scaffold them.
 | F-01       | identity-and-family-access-contract | Establish identity, roles, and family access guard  | yes                   | Unlocks the first capture slice and all family-data paths. |
 | F-02       | classification-privacy-boundary     | Establish privacy boundary for classification       | yes                   | Unlocks classified proposal behavior. |
 | F-03       | production-health-release-gate      | Establish production health release gate            | yes                   | Can run in parallel with product foundations. |
-| S-01       | first-school-event-capture          | Parent captures first school event from text        | no                    | Wait for F-01 and F-02. |
-| S-02       | parent-family-entry-management      | Parent manages saved family entries                 | no                    | Wait for F-01 and S-01. |
-| S-03       | child-assigned-entry-view           | Child sees only assigned entries                    | no                    | Wait for F-01 and S-01. |
-| S-04       | missing-info-follow-up              | Parent receives follow-up for missing required data | no                    | Wait for F-02 and S-01. |
-| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | yes                   | F-01 is done; can run parallel with S-01. |
-| S-05       | eduvulcan-school-event-intake       | Automation forwards EduVulcan notifications as school entries | no          | Wait for S-01 and F-04. |
+| S-01       | first-school-event-capture          | Parent captures first school event from text        | n/a                   | Implemented and impl-reviewed 2026-09-28; archive next. |
+| S-02       | parent-family-entry-management      | Parent manages saved family entries                 | no                    | Planning started; formally ready once S-01 is archived. |
+| S-03       | child-assigned-entry-view           | Child sees only assigned entries                    | no                    | Ready once S-01 is archived. |
+| S-04       | missing-info-follow-up              | Parent receives follow-up for missing required data | no                    | Ready once S-01 is archived. |
+| F-04       | automation-token-access             | Admin-issued automation tokens for parents          | n/a                   | Implemented and impl-reviewed 2026-09-28; archive next. |
+| S-05       | eduvulcan-school-event-intake       | Automation forwards EduVulcan notifications as school entries | no          | Ready once S-01 and F-04 are archived; plan against F-04 "S-05 Handoff". |
 
 ## Open Roadmap Questions
 
