@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from entries.health_views import conversion_healthz
 from family_notes.views import healthz, home
 
 urlpatterns = [
@@ -28,4 +29,5 @@ urlpatterns = [
     path('api/automation/', include('entries.api_urls')),
     path('entries/', include('entries.urls')),
     path('healthz/', healthz, name='healthz'),
+    path('healthz/conversion/', conversion_healthz, name='conversion_healthz'),
 ]

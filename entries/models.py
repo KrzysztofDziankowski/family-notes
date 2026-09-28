@@ -228,3 +228,23 @@ class NotificationConversionOutput(models.Model):
 
     def __str__(self):
         return f'notification #{self.notification_id} output {self.output_index} ({self.kind})'
+
+
+class ConversionWorkerHeartbeat(models.Model):
+    """Last time an active EduVulcan conversion worker proved it was alive.
+
+    Every Gunicorn process's worker writes the same named row, so the row
+    answers "is conversion running somewhere" for ``/healthz/conversion/``.
+    It holds a timestamp only, never queue contents or family data.
+    Admin-only metadata, so labels are English.
+    """
+
+    name = models.CharField('name', max_length=64, unique=True)
+    beat_at = models.DateTimeField('last heartbeat at')
+
+    class Meta:
+        verbose_name = 'conversion worker heartbeat'
+        verbose_name_plural = 'conversion worker heartbeats'
+
+    def __str__(self):
+        return f'{self.name} heartbeat'

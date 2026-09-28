@@ -43,6 +43,40 @@ def env_number(name, default, cast=float):
         raise ImproperlyConfigured(f'{name} must be a number.') from None
 
 
+def env_positive_int(name, default):
+    """A whole number above zero; anything else stops startup (fail closed)."""
+    value = env_number(name, default, cast=int)
+    if value <= 0:
+        raise ImproperlyConfigured(f'{name} must be a positive whole number.')
+    return value
+
+
+def env_positive_int_tuple(name, default):
+    """Comma-separated positive whole numbers, e.g. ``60,300``."""
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return tuple(default)
+    try:
+        values = tuple(int(item) for item in env_list(name))
+    except ValueError:
+        values = ()
+    if not values or any(value <= 0 for value in values):
+        # Name the variable only; never echo configured values.
+        raise ImproperlyConfigured(
+            f'{name} must be a comma-separated list of positive whole numbers.'
+        )
+    return values
+
+
+def validate_eduvulcan_worker_settings(*, heartbeat_seconds, heartbeat_max_age_seconds):
+    """Reject a freshness window that a healthy worker could never satisfy."""
+    if not heartbeat_max_age_seconds > heartbeat_seconds:
+        raise ImproperlyConfigured(
+            'EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS must be greater than '
+            'EDUVULCAN_WORKER_HEARTBEAT_SECONDS.'
+        )
+
+
 # Empty means the request carries no reasoning parameter (non-reasoning models).
 OPENAI_REASONING_EFFORTS = frozenset({'', 'none', 'minimal', 'low', 'medium', 'high'})
 
@@ -267,6 +301,36 @@ validate_classification_settings(
     attempt_timeout_seconds=CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS,
     max_retries=CLASSIFICATION_MAX_RETRIES,
     reasoning_effort=OPENAI_REASONING_EFFORT,
+)
+
+# EduVulcan notification conversion (roadmap S-05).
+# The worker runs inside each Gunicorn process and is started only by the
+# post_worker_init hook in gunicorn.conf.py; tests, runserver, and management
+# commands never start it. Deploy migrations with the worker disabled, then
+# enable it once the new release is healthy.
+EDUVULCAN_WORKER_ENABLED = env_bool('EDUVULCAN_WORKER_ENABLED', default=False)
+# Seconds between database sweeps for pending, retry-due, and stale rows.
+EDUVULCAN_CONVERSION_SWEEP_INTERVAL_SECONDS = env_positive_int(
+    'EDUVULCAN_CONVERSION_SWEEP_INTERVAL_SECONDS', 60
+)
+EDUVULCAN_CONVERSION_BATCH_SIZE = env_positive_int('EDUVULCAN_CONVERSION_BATCH_SIZE', 50)
+EDUVULCAN_CONVERSION_LEASE_SECONDS = env_positive_int('EDUVULCAN_CONVERSION_LEASE_SECONDS', 120)
+EDUVULCAN_CONVERSION_MAX_ATTEMPTS = env_positive_int('EDUVULCAN_CONVERSION_MAX_ATTEMPTS', 3)
+# Delay before attempt 2, attempt 3, ...; later attempts reuse the last value.
+EDUVULCAN_CONVERSION_RETRY_DELAYS_SECONDS = env_positive_int_tuple(
+    'EDUVULCAN_CONVERSION_RETRY_DELAYS_SECONDS', (60, 300)
+)
+EDUVULCAN_RAW_RETENTION_DAYS = env_positive_int('EDUVULCAN_RAW_RETENTION_DAYS', 90)
+# Active workers record a heartbeat this often; /healthz/conversion/ reports
+# "unavailable" when the newest heartbeat is older than the max age.
+EDUVULCAN_WORKER_HEARTBEAT_SECONDS = env_positive_int('EDUVULCAN_WORKER_HEARTBEAT_SECONDS', 30)
+EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS = env_positive_int(
+    'EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS', 180
+)
+
+validate_eduvulcan_worker_settings(
+    heartbeat_seconds=EDUVULCAN_WORKER_HEARTBEAT_SECONDS,
+    heartbeat_max_age_seconds=EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS,
 )
 
 SOCIALACCOUNT_PROVIDERS = {

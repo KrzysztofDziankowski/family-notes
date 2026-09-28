@@ -8,17 +8,6 @@ BACKUPS=/var/backups/family-notes
 RELEASE_GATE_LIBRARY=/usr/local/libexec/family-notes/release-gate.sh
 EXPECTED_RELEASE_GATE_PROTOCOL_VERSION=1
 
-[ -r "$RELEASE_GATE_LIBRARY" ] || {
-    echo "family-notes-deploy: release gate library is unavailable" >&2
-    exit 1
-}
-# shellcheck disable=SC1090
-. "$RELEASE_GATE_LIBRARY"
-[ "${RELEASE_GATE_PROTOCOL_VERSION:-}" = "$EXPECTED_RELEASE_GATE_PROTOCOL_VERSION" ] || {
-    echo "family-notes-deploy: incompatible release gate protocol" >&2
-    exit 1
-}
-
 fail() {
     echo "family-notes-deploy: $*" >&2
     exit 1
@@ -73,6 +62,64 @@ health_probe() {
 
 health_clock() { date -u +%s; }
 health_sleep() { sleep "$1"; }
+
+# One probe of the conversion worker's health. Prints only a fixed state word
+# (ok, disabled, unavailable, or unexpected), never the response body. Succeeds
+# for ok and disabled; the release gate above never depends on it.
+conversion_health_probe() {
+    conversion_budget=$1
+    case "$conversion_budget" in
+        ''|*[!0-9]*|0) return 1 ;;
+    esac
+    umask 077
+    conversion_response=$(mktemp)
+    trap 'rm -f "$conversion_response"' EXIT HUP INT TERM
+    conversion_code=$(curl --silent --max-time "$conversion_budget" \
+        --unix-socket /run/family-notes/gunicorn.sock \
+        -H "Host: $health_host" -H 'X-Forwarded-Proto: https' \
+        --output "$conversion_response" --write-out '%{http_code}' \
+        http://localhost/healthz/conversion/) || conversion_code=000
+    conversion_state=unexpected
+    for conversion_candidate in 200:ok 200:disabled 503:unavailable; do
+        if [ "$conversion_code" = "${conversion_candidate%%:*}" ] \
+            && printf '{"status": "%s"}' "${conversion_candidate#*:}" \
+                | cmp -s - "$conversion_response"; then
+            conversion_state=${conversion_candidate#*:}
+            break
+        fi
+    done
+    rm -f "$conversion_response"
+    trap - EXIT HUP INT TERM
+    printf 'conversion health: %s\n' "$conversion_state"
+    case "$conversion_state" in
+        ok|disabled) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Tests source the helper to exercise its functions with fake commands. The
+# mode only returns early when sourced; executing the helper (installed or
+# staged) with it set fails before any action.
+if [ "${FAMILY_NOTES_DEPLOY_SOURCE_ONLY:-}" = 1 ]; then
+    case "${0##*/}" in
+        family-notes-deploy|family-notes-deploy.new)
+            echo "family-notes-deploy: source-only mode requires sourcing" >&2
+            exit 1
+            ;;
+    esac
+    return 0
+fi
+
+[ -r "$RELEASE_GATE_LIBRARY" ] || {
+    echo "family-notes-deploy: release gate library is unavailable" >&2
+    exit 1
+}
+# shellcheck disable=SC1090
+. "$RELEASE_GATE_LIBRARY"
+[ "${RELEASE_GATE_PROTOCOL_VERSION:-}" = "$EXPECTED_RELEASE_GATE_PROTOCOL_VERSION" ] || {
+    echo "family-notes-deploy: incompatible release gate protocol" >&2
+    exit 1
+}
 
 command=${1:-}
 case "$command" in
@@ -132,11 +179,18 @@ case "$command" in
         [ -n "$health_host" ] || fail "DJANGO_ALLOWED_HOSTS is empty"
         release_gate_wait health_probe health_clock health_sleep
         ;;
+    conversion-health)
+        [ "$#" -eq 1 ] || fail "usage: $0 conversion-health"
+        load_environment
+        health_host=${DJANGO_ALLOWED_HOSTS%%,*}
+        [ -n "$health_host" ] || fail "DJANGO_ALLOWED_HOSTS is empty"
+        conversion_health_probe 10
+        ;;
     reboot)
         [ "$#" -eq 1 ] || fail "usage: $0 reboot"
         systemctl reboot
         ;;
     *)
-        fail "usage: $0 {check|backup|activate|rollback|status|logs|gate-version|health|reboot} [RELEASE_ID]"
+        fail "usage: $0 {check|backup|activate|rollback|status|logs|gate-version|health|conversion-health|reboot} [RELEASE_ID]"
         ;;
 esac

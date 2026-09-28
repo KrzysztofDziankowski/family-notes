@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 
 from family_access.automation import automation_token_required
 
+from .eduvulcan.worker import schedule_wakeup
 from .models import InboundNotification
 
 MAX_BODY_BYTES = 16 * 1024
@@ -112,6 +113,9 @@ def submit_notification(request):
                     payload=payload,
                     **values,
                 )
+                # Only a post-commit wake-up for the worker; the row is
+                # already durable, so a skipped wake-up waits for a sweep.
+                schedule_wakeup(existing.pk)
         except IntegrityError:
             # A concurrent copy won the race; answer with its row.
             existing = (

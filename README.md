@@ -136,6 +136,7 @@ With the local server running, verify these routes:
 - <http://localhost:20121/account/> requires authentication and shows the configured display name and role, or a generic not-configured state.
 - <http://localhost:20121/admin/> accepts the credentials created by `createsuperuser`; normal staff and family accounts are denied.
 - <http://localhost:20121/healthz/> returns `{"status": "ok"}` while the database is available.
+- <http://localhost:20121/healthz/conversion/> returns `{"status": "disabled"}` unless the conversion worker is enabled (see [Convert notifications locally](#convert-notifications-locally)).
 
 For production, register
 `https://YOUR_DOMAIN/accounts/google/login/callback/` separately and store the
@@ -184,9 +185,37 @@ A new notification returns `202 {"status": "accepted", "id": <row id>}`.
 Repeating the same `notification_id`, or the same title and message captured on
 the same day, returns `202` with the existing row's id and stores nothing new.
 An invalid body returns `400`, a body over 16 KB returns `413`. The row appears
-in admin under **Entries → Powiadomienia przychodzące** with status `pending`
-until EduVulcan processing (roadmap S-05) exists. Use only anonymized payloads
-for manual tests; real notifications name family members.
+in admin under **Entries → Powiadomienia przychodzące** with status `pending`.
+Use only anonymized payloads for manual tests; real notifications name family
+members.
+
+### Convert notifications locally
+
+A `202` means the notification is stored, not that it is already converted.
+Conversion runs in a background thread inside each Gunicorn worker process,
+never in the request, and only when `EDUVULCAN_WORKER_ENABLED=True`. The thread
+is started by the hooks in `gunicorn.conf.py`; `runserver`, tests, and
+management commands never start it. To watch pending rows convert locally:
+
+```bash
+EDUVULCAN_WORKER_ENABLED=True uv run gunicorn family_notes.wsgi:application \
+  --config gunicorn.conf.py --workers 2 --bind '[::1]:20122'
+```
+
+On startup, and then every `EDUVULCAN_CONVERSION_SWEEP_INTERVAL_SECONDS`, the
+worker converts pending, retry-due, and stale `processing` rows; new intake rows
+also wake it right after commit. The remaining tuning variables are listed in
+`.env.example`; an invalid number stops startup.
+
+Two health checks exist:
+
+- `/healthz/` returns exactly `{"status": "ok"}` while the database is
+  available. It is the release gate and ignores conversion.
+- `/healthz/conversion/` returns `200 {"status": "disabled"}` when the worker is
+  switched off, `200 {"status": "ok"}` when a worker recorded a heartbeat within
+  `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS`, and
+  `503 {"status": "unavailable"}` otherwise. Intake keeps answering `202`
+  either way.
 
 ## Verify the project
 

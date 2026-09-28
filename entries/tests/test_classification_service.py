@@ -434,11 +434,17 @@ class NoPersistenceTests(FamilyFixtureMixin, TestCase):
 
     def test_entries_app_models_hold_no_classification_drafts(self):
         # S-01 adds the confirmed Entry, F-04 the raw notification inbox, and
-        # S-05 the non-sensitive output provenance; classification stores nothing.
+        # S-05 the non-sensitive output provenance and a timestamp-only worker
+        # heartbeat; classification stores nothing.
         models = apps.get_app_config('entries').get_models()
         self.assertEqual(
             [model.__name__ for model in models],
-            ['Entry', 'InboundNotification', 'NotificationConversionOutput'],
+            [
+                'Entry',
+                'InboundNotification',
+                'NotificationConversionOutput',
+                'ConversionWorkerHeartbeat',
+            ],
         )
 
     def _row_counts(self):

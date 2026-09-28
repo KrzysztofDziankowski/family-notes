@@ -442,7 +442,7 @@ WorkingDirectory=/srv/family-notes/current
 EnvironmentFile=/etc/family-notes/env
 RuntimeDirectory=family-notes
 RuntimeDirectoryMode=0755
-ExecStart=/srv/family-notes/current/.venv/bin/gunicorn family_notes.wsgi:application --workers 2 --timeout 45 --bind unix:/run/family-notes/gunicorn.sock --no-control-socket --access-logfile - --error-logfile -
+ExecStart=/srv/family-notes/current/.venv/bin/gunicorn family_notes.wsgi:application --config gunicorn.conf.py --workers 2 --timeout 45 --bind unix:/run/family-notes/gunicorn.sock --no-control-socket --access-logfile - --error-logfile -
 Restart=on-failure
 RestartSec=5
 PrivateTmp=true
@@ -451,6 +451,16 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 ```
+
+`--config gunicorn.conf.py` loads the release's Gunicorn hooks from the
+working directory. The file only adds hooks: the EduVulcan conversion worker
+starts in each of the two worker processes when `EDUVULCAN_WORKER_ENABLED=True`
+(see [Enable EduVulcan Conversion](#enable-eduvulcan-conversion)); the
+command-line options above still decide workers, timeout, and binding. A unit
+created before this option existed must be updated (`systemctl edit --full
+family-notes`, then `systemctl daemon-reload`) before conversion is enabled.
+Gunicorn also discovers `gunicorn.conf.py` in its working directory, but keep the
+option explicit.
 
 During the one-time bootstrap, enable the service without starting it:
 
@@ -533,6 +543,12 @@ production.
 Install the pair before running the revised `scripts/deployment/release.sh`. A
 helper installed before this change has no `gate-version` action, so the revised
 script stops with `release: release gate protocol check failed`.
+
+The helper revision that adds the `conversion-health` action keeps protocol `1`
+and the unchanged `health` gate. Install it with the same procedure (the library
+file is unchanged but is reinstalled as part of the matched pair); until then,
+`conversion-health` reports `usage` and the direct socket `curl` in
+[Enable EduVulcan Conversion](#enable-eduvulcan-conversion) is the fallback.
 
 ### Stage the files as `deploy`
 
@@ -725,6 +741,11 @@ restoration remains a separate, human-approved incident procedure.
 Public HTTPS is not part of the automated gate. After every release, verify it
 manually as described in step 10.
 
+EduVulcan conversion health is not part of the gate either. A release can be
+healthy while conversion is disabled or stalled; intake keeps accepting
+notifications and the rows wait in the database. Check it separately with the
+helper's `conversion-health` action (step 10).
+
 ## 10. Verify Before Calling the Deployment Complete
 
 On the VPS:
@@ -744,6 +765,19 @@ curl -I "http://[::1]:20121/healthz/" -H 'Host: <PUBLIC_HOST>'
 
 `gate-version` must print `1`, and the `health` action runs the same 30-second
 readiness gate used by the release script, ending in `readiness gate succeeded`.
+
+Then check the conversion worker with a single probe of `/healthz/conversion/`:
+
+```bash
+sudo -n /usr/local/sbin/family-notes-deploy conversion-health
+```
+
+It prints only `conversion health: <STATE>`. `disabled` (worker switched off)
+and `ok` (a heartbeat within `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS`) exit
+`0`; `unavailable` (enabled but no fresh heartbeat) and `unexpected` (transport
+error or any other response) exit nonzero. After enabling conversion, `ok` is
+expected within a few seconds of the restart, because each worker records a
+heartbeat as it starts.
 
 The release script's gate proves internal, database-backed readiness only. Public
 HTTPS remains a manual acceptance step. From the development machine:
@@ -944,6 +978,89 @@ root, and confirm `health` as `deploy`. Classification stores no data, so
 disabling it (and, if needed, rolling back the application release) requires no
 data cleanup.
 
+## Enable EduVulcan Conversion
+
+Stored EduVulcan notifications are converted into entries by a background
+thread inside each Gunicorn worker process. It ships disabled
+(`EDUVULCAN_WORKER_ENABLED=False`); enabling it is an operator-approved
+configuration change that keeps the two Gunicorn workers, `--timeout 45`, and
+the release gate unchanged. With both processes enabled, a PostgreSQL advisory
+lock lets only one of them convert at a time; the other keeps its heartbeat and
+takes over when the lock is free. Conversion calls classification only for
+notifications that the fixed school rules do not recognise, so the
+[Enable Classification](#enable-classification) prerequisites apply to those; with
+classification disabled they become general family notes.
+
+### 1. Deploy the schema with the worker disabled
+
+Release the commit containing the conversion migrations through the normal
+release script while `EDUVULCAN_WORKER_ENABLED` is absent or `False`. The
+readiness gate must succeed, and `conversion-health` must print
+`conversion health: disabled`. Confirm the systemd `ExecStart` includes
+`--config gunicorn.conf.py` (step 8).
+
+### 2. Enable the worker
+
+As root in the provider console, add to `/etc/family-notes/env`:
+
+```dotenv
+EDUVULCAN_WORKER_ENABLED=True
+```
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `EDUVULCAN_WORKER_ENABLED` | `False` | Master switch for the conversion thread. |
+| `EDUVULCAN_CONVERSION_SWEEP_INTERVAL_SECONDS` | `60` | Seconds between database sweeps for pending, retry-due, and stale rows. |
+| `EDUVULCAN_CONVERSION_BATCH_SIZE` | `50` | Rows per sweep (and per pruning batch). |
+| `EDUVULCAN_CONVERSION_LEASE_SECONDS` | `120` | How long one attempt owns a row before another sweep may reclaim it. |
+| `EDUVULCAN_CONVERSION_MAX_ATTEMPTS` | `3` | Total attempts before a row fails or falls back to a general note. |
+| `EDUVULCAN_CONVERSION_RETRY_DELAYS_SECONDS` | `60,300` | Delays before attempt 2 and attempt 3. |
+| `EDUVULCAN_RAW_RETENTION_DAYS` | `90` | Age after which raw title, message, and payload of processed rows are scrubbed (hourly). |
+| `EDUVULCAN_WORKER_HEARTBEAT_SECONDS` | `30` | How often an active worker records its heartbeat. |
+| `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS` | `180` | Heartbeat age after which `/healthz/conversion/` reports `unavailable`; must exceed the heartbeat interval. |
+
+Leave the tuning variables unset unless a reviewed change says otherwise. An
+invalid number (not a positive whole number) stops Django at startup and names
+only the variable, so run the helper's `check` action against the active release
+first, then restart as root and verify as `deploy`:
+
+```bash
+sudo -n /usr/local/sbin/family-notes-deploy check "$(basename "$(readlink -f /srv/family-notes/current)")"
+systemctl restart family-notes              # as root
+sudo -n /usr/local/sbin/family-notes-deploy health
+sudo -n /usr/local/sbin/family-notes-deploy conversion-health
+```
+
+`health` must end in `readiness gate succeeded` and `conversion-health` must
+print `conversion health: ok`. If the helper does not yet have the
+`conversion-health` action, probe the socket directly; the expected body is
+exactly `{"status": "ok"}`:
+
+```bash
+curl -sS --unix-socket /run/family-notes/gunicorn.sock \
+  -H 'Host: <PUBLIC_HOST>' -H 'X-Forwarded-Proto: https' \
+  http://localhost/healthz/conversion/
+```
+
+### 3. Confirm restart recovery
+
+Restarting the service sweeps immediately: each worker process converts pending,
+retry-due, and stale `processing` rows as it starts, so rows received while the
+worker was stopped are not lost. In admin, **Entries → Powiadomienia
+przychodzące** shows each row's status, attempt count, and a safe error code
+only. Logs name notification IDs, attempt numbers, and codes, never
+notification text or family names; inspect them with
+`sudo -n /usr/local/sbin/family-notes-deploy logs`.
+
+### Disable conversion
+
+Set `EDUVULCAN_WORKER_ENABLED=False`, restart as root, and confirm `health`
+and `conversion-health` (`disabled`) as `deploy`. Intake keeps storing
+notifications as `pending`; they are converted after the worker is enabled
+again. An application rollback disables the worker first; pending rows and
+conversion outputs stay valid for a forward fix, and migrations are never
+reversed automatically.
+
 ## 11. Roll Back the Application
 
 As `deploy`, list releases and identify the previous known-good directory:
@@ -998,6 +1115,12 @@ separate, human-approved incident procedure.
 - **`release: release gate protocol check failed` or `unexpected release gate
   protocol`:** the release stopped before fetching or creating a release. Check
   `sudo -n /usr/local/sbin/family-notes-deploy gate-version`; it must print `1`.
+- **`conversion health: unavailable`:** the worker is enabled but no process
+  recorded a heartbeat within the max age. Intake still works. Confirm the unit's
+  `ExecStart` includes `--config gunicorn.conf.py`, then inspect `logs` for
+  `EduVulcan conversion` warnings (for example `error=<CLASS>`, or
+  `worker not started` from the Gunicorn hook).
+  A database outage also reports `unavailable`; check `health` first.
 - **`readiness exhausted for release`:** the new release is active and its backup
   is in place. Run the printed `status`, `logs`, and `health` commands, then choose
   a forward fix or the manual application rollback.

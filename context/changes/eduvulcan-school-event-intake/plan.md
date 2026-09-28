@@ -334,10 +334,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [x] 2.1 Concurrent and repeated conversion calls create exactly one entry per output index; deleting an entry and retrying preserves its tombstone and does not recreate it.
-- [x] 2.2 A simulated crash before commit leaves no entries or links; the next claim converts successfully.
-- [x] 2.3 Retry timing, a three-provider-call maximum, three-attempt exhaustion, stale two-minute leases, fallback, and action-only admin requeue are covered.
-- [x] 2.4 Ninety-day pruning uses the agreed empty sentinels while retaining deduplication and provenance behavior.
+- [x] 2.1 Concurrent and repeated conversion calls create exactly one entry per output index; deleting an entry and retrying preserves its tombstone and does not recreate it. — 49e3884
+- [x] 2.2 A simulated crash before commit leaves no entries or links; the next claim converts successfully. — 49e3884
+- [x] 2.3 Retry timing, a three-provider-call maximum, three-attempt exhaustion, stale two-minute leases, fallback, and action-only admin requeue are covered. — 49e3884
+- [x] 2.4 Ninety-day pruning uses the agreed empty sentinels while retaining deduplication and provenance behavior. — 49e3884
 
 #### Manual
 
@@ -348,10 +348,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [ ] 3.1 Intake remains `202`, classification-free, and bounded when enqueueing succeeds, fails, or workers are disabled.
-- [ ] 3.2 Worker tests cover startup sweep, periodic sweep, retry-due selection, advisory-lock refusal, and connection cleanup.
-- [ ] 3.3 Health tests preserve the exact `/healthz/` body and cover disabled conversion, healthy heartbeat, and stale/missing heartbeat on `/healthz/conversion/`; deployment shell tests cover both probes.
-- [ ] 3.4 Existing automation-token and notification-intake contracts remain green.
+- [x] 3.1 Intake remains `202`, classification-free, and bounded when enqueueing succeeds, fails, or workers are disabled.
+- [x] 3.2 Worker tests cover startup sweep, periodic sweep, retry-due selection, advisory-lock refusal, and connection cleanup.
+- [x] 3.3 Health tests preserve the exact `/healthz/` body and cover disabled conversion, healthy heartbeat, and stale/missing heartbeat on `/healthz/conversion/`; deployment shell tests cover both probes.
+- [x] 3.4 Existing automation-token and notification-intake contracts remain green.
 
 #### Manual
 
