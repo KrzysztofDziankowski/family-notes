@@ -242,16 +242,16 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Automated
 
-- [ ] 1.1 Form tests cover structured create/edit, Polish errors, active-family assignees, field limits, calendar dates, school subtype compatibility, and required school data.
-- [ ] 1.2 Service tests cover own-family create/update/delete and the complete unauthorized-user matrix.
-- [ ] 1.3 Structured-create retries with the same submission key produce exactly one entry.
-- [ ] 1.4 Updates preserve all provenance fields for manual and EduVulcan entries.
-- [ ] 1.5 Foreign-family and inactive assignees are rejected without mutation.
-- [ ] 1.6 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service`.
+- [x] 1.1 Form tests cover structured create/edit, Polish errors, active-family assignees, field limits, calendar dates, school subtype compatibility, and required school data. — 376ef92
+- [x] 1.2 Service tests cover own-family create/update/delete and the complete unauthorized-user matrix. — 376ef92
+- [x] 1.3 Structured-create retries with the same submission key produce exactly one entry. — 376ef92
+- [x] 1.4 Updates preserve all provenance fields for manual and EduVulcan entries. — 376ef92
+- [x] 1.5 Foreign-family and inactive assignees are rejected without mutation. — 376ef92
+- [x] 1.6 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service`. — 376ef92
 
 #### Manual
 
-- [ ] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels.
+- [x] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels. (agent-verified by rendering forms; human visual check pending) — 376ef92
 
 ### Phase 2: Parent CRUD Routes and UI
 
