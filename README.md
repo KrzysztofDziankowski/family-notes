@@ -99,6 +99,37 @@ user). Do not delete users or members: an entry assigned to a member protects it
 (`on_delete=RESTRICT`), so admin refuses the delete with a list of the blocking
 entries. Deactivation takes effect immediately and keeps those entries attributed.
 
+### Seed a local test family
+
+For manual QA you can seed test users instead of using real Google accounts.
+Run this against your local database only. The script refuses to run when
+`DJANGO_DEBUG` is off:
+
+```bash
+DJANGO_DEBUG=true uv run python manage.py shell < scripts/dev/seed_test_family.py
+```
+
+It creates these users, all with the password `test-haslo-123`:
+
+| Username | Role | Family |
+| --- | --- | --- |
+| `test_rodzic` | parent (Ewa) | Rodzina testowa |
+| `test_kasia` | child (Kasia) | Rodzina testowa |
+| `test_tymek` | child (Tymek), sibling | Rodzina testowa |
+| `test_obcy` | parent (Obcy) | Inna rodzina |
+
+It also adds sample entries: upcoming, today, undated, long text, past
+EduVulcan, a sibling's entry, a family-wide entry, and one entry in the other
+family. At the end it prints the IDs of the sibling, family-wide and
+other-family entries, which the access checks use. Re-running it resets the
+test users' passwords and recreates the entries of these two test families.
+Other families are not touched.
+
+Sign in at <http://localhost:20121/accounts/login/> with the username and
+password, and log out between roles. To test on a phone, start the server with
+`runserver 0.0.0.0:20121` and add the computer's LAN IP to
+`DJANGO_ALLOWED_HOSTS` in `.env`.
+
 With the local server running, verify these routes:
 
 - <http://localhost:20121/accounts/google/login/> starts Google sign-in for an allowed test user.
