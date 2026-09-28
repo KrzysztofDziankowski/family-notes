@@ -48,7 +48,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | done     |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
 | S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | in-progress |
-| S-06 | family-entries-rest-api               | parent-owned automation can retrieve all entries of its family through a read-only REST API | F-04, S-01 | MS-01, NFR family privacy, NFR token revocation | planning |
+| S-06 | family-entries-rest-api               | parent-owned automation can retrieve all entries of its family through a read-only REST API | F-04, S-01 | MS-01, NFR family privacy, NFR token revocation | in-progress |
 
 ## Streams
 
@@ -210,7 +210,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - What response contract and pagination behavior should clients rely on as the number of entries grows? - Owner: user. Block: no; `/10x-plan` should select and document a minimal stable contract.
 - **Risk:** This deliberately expands automation-token authority beyond the PRD v2 write-only intake boundary. Every read must be scoped from the authenticated token owner's active parent membership, revoked or invalid tokens must fail closed, foreign-family data must never be distinguishable or returned, and the endpoint must expose no mutation capability.
-- **Status:** planning
+- **Status:** in-progress
 
 ## Backlog Handoff
 

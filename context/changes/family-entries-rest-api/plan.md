@@ -225,10 +225,10 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Automated
 
-- [ ] 1.1 Testy parsera potwierdzają wartości domyślne, granice `limit`, nieujemny `offset`, format ISO dat i nieistniejący dzień (`2026-02-30`), boolean bez rozróżniania wielkości liter z odrzuceniem `1`/`0`/pustej wartości oraz odwrócony zakres.
-- [ ] 1.2 Testy filtrowania potwierdzają obie włączne granice, granice jednostronne i zachowanie `include_undated`, także jawne `false` bez granic dat (tylko wpisy datowane).
-- [ ] 1.3 Testy serializacji potwierdzają pola domenowe, wartości `null`, nieaktywną historyczną osobę oraz brak pól wewnętrznych.
-- [ ] 1.4 Testy kolejności potwierdzają `created_at ASC, id ASC`, także przy remisie czasu, oraz że wpis dodany między stronami nie powtarza się na kolejnej stronie.
+- [x] 1.1 Testy parsera potwierdzają wartości domyślne, granice `limit`, nieujemny `offset`, format ISO dat i nieistniejący dzień (`2026-02-30`), boolean bez rozróżniania wielkości liter z odrzuceniem `1`/`0`/pustej wartości oraz odwrócony zakres.
+- [x] 1.2 Testy filtrowania potwierdzają obie włączne granice, granice jednostronne i zachowanie `include_undated`, także jawne `false` bez granic dat (tylko wpisy datowane).
+- [x] 1.3 Testy serializacji potwierdzają pola domenowe, wartości `null`, nieaktywną historyczną osobę oraz brak pól wewnętrznych.
+- [x] 1.4 Testy kolejności potwierdzają `created_at ASC, id ASC`, także przy remisie czasu, oraz że wpis dodany między stronami nie powtarza się na kolejnej stronie.
 
 ### Phase 2: Endpoint i bezpieczeństwo
 

@@ -1,8 +1,16 @@
-"""Token-authenticated notification intake: store unchanged, answer fast, never classify."""
+"""Token-authenticated automation API.
+
+- Notification intake: store unchanged, answer fast, never classify.
+- Family entries read: the token owner's family only, filtered by inclusive
+  dates, ordered by ``created_at, id`` and paginated with ``limit + offset``.
+"""
 
 import hashlib
 import json
+import re
 import unicodedata
+from dataclasses import dataclass
+from datetime import date
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -127,3 +135,103 @@ def submit_notification(request):
             if existing is None:
                 raise
     return JsonResponse({'status': 'accepted', 'id': existing.pk}, status=202)
+
+
+# --- Family entries read (S-06) ----------------------------------------------
+
+DEFAULT_LIMIT = 100
+MAX_LIMIT = 500
+_UNSIGNED_INT = re.compile(r'[0-9]+')
+_ISO_DATE = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}')
+_BOOLEANS = {'true': True, 'false': False}
+
+
+@dataclass(frozen=True)
+class EntriesQuery:
+    limit: int = DEFAULT_LIMIT
+    offset: int = 0
+    date_from: date | None = None
+    date_to: date | None = None
+    include_undated: bool = True
+
+
+def _parse_unsigned_int(value):
+    if not _UNSIGNED_INT.fullmatch(value):
+        return None
+    return int(value)
+
+
+def _parse_iso_date(value):
+    if not _ISO_DATE.fullmatch(value):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        # Well-formed but impossible, e.g. 2026-02-30.
+        return None
+
+
+def parse_entries_query(params):
+    """Validate the public query parameters; ``None`` means ``invalid_query``.
+
+    Unknown parameters are ignored for forward compatibility.
+    """
+    limit = DEFAULT_LIMIT
+    if 'limit' in params:
+        limit = _parse_unsigned_int(params['limit'])
+        if limit is None or not 1 <= limit <= MAX_LIMIT:
+            return None
+    offset = 0
+    if 'offset' in params:
+        offset = _parse_unsigned_int(params['offset'])
+        if offset is None:
+            return None
+    bounds = {}
+    for name in ('date_from', 'date_to'):
+        if name in params:
+            bounds[name] = _parse_iso_date(params[name])
+            if bounds[name] is None:
+                return None
+    date_from, date_to = bounds.get('date_from'), bounds.get('date_to')
+    if date_from is not None and date_to is not None and date_from > date_to:
+        return None
+    # Undated entries belong to an unbounded read, not to a date range.
+    include_undated = not bounds
+    if 'include_undated' in params:
+        include_undated = _BOOLEANS.get(params['include_undated'].lower())
+        if include_undated is None:
+            return None
+    return EntriesQuery(limit, offset, date_from, date_to, include_undated)
+
+
+def _iso_or_none(value):
+    return value.isoformat() if value is not None else None
+
+
+def serialize_entry(entry):
+    """Explicit allow-list of entry fields; never family, creator or keys."""
+    member = entry.assigned_member
+    return {
+        'id': entry.pk,
+        'entry_type': entry.entry_type,
+        'content': entry.content,
+        'date': _iso_or_none(entry.date),
+        'time': _iso_or_none(entry.time),
+        'assigned_member': {'display_name': member.display_name} if member else None,
+        'school_item': entry.school_item or None,
+        'source': entry.source,
+        'created_at': _iso_or_none(entry.created_at),
+        'updated_at': _iso_or_none(entry.updated_at),
+    }
+
+
+def entries_page(queryset, query):
+    """Envelope for one page; ``count`` is the filtered total before paging."""
+    count = queryset.count()
+    page = queryset[query.offset:query.offset + query.limit]
+    return {
+        'count': count,
+        'limit': query.limit,
+        'offset': query.offset,
+        'results': [serialize_entry(entry) for entry in page],
+    }

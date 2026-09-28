@@ -2,6 +2,7 @@
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.views.decorators.debug import sensitive_variables
 
 from family_access.access import (
@@ -254,6 +255,27 @@ def child_entries(user):
         family=membership.family,
         assigned_member=membership,
     ).select_related('assigned_member')
+
+
+# --- Automation read API (S-06) ---------------------------------------------
+
+
+def automation_family_entries(membership, *, date_from=None, date_to=None, include_undated=True):
+    """All entries of the token owner's family for the automation read API.
+
+    Deliberately independent of the HTML listing rules: no sections, no
+    skipped entry types. Both date bounds are inclusive and optional; undated
+    entries are added only when ``include_undated`` is true. The order
+    ``created_at, id`` is stable, so newly created entries land at the end and
+    do not shift earlier ``limit + offset`` pages.
+    """
+    dated = Q(date__isnull=False)
+    if date_from is not None:
+        dated &= Q(date__gte=date_from)
+    if date_to is not None:
+        dated &= Q(date__lte=date_to)
+    condition = (dated | Q(date__isnull=True)) if include_undated else dated
+    return _family_entries(membership).filter(condition).order_by('created_at', 'id')
 
 
 # --- Automated EduVulcan entries (S-05) ---------------------------------------
