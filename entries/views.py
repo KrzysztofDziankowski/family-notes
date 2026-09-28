@@ -2,17 +2,18 @@ import datetime
 import uuid
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.http import Http404
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from family_access.access import get_active_membership, is_parent, scope_queryset_to_family
+from family_access.access import require_active_membership, scope_queryset_to_family
 from family_access.models import FamilyMember
 
 from .classification.service import classify_for_parent
@@ -26,9 +27,35 @@ from .classification.types import (
     ClassificationUnavailable,
     UnavailableReason,
 )
-from .forms import CaptureForm, EntryReviewForm, review_form_from_classification
+from .forms import (
+    CaptureForm,
+    EntryCreateForm,
+    EntryEditForm,
+    EntryReviewForm,
+    review_form_from_classification,
+)
+from .listing import (
+    LIST_MODES,
+    PAST,
+    SECTION_DATED,
+    SECTION_PAST,
+    SECTION_UNDATED,
+    UPCOMING,
+    EntrySection,
+    normalize_list_mode,
+    partition_entries,
+    with_effective_date,
+)
 from .models import Entry
-from .services import save_confirmed_entry
+from .services import (
+    child_entries,
+    create_family_entry,
+    delete_family_entry,
+    parent_family_entries,
+    require_parent_membership,
+    save_confirmed_entry,
+    update_family_entry,
+)
 
 UNAVAILABLE_NOTICE = (
     'Nie udało się teraz rozpoznać wpisu. Możesz zapisać go jako notatkę lub poprawić.'
@@ -38,10 +65,7 @@ SAVE_FAILED_ERROR = 'Nie udało się zapisać wpisu. Sprawdź dane i spróbuj po
 
 
 def _require_parent(request):
-    membership = get_active_membership(request.user)
-    if not is_parent(membership):
-        raise PermissionDenied('An active parent membership is required.')
-    return membership
+    return require_parent_membership(request.user)
 
 
 def _render(request, state, **context):
@@ -246,29 +270,6 @@ def _use_synthetic_members(form):
 
 
 # --- Parent family entry management (S-02) ---
-# Imports live with the block so the S-02 and S-03 view additions merge independently.
-
-from django.contrib import messages  # noqa: E402
-
-from .forms import EntryCreateForm, EntryEditForm  # noqa: E402
-from .listing import (  # noqa: E402
-    LIST_MODES,
-    EntrySection,
-    PAST,
-    SECTION_DATED,
-    SECTION_PAST,
-    SECTION_UNDATED,
-    UPCOMING,
-    normalize_list_mode,
-    partition_entries,
-    with_effective_date,
-)
-from .services import (  # noqa: E402
-    create_family_entry,
-    delete_family_entry,
-    parent_family_entries,
-    update_family_entry,
-)
 
 LIST_MODE_LABELS = {UPCOMING: 'Nadchodzące', PAST: 'Minione'}
 SECTION_LABELS = {
@@ -578,24 +579,6 @@ def _manage_state_sections(membership):
 
 
 # --- Child assigned entry view (S-03) ---
-# Imports stay inside this block so the S-02 merge does not touch the header.
-from django.shortcuts import get_object_or_404  # noqa: E402
-from django.views.decorators.http import require_GET  # noqa: E402
-
-from family_access.access import require_active_membership  # noqa: E402
-
-from .listing import (  # noqa: E402
-    PAST,
-    SECTION_DATED,
-    SECTION_PAST,
-    SECTION_UNDATED,
-    UPCOMING,
-    EntrySection,
-    normalize_list_mode,
-    partition_entries,
-    with_effective_date,
-)
-from .services import child_entries  # noqa: E402
 
 CHILD_EMPTY_MESSAGES = {
     UPCOMING: 'Nie masz żadnych nadchodzących wpisów.',

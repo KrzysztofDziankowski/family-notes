@@ -34,9 +34,7 @@ def save_confirmed_entry(
     view. ``submission_key`` makes the call idempotent: the first save wins
     and a repeat returns that entry unchanged.
     """
-    membership = get_active_membership(user)
-    if not is_parent(membership):
-        raise PermissionDenied('An active parent membership is required.')
+    membership = require_parent_membership(user)
 
     entry_type = EntryType(entry_type)
     school_item = SchoolItemKind(school_item) if school_item else None
@@ -101,7 +99,7 @@ def _validate(
 MANAGED_FIELDS = ('entry_type', 'content', 'date', 'time', 'assigned_member', 'school_item')
 
 
-def _require_parent_membership(user):
+def require_parent_membership(user):
     membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
@@ -116,7 +114,7 @@ def _family_entries(membership):
 
 def parent_family_entries(user):
     """Entries of the active parent's family only; non-parents are denied."""
-    return _family_entries(_require_parent_membership(user))
+    return _family_entries(require_parent_membership(user))
 
 
 def get_parent_family_entry(user, entry_id):
@@ -164,7 +162,7 @@ def create_family_entry(
 
     Idempotent on ``submission_key``: a repeat returns the first saved entry.
     """
-    membership = _require_parent_membership(user)
+    membership = require_parent_membership(user)
     entry_type = EntryType(entry_type)
     school_item_kind = SchoolItemKind(school_item) if school_item else None
 
@@ -201,7 +199,7 @@ def update_family_entry(
     Family, source, creator, submission key and creation time are preserved.
     Raises ``Entry.DoesNotExist`` for missing or foreign-family IDs.
     """
-    membership = _require_parent_membership(user)
+    membership = require_parent_membership(user)
     entry_type = EntryType(entry_type)
     school_item_kind = SchoolItemKind(school_item) if school_item else None
 
@@ -226,7 +224,7 @@ def delete_family_entry(user, entry_id):
 
     Raises ``Entry.DoesNotExist`` for missing or foreign-family IDs.
     """
-    membership = _require_parent_membership(user)
+    membership = require_parent_membership(user)
     with transaction.atomic():
         entry = _family_entries(membership).select_for_update().get(pk=entry_id)
         entry.delete()
