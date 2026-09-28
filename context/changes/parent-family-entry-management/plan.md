@@ -242,34 +242,34 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Automated
 
-- [x] 1.1 Form tests cover structured create/edit, Polish errors, active-family assignees, field limits, calendar dates, school subtype compatibility, and required school data. — 376ef92
-- [x] 1.2 Service tests cover own-family create/update/delete and the complete unauthorized-user matrix. — 376ef92
-- [x] 1.3 Structured-create retries with the same submission key produce exactly one entry. — 376ef92
-- [x] 1.4 Updates preserve all provenance fields for manual and EduVulcan entries. — 376ef92
-- [x] 1.5 Foreign-family and inactive assignees are rejected without mutation. — 376ef92
-- [x] 1.6 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service`. — 376ef92
+- [x] 1.1 Form tests cover structured create/edit, Polish errors, active-family assignees, field limits, calendar dates, school subtype compatibility, and required school data. — 8cd1ba1
+- [x] 1.2 Service tests cover own-family create/update/delete and the complete unauthorized-user matrix. — 8cd1ba1
+- [x] 1.3 Structured-create retries with the same submission key produce exactly one entry. — 8cd1ba1
+- [x] 1.4 Updates preserve all provenance fields for manual and EduVulcan entries. — 8cd1ba1
+- [x] 1.5 Foreign-family and inactive assignees are rejected without mutation. — 8cd1ba1
+- [x] 1.6 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service`. — 8cd1ba1
 
 #### Manual
 
-- [x] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels. (agent-verified by rendering forms; human visual check pending) — 376ef92
+- [x] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels. (agent-verified by rendering forms; human visual check pending) — 8cd1ba1
 
 ### Phase 2: Parent CRUD Routes and UI
 
 #### Automated
 
-- [ ] 2.1 Route tests cover index, detail, create, edit, and POST-only delete.
-- [ ] 2.2 Index tests prove exact upcoming, undated, and past boundaries and deterministic ordering.
-- [ ] 2.3 Parent list/detail responses contain only entries from the parent's family.
-- [ ] 2.4 Foreign and nonexistent IDs return the same status and reveal no sentinel content.
-- [ ] 2.5 Successful create/update/delete redirects are correct and preserve only an allowlisted list mode.
-- [ ] 2.6 Template tests confirm structured-create, capture, edit, and delete actions are present.
-- [ ] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests`.
+- [x] 2.1 Route tests cover index, detail, create, edit, and POST-only delete.
+- [x] 2.2 Index tests prove exact upcoming, undated, and past boundaries and deterministic ordering.
+- [x] 2.3 Parent list/detail responses contain only entries from the parent's family.
+- [x] 2.4 Foreign and nonexistent IDs return the same status and reveal no sentinel content.
+- [x] 2.5 Successful create/update/delete redirects are correct and preserve only an allowlisted list mode.
+- [x] 2.6 Template tests confirm structured-create, capture, edit, and delete actions are present.
+- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests`.
 
 #### Manual
 
-- [ ] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it.
-- [ ] 2.9 The inline delete disclosure is clear and usable without JavaScript.
-- [ ] 2.10 Long content, undated entries, missing times, and empty list states remain readable.
+- [x] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it. (agent-verified: headless Chromium at 360px mobile viewport on a fictional dev family drove index → Minione → invalid create → create → detail → edit → detail → delete → upcoming list; screenshots in screenshots/phase2-360-*.png; human check pending)
+- [x] 2.9 The inline delete disclosure is clear and usable without JavaScript. (agent-verified: Chromium at 360px with script execution disabled, real mouse events opened the <details> and submitted the CSRF form, redirecting to the list with "Usunięto wpis."; page ships no <script>; human check pending)
+- [x] 2.10 Long content, undated entries, missing times, and empty list states remain readable. (agent-verified: 360px screenshots show wrapped unbroken long content, "Bez daty" section, untimed rows, and the Minione empty state with no horizontal overflow (scrollWidth 360); fixed Pico nav margins clipping the list-mode tabs; human check pending)
 
 ### Phase 3: Security, Lifecycle, and Visual Verification
 

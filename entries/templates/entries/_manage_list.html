@@ -1,0 +1,26 @@
+{% comment %}
+Parent family entry list body. Parameters: mode, modes, sections, is_empty, empty_message.
+{% endcomment %}
+<nav class="fn-manage-tabs" aria-label="Widok listy" data-state-part="list-modes">
+    <ul>
+        {% for key, label in modes %}
+        <li><a href="{% url 'entries:index' %}?view={{ key }}"{% if key == mode %} aria-current="page"{% endif %}>{{ label }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+{% if is_empty %}
+    <p class="fn-manage-empty fn-muted" data-state-part="empty-{{ mode }}">{{ empty_message }}</p>
+{% else %}
+    {% for section in sections %}
+        {% if section.entries %}
+        <section data-list-section="{{ section.key }}">
+            <h2 class="fn-manage-section-title">{{ section.label }}</h2>
+            <ul class="fn-entry-list">
+                {% for entry in section.entries %}
+                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" edit_url_name="entries:edit" %}
+                {% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+    {% endfor %}
+{% endif %}

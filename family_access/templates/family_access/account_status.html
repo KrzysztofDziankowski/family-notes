@@ -13,6 +13,7 @@
     </dl>
     {% if membership.role == "parent" %}
         <p><a role="button" href="{% url 'entries:capture' %}">Dodaj wpis</a></p>
+        <p><a href="{% url 'entries:index' %}">Wpisy rodziny</a></p>
     {% endif %}
 {% else %}
     <p>Twoje członkostwo w rodzinie nie jest jeszcze skonfigurowane.</p>

@@ -4,6 +4,7 @@
 
 {% block content %}
 <h1>Dodaj wpis</h1>
+<p class="fn-muted"><a href="{% url 'entries:index' %}">Wpisy rodziny</a> · <a href="{% url 'entries:create' %}">Nowy wpis bez rozpoznawania</a></p>
 {% if state == "saved" %}
     {% include "entries/_saved_panel.html" with entry=saved_entry %}
 {% endif %}

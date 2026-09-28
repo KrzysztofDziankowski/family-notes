@@ -8,4 +8,10 @@ urlpatterns = [
     path('new/', views.capture, name='capture'),
     path('confirm/', views.confirm, name='confirm'),
     path('_states/', views.states, name='states'),
+    # S-02 parent management
+    path('', views.index, name='index'),
+    path('create/', views.create, name='create'),
+    path('<int:pk>/', views.detail, name='detail'),
+    path('<int:pk>/edit/', views.edit, name='edit'),
+    path('<int:pk>/delete/', views.delete, name='delete'),
 ]
