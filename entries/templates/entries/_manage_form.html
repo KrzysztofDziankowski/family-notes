@@ -1,0 +1,26 @@
+{% comment %}
+Structured create/edit form. Parameters: form, entry (None when creating).
+{% endcomment %}
+<form method="post" action="{% if entry %}{% url 'entries:edit' entry.pk %}{% else %}{% url 'entries:create' %}{% endif %}" data-state-part="{% if entry %}edit{% else %}create{% endif %}-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+    {% elif form.errors %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            <p>Popraw zaznaczone pola.</p>
+        </div>
+    {% endif %}
+    {% include "entries/_field.html" with field=form.entry_type hint="" %}
+    {% include "entries/_field.html" with field=form.content hint="" %}
+    {% include "entries/_field.html" with field=form.date hint="" %}
+    {% include "entries/_field.html" with field=form.time hint="" %}
+    {% include "entries/_field.html" with field=form.assigned_member hint="" %}
+    {% include "entries/_field.html" with field=form.school_item hint="" %}
+    {% if form.submission_key %}{{ form.submission_key }}{% endif %}
+    <div class="fn-actions">
+        <button type="submit">{% if entry %}Zapisz zmiany{% else %}Dodaj wpis{% endif %}</button>
+        {% if entry %}<a href="{% url 'entries:detail' entry.pk %}">Anuluj</a>{% else %}<a href="{% url 'entries:index' %}">Anuluj</a>{% endif %}
+    </div>
+</form>

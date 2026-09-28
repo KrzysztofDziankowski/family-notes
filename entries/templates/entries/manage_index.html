@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Wpisy rodziny{% endblock %}
+
+{% block content %}
+<h1>Wpisy rodziny</h1>
+{% include "entries/_manage_messages.html" %}
+<div class="fn-actions fn-manage-actions" data-state-part="index-actions">
+    <a role="button" href="{% url 'entries:create' %}">Nowy wpis</a>
+    <a role="button" class="secondary outline" href="{% url 'entries:capture' %}">Dodaj wpis z tekstu</a>
+</div>
+{% include "entries/_manage_list.html" %}
+{% endblock %}

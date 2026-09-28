@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}{% if entry %}Edytuj wpis{% else %}Nowy wpis{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if entry %}Edytuj wpis{% else %}Nowy wpis{% endif %}</h1>
+{% if not entry %}
+    <p class="fn-muted">Wolisz opisać wpis własnymi słowami? <a href="{% url 'entries:capture' %}">Dodaj wpis z tekstu</a>.</p>
+{% endif %}
+{% include "entries/_manage_form.html" %}
+{% endblock %}

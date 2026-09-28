@@ -234,11 +234,347 @@ def states(request):
             'capture_form': CaptureForm(),
         },
     ]
-    return render(request, 'entries/states.html', {'sections': sections})
+    return render(
+        request,
+        'entries/states.html',
+        {'sections': sections, 'manage_sections': _manage_state_sections(membership)},
+    )
 
 
 def _use_synthetic_members(form):
     form.fields['assigned_member'].choices = STATES_MEMBER_CHOICES
+
+
+# --- Parent family entry management (S-02) ---
+# Imports live with the block so the S-02 and S-03 view additions merge independently.
+
+from django.contrib import messages  # noqa: E402
+
+from .forms import EntryCreateForm, EntryEditForm  # noqa: E402
+from .listing import (  # noqa: E402
+    LIST_MODES,
+    EntrySection,
+    PAST,
+    SECTION_DATED,
+    SECTION_PAST,
+    SECTION_UNDATED,
+    UPCOMING,
+    normalize_list_mode,
+    partition_entries,
+    with_effective_date,
+)
+from .services import (  # noqa: E402
+    create_family_entry,
+    delete_family_entry,
+    parent_family_entries,
+    update_family_entry,
+)
+
+LIST_MODE_LABELS = {UPCOMING: 'Nadchodzące', PAST: 'Minione'}
+SECTION_LABELS = {
+    SECTION_DATED: 'Z datą',
+    SECTION_UNDATED: 'Bez daty',
+    SECTION_PAST: 'Minione',
+}
+EMPTY_LIST_MESSAGES = {
+    UPCOMING: 'Nie ma nadchodzących wpisów.',
+    PAST: 'Nie ma minionych wpisów.',
+}
+ENTRY_CREATED_MESSAGE = 'Dodano wpis.'
+ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
+ENTRY_DELETED_MESSAGE = 'Usunięto wpis.'
+
+
+def _index_url(mode):
+    return f"{reverse('entries:index')}?view={normalize_list_mode(mode)}"
+
+
+def _list_mode_for(entry, today):
+    """The list an entry appears in: past for an effective date before today."""
+    effective_date = getattr(entry, 'effective_date', entry.date)
+    return PAST if effective_date is not None and effective_date < today else UPCOMING
+
+
+def _managed_entry_or_404(user, pk):
+    """Resolve an entry in the parent's family; missing and foreign IDs are both 404."""
+    try:
+        return with_effective_date(parent_family_entries(user)).get(pk=pk)
+    except Entry.DoesNotExist:
+        raise Http404 from None
+
+
+def _mark_invalid_fields(form):
+    """Expose field errors to assistive technology."""
+    for name in form.errors:
+        if name in form.fields:
+            attrs = form.fields[name].widget.attrs
+            attrs['aria-invalid'] = 'true'
+            attrs['aria-describedby'] = f'{form[name].auto_id}-error'
+
+
+def _index_sections(sections):
+    return [
+        {'key': section.key, 'label': SECTION_LABELS[section.key], 'entries': list(section.entries)}
+        for section in sections
+    ]
+
+
+def _index_context(mode, sections):
+    sections = _index_sections(sections)
+    return {
+        'mode': mode,
+        'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
+        'sections': sections,
+        'is_empty': not any(section['entries'] for section in sections),
+        'empty_message': EMPTY_LIST_MESSAGES[mode],
+    }
+
+
+def _detail_context(entry, list_mode, delete_open=False):
+    return {'entry': entry, 'list_mode': list_mode, 'delete_open': delete_open}
+
+
+def _form_context(form, *, entry=None):
+    return {'form': form, 'entry': entry}
+
+
+@require_http_methods(['GET'])
+@login_required
+def index(request):
+    mode = normalize_list_mode(request.GET.get('view', ''))
+    sections = partition_entries(parent_family_entries(request.user), mode, timezone.localdate())
+    return render(request, 'entries/manage_index.html', _index_context(mode, sections))
+
+
+@require_http_methods(['GET'])
+@login_required
+def detail(request, pk):
+    entry = _managed_entry_or_404(request.user, pk)
+    list_mode = _list_mode_for(entry, timezone.localdate())
+    return render(request, 'entries/manage_detail.html', _detail_context(entry, list_mode))
+
+
+@sensitive_post_parameters('content')
+@require_http_methods(['GET', 'POST'])
+@login_required
+def create(request):
+    membership = _require_parent(request)
+    if request.method == 'GET':
+        form = EntryCreateForm(membership)
+        return render(request, 'entries/manage_form.html', _form_context(form))
+
+    form = EntryCreateForm(membership, request.POST)
+    if form.is_valid():
+        data = form.cleaned_data
+        try:
+            entry, _ = create_family_entry(
+                request.user,
+                entry_type=data['entry_type'],
+                content=data['content'],
+                date=data['date'],
+                time=data['time'],
+                assigned_member=data['assigned_member'],
+                school_item=data['school_item'],
+                submission_key=data['submission_key'],
+            )
+        except ValidationError:
+            retry_data = request.POST.copy()
+            retry_data['submission_key'] = str(uuid.uuid4())
+            form = EntryCreateForm(membership, retry_data)
+            form.is_valid()
+            form.add_error(None, SAVE_FAILED_ERROR)
+        else:
+            messages.success(request, ENTRY_CREATED_MESSAGE)
+            return redirect('entries:detail', pk=entry.pk)
+    _mark_invalid_fields(form)
+    return render(request, 'entries/manage_form.html', _form_context(form))
+
+
+@sensitive_post_parameters('content')
+@require_http_methods(['GET', 'POST'])
+@login_required
+def edit(request, pk):
+    membership = _require_parent(request)
+    entry = _managed_entry_or_404(request.user, pk)
+    if request.method == 'GET':
+        form = EntryEditForm(membership, entry=entry)
+        return render(request, 'entries/manage_form.html', _form_context(form, entry=entry))
+
+    form = EntryEditForm(membership, request.POST, entry=entry)
+    if form.is_valid():
+        data = form.cleaned_data
+        try:
+            update_family_entry(
+                request.user,
+                entry.pk,
+                entry_type=data['entry_type'],
+                content=data['content'],
+                date=data['date'],
+                time=data['time'],
+                assigned_member=data['assigned_member'],
+                school_item=data['school_item'],
+            )
+        except Entry.DoesNotExist:
+            raise Http404 from None
+        except ValidationError:
+            form.add_error(None, SAVE_FAILED_ERROR)
+        else:
+            messages.success(request, ENTRY_UPDATED_MESSAGE)
+            return redirect('entries:detail', pk=entry.pk)
+    _mark_invalid_fields(form)
+    return render(request, 'entries/manage_form.html', _form_context(form, entry=entry))
+
+
+@require_POST
+@login_required
+def delete(request, pk):
+    try:
+        delete_family_entry(request.user, pk)
+    except Entry.DoesNotExist:
+        raise Http404 from None
+    messages.success(request, ENTRY_DELETED_MESSAGE)
+    return redirect(_index_url(request.POST.get('view', '')))
+
+
+# Fictional management kitchen-sink data (DEBUG gallery): unsaved rows only.
+STATES_ENTRY_PK = 900001
+
+
+def _synthetic_entry(offset, **fields):
+    """An unsaved entry with explicit provenance; the pk only feeds URL reversing."""
+    created_at = timezone.make_aware(datetime.datetime(2026, 9, 21, 18, 40))
+    values = dict(
+        pk=STATES_ENTRY_PK + offset,
+        entry_type=EntryType.TODO.value,
+        source=Entry.Source.MANUAL,
+        created_at=created_at,
+        updated_at=created_at + datetime.timedelta(days=1, minutes=5),
+    )
+    values.update(fields)
+    member = values.pop('member', None)
+    entry = Entry(**values)
+    if member:
+        entry.assigned_member = FamilyMember(display_name=member)
+    return entry
+
+
+def _synthetic_list(mode, sections):
+    return _index_context(
+        mode,
+        [EntrySection(key, entries) for key, entries in sections],
+    )
+
+
+def _manage_state_sections(membership):
+    """Management states for the DEBUG gallery; no family data is read or written."""
+    test_entry = _synthetic_entry(
+        1,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Sprawdzian z historii o średniowieczu',
+        date=STATES_DATE,
+        time=datetime.time(8, 0),
+        school_item=SchoolItemKind.TEST.value,
+        member='Kasia',
+    )
+    trip = _synthetic_entry(
+        2,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Wycieczka klasowa do muzeum techniki',
+        date=STATES_DATE + datetime.timedelta(days=2),
+        member='Tymek',
+    )
+    long_note = _synthetic_entry(
+        3,
+        entry_type=EntryType.NOTE.value,
+        content=(
+            'Bardzo długa notatka: '
+            + 'Konstantynopolitańczykowianeczka' * 3
+            + ' oraz opis, który musi się zawinąć na wąskim ekranie telefonu.'
+        ),
+    )
+    undated = _synthetic_entry(4, content='Oddać książkę do biblioteki')
+    past_entry = _synthetic_entry(
+        5,
+        content='Zapłacić za obiady',
+        date=STATES_DATE - datetime.timedelta(days=14),
+        time=datetime.time(7, 45),
+    )
+    eduvulcan_entry = _synthetic_entry(
+        6,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Kartkówka z matematyki — ułamki',
+        date=STATES_DATE + datetime.timedelta(days=1),
+        time=datetime.time(9, 50),
+        school_item=SchoolItemKind.QUIZ.value,
+        source=Entry.Source.EDUVULCAN,
+        member='Tymek',
+    )
+
+    create_form = EntryCreateForm(membership)
+    _use_synthetic_members(create_form)
+
+    invalid_form = EntryCreateForm(
+        membership,
+        {
+            'entry_type': EntryType.NOTE.value,
+            'content': '',
+            'date': '',
+            'time': '',
+            'assigned_member': '',
+            'school_item': SchoolItemKind.TEST.value,
+            'submission_key': str(uuid.uuid4()),
+        },
+    )
+    _use_synthetic_members(invalid_form)
+    invalid_form.is_valid()
+    _mark_invalid_fields(invalid_form)
+
+    edit_form = EntryEditForm(membership, entry=test_entry)
+    _use_synthetic_members(edit_form)
+    edit_form.initial['assigned_member'] = 's1'
+
+    return [
+        {
+            'name': 'list_upcoming',
+            'label': 'Lista: nadchodzące',
+            'list': _synthetic_list(
+                UPCOMING,
+                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, long_note])],
+            ),
+        },
+        {
+            'name': 'list_past',
+            'label': 'Lista: minione',
+            'list': _synthetic_list(PAST, [(SECTION_PAST, [past_entry])]),
+        },
+        {
+            'name': 'list_empty',
+            'label': 'Lista: pusta',
+            'list': _synthetic_list(UPCOMING, [(SECTION_DATED, []), (SECTION_UNDATED, [])]),
+        },
+        {
+            'name': 'detail_manual',
+            'label': 'Szczegóły: wpis ręczny',
+            'detail': _detail_context(test_entry, UPCOMING),
+        },
+        {
+            'name': 'detail_eduvulcan',
+            'label': 'Szczegóły: wpis z EduVulcan',
+            'detail': _detail_context(eduvulcan_entry, UPCOMING),
+        },
+        {'name': 'create', 'label': 'Nowy wpis', 'form': _form_context(create_form)},
+        {'name': 'invalid', 'label': 'Błędy w formularzu', 'form': _form_context(invalid_form)},
+        {
+            'name': 'edit',
+            'label': 'Edycja wpisu',
+            'form': _form_context(edit_form, entry=test_entry),
+        },
+        {
+            'name': 'delete_open',
+            'label': 'Otwarte potwierdzenie usunięcia',
+            'detail': _detail_context(past_entry, PAST, delete_open=True),
+        },
+    ]
 
 
 # --- Child assigned entry view (S-03) ---

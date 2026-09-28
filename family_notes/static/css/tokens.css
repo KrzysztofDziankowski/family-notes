@@ -181,6 +181,92 @@
   font-size: 0.875em;
 }
 
+/* Parent management (S-02) */
+.fn-manage-actions {
+  margin-bottom: var(--fn-space-4);
+}
+
+/* :first-of-type/:last-of-type outrank Pico's negative nav list margins. */
+.fn-manage-tabs ul,
+.fn-manage-tabs ul:first-of-type,
+.fn-manage-tabs ul:last-of-type {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fn-space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--fn-space-3);
+}
+
+.fn-manage-tabs li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fn-manage-tabs a {
+  display: inline-block;
+  padding: var(--fn-space-1) var(--fn-space-3);
+  border: 1px solid var(--fn-color-border);
+  border-radius: var(--fn-radius);
+  background: var(--fn-color-surface);
+  color: var(--fn-color-text-strong);
+  text-decoration: none;
+  margin: 0;
+}
+
+.fn-manage-tabs a[aria-current="page"] {
+  border-color: var(--fn-color-accent);
+  background: var(--fn-color-accent);
+  color: var(--fn-color-accent-inverse);
+  font-weight: 600;
+}
+
+.fn-manage-section-title {
+  font-size: 1rem;
+  color: var(--fn-color-text-strong);
+  margin: var(--fn-space-3) 0 var(--fn-space-2);
+}
+
+.fn-manage-empty {
+  background: var(--fn-color-surface);
+  border: 1px dashed var(--fn-color-border);
+  border-radius: var(--fn-radius);
+  padding: var(--fn-space-3);
+}
+
+.fn-manage-content {
+  white-space: normal;
+}
+
+.fn-manage-delete {
+  border-left: var(--fn-accent-rule) solid var(--fn-color-danger);
+  background: var(--fn-color-surface);
+  border-radius: 0 var(--fn-radius) var(--fn-radius) 0;
+  padding: var(--fn-space-2) var(--fn-space-3);
+}
+
+.fn-manage-delete[open] {
+  background: var(--fn-color-danger-bg);
+}
+
+.fn-manage-delete form {
+  margin: 0;
+}
+
+.fn-manage-danger {
+  --pico-background-color: var(--fn-color-danger);
+  --pico-border-color: var(--fn-color-danger);
+  --pico-color: var(--fn-color-accent-inverse);
+  width: 100%;
+}
+
+.fn-manage-delete summary,
+.fn-manage-delete[open] > summary:not([role]):not(:focus) {
+  color: var(--fn-color-danger);
+  font-weight: 600;
+}
+
 /* Child view (S-03) */
 .fn-child-modes {
   margin-bottom: var(--fn-space-4);

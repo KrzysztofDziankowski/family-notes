@@ -222,6 +222,10 @@ The configured family has low volume, so pagination and caching are unnecessary.
 
 No database migration or data backfill is expected. Rollback consists of removing the new management routes, forms, services, templates, and tests; existing entries and capture behavior remain compatible.
 
+## Known Limitations
+
+- *Impl-review F6 (2026-09-28):* The structured-create idempotency key is stored only on the `Entry` row, so it is deleted together with the entry. If a parent goes back in the browser and resubmits a cached create form after deleting that entry, the entry is created again. This was accepted for the MVP: it needs a deliberate resubmission, and a key tombstone isn't worth it at single-family scale.
+
 ## References
 
 - `context/foundation/prd.md` — FR-006, FR-008, Access Control
@@ -242,47 +246,47 @@ No database migration or data backfill is expected. Rollback consists of removin
 
 #### Automated
 
-- [ ] 1.1 Form tests cover structured create/edit, Polish errors, active-family assignees, field limits, calendar dates, school subtype compatibility, and required school data.
-- [ ] 1.2 Service tests cover own-family create/update/delete and the complete unauthorized-user matrix.
-- [ ] 1.3 Structured-create retries with the same submission key produce exactly one entry.
-- [ ] 1.4 Updates preserve all provenance fields for manual and EduVulcan entries.
-- [ ] 1.5 Foreign-family and inactive assignees are rejected without mutation.
-- [ ] 1.6 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service`.
+- [x] 1.1 Form tests cover structured create/edit, Polish errors, active-family assignees, field limits, calendar dates, school subtype compatibility, and required school data. — 8cd1ba1
+- [x] 1.2 Service tests cover own-family create/update/delete and the complete unauthorized-user matrix. — 8cd1ba1
+- [x] 1.3 Structured-create retries with the same submission key produce exactly one entry. — 8cd1ba1
+- [x] 1.4 Updates preserve all provenance fields for manual and EduVulcan entries. — 8cd1ba1
+- [x] 1.5 Foreign-family and inactive assignees are rejected without mutation. — 8cd1ba1
+- [x] 1.6 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service`. — 8cd1ba1
 
 #### Manual
 
-- [ ] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels.
+- [ ] 1.7 Structured create and edit forms render all agreed editable fields with understandable Polish labels. (agent-verified by rendering forms; human visual check pending) — 8cd1ba1
 
 ### Phase 2: Parent CRUD Routes and UI
 
 #### Automated
 
-- [ ] 2.1 Route tests cover index, detail, create, edit, and POST-only delete.
-- [ ] 2.2 Index tests prove exact upcoming, undated, and past boundaries and deterministic ordering.
-- [ ] 2.3 Parent list/detail responses contain only entries from the parent's family.
-- [ ] 2.4 Foreign and nonexistent IDs return the same status and reveal no sentinel content.
-- [ ] 2.5 Successful create/update/delete redirects are correct and preserve only an allowlisted list mode.
-- [ ] 2.6 Template tests confirm structured-create, capture, edit, and delete actions are present.
-- [ ] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests`.
+- [x] 2.1 Route tests cover index, detail, create, edit, and POST-only delete. — b8c94b2
+- [x] 2.2 Index tests prove exact upcoming, undated, and past boundaries and deterministic ordering. — b8c94b2
+- [x] 2.3 Parent list/detail responses contain only entries from the parent's family. — b8c94b2
+- [x] 2.4 Foreign and nonexistent IDs return the same status and reveal no sentinel content. — b8c94b2
+- [x] 2.5 Successful create/update/delete redirects are correct and preserve only an allowlisted list mode. — b8c94b2
+- [x] 2.6 Template tests confirm structured-create, capture, edit, and delete actions are present. — b8c94b2
+- [x] 2.7 Relevant tests pass: `uv run python manage.py test entries.tests`. — b8c94b2
 
 #### Manual
 
-- [ ] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it.
-- [ ] 2.9 The inline delete disclosure is clear and usable without JavaScript.
-- [ ] 2.10 Long content, undated entries, missing times, and empty list states remain readable.
+- [ ] 2.8 At phone width, a parent can browse upcoming and past entries, create one directly, edit it, inspect its provenance, and delete it. (agent-verified: headless Chromium at 360px mobile viewport on a fictional dev family drove index → Minione → invalid create → create → detail → edit → detail → delete → upcoming list; screenshots in screenshots/phase2-360-*.png; human check pending) — b8c94b2
+- [ ] 2.9 The inline delete disclosure is clear and usable without JavaScript. (agent-verified: Chromium at 360px with script execution disabled, real mouse events opened the <details> and submitted the CSRF form, redirecting to the list with "Usunięto wpis."; page ships no <script>; human check pending) — b8c94b2
+- [ ] 2.10 Long content, undated entries, missing times, and empty list states remain readable. (agent-verified: 360px screenshots show wrapped unbroken long content, "Bez daty" section, untimed rows, and the Minione empty state with no horizontal overflow (scrollWidth 360); fixed Pico nav margins clipping the list-mode tabs; human check pending) — b8c94b2
 
 ### Phase 3: Security, Lifecycle, and Visual Verification
 
 #### Automated
 
-- [ ] 3.1 Full tests pass: `uv run python manage.py test`.
-- [ ] 3.2 Django checks pass: `uv run python manage.py check`.
-- [ ] 3.3 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 3.4 State-gallery tests prove DEBUG gating, parent-only access, expected state markers, and zero database writes.
-- [ ] 3.5 Existing capture, classification, notification-intake, and family-access tests remain green.
+- [x] 3.1 Full tests pass: `uv run python manage.py test`.
+- [x] 3.2 Django checks pass: `uv run python manage.py check`.
+- [x] 3.3 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 3.4 State-gallery tests prove DEBUG gating, parent-only access, expected state markers, and zero database writes.
+- [x] 3.5 Existing capture, classification, notification-intake, and family-access tests remain green.
 
 #### Manual
 
-- [ ] 3.6 The management state gallery is reviewed at 360px width with no clipping, unreadable metadata, or inaccessible actions.
-- [ ] 3.7 Chrome on Android completes list → detail → edit and detail → delete flows.
-- [ ] 3.8 A final check confirms a parent cannot infer the existence of a foreign-family entry.
+- [ ] 3.6 The management state gallery is reviewed at 360px width with no clipping, unreadable metadata, or inaccessible actions. (agent-verified: headless Chromium at a 360px mobile viewport rendered /entries/_states/; each of the 9 management states was captured separately (screenshots/phase3-360-gallery-*.png) and inspected — no horizontal overflow (scrollWidth 360), metadata wraps legibly, all actions visible; human check pending)
+- [ ] 3.7 Chrome on Android completes list → detail → edit and detail → delete flows. (agent-verified: Chromium at a 360px mobile viewport with real mouse events went list → detail → Edytuj → save ("Zapisano zmiany.") → open disclosure → "Usuń na stałe" → upcoming list ("Usunięto wpis."); real Android device check pending)
+- [ ] 3.8 A final check confirms a parent cannot infer the existence of a foreign-family entry. (agent-verified: as a parent on the dev server, a foreign-family entry ID and a nonexistent ID both returned 404 with bodies identical apart from the echoed path and no sentinel text; automated tests assert byte-identical 404s for detail/edit/delete; human check pending)
