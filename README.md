@@ -239,7 +239,8 @@ Query parameters (all optional; unknown parameters are ignored):
 | `include_undated` | `true` or `false`, case-insensitive | `true` without date bounds, `false` with at least one bound |
 
 Either bound may be given alone. Without bounds, `include_undated=false`
-returns only dated entries.
+returns only dated entries. If a parameter is repeated, the last value is
+used.
 
 Results are ordered by `created_at`, then `id`, both ascending. A `200`
 response looks like this (fictional data):
