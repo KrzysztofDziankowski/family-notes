@@ -17,7 +17,7 @@ from entries.classification.types import EntryType, SchoolItemKind
 from entries.models import Entry
 from entries.services import automation_family_entries
 from family_access.models import AutomationToken, Family, FamilyMember
-from family_access.test_automation import AutomationFixtureMixin
+from family_access.tests.test_automation import AutomationFixtureMixin
 
 FOREIGN_SENTINEL = 'SENTINEL-obca-rodzina'
 EXPECTED_FIELDS = {
@@ -370,7 +370,7 @@ class EntriesOrderingAndPaginationTests(EntriesApiDataMixin, TestCase):
 class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
     def setUp(self):
         super().setUp()
-        self.url = reverse('automation_entries_list')
+        self.url = reverse('automation:entries_list')
         self.token, self.secret = AutomationToken.issue(self.parent, 'Telefon')
         self.foreign_token, self.foreign_secret = AutomationToken.issue(
             self.other_parent, 'Obcy telefon'

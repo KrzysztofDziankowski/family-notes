@@ -37,7 +37,7 @@ from entries.eduvulcan.worker import (
 )
 from entries.models import ConversionWorkerHeartbeat, Entry, InboundNotification
 from family_access.models import AutomationToken
-from family_access.test_automation import AutomationFixtureMixin
+from family_access.tests.test_automation import AutomationFixtureMixin
 
 from .test_classification_service import FamilyFixtureMixin
 from .test_conversion_models import make_notification
@@ -431,7 +431,7 @@ class GunicornHookTests(SimpleTestCase):
 
 
 class IntakeWakeupTests(AutomationFixtureMixin, TestCase):
-    URL = reverse('automation_notification_submit')
+    URL = reverse('automation:notification_submit')
 
     def setUp(self):
         super().setUp()

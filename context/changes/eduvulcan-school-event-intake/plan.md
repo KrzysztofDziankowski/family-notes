@@ -348,10 +348,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [x] 3.1 Intake remains `202`, classification-free, and bounded when enqueueing succeeds, fails, or workers are disabled.
-- [x] 3.2 Worker tests cover startup sweep, periodic sweep, retry-due selection, advisory-lock refusal, and connection cleanup.
-- [x] 3.3 Health tests preserve the exact `/healthz/` body and cover disabled conversion, healthy heartbeat, and stale/missing heartbeat on `/healthz/conversion/`; deployment shell tests cover both probes.
-- [x] 3.4 Existing automation-token and notification-intake contracts remain green.
+- [x] 3.1 Intake remains `202`, classification-free, and bounded when enqueueing succeeds, fails, or workers are disabled. — 0d7dc79
+- [x] 3.2 Worker tests cover startup sweep, periodic sweep, retry-due selection, advisory-lock refusal, and connection cleanup. — 0d7dc79
+- [x] 3.3 Health tests preserve the exact `/healthz/` body and cover disabled conversion, healthy heartbeat, and stale/missing heartbeat on `/healthz/conversion/`; deployment shell tests cover both probes. — 0d7dc79
+- [x] 3.4 Existing automation-token and notification-intake contracts remain green. — 0d7dc79
 
 #### Manual
 
@@ -362,10 +362,10 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Automated
 
-- [ ] 4.1 Focused EduVulcan, classification, access, intake, worker, and health tests pass.
-- [ ] 4.2 Full Django tests and system checks pass.
-- [ ] 4.3 Migration consistency check reports no missing migrations.
-- [ ] 4.4 Existing public automation paths and response bodies remain compatible.
+- [x] 4.1 Focused EduVulcan, classification, access, intake, worker, and health tests pass. — 1eeeb2c
+- [x] 4.2 Full Django tests and system checks pass. — 1eeeb2c
+- [x] 4.3 Migration consistency check reports no missing migrations. — 1eeeb2c
+- [x] 4.4 Existing public automation paths and response bodies remain compatible. — 1eeeb2c
 
 #### Manual
 

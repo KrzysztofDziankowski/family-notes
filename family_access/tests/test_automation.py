@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.urls import resolve, reverse
 from django.utils import timezone
 
-from .models import AutomationToken, Family, FamilyMember
+from family_access.models import AutomationToken, Family, FamilyMember
 
 
 class AutomationFixtureMixin:
@@ -213,7 +213,7 @@ class AutomationPingTests(AutomationFixtureMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.token, self.secret = AutomationToken.issue(self.parent, 'Telefon')
-        self.url = reverse('automation_ping')
+        self.url = reverse('automation:ping')
 
     def ping(self, authorization=None, client=None):
         headers = {} if authorization is None else {'HTTP_AUTHORIZATION': authorization}

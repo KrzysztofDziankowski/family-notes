@@ -1052,6 +1052,46 @@ only. Logs name notification IDs, attempt numbers, and codes, never
 notification text or family names; inspect them with
 `sudo -n /usr/local/sbin/family-notes-deploy logs`.
 
+### 4. Inspect status and requeue failed rows
+
+Intake's `202` only acknowledges durable storage; it does not mean the
+notification is already converted. With the worker enabled, a new row is
+normally converted within seconds, and at the latest by the next sweep
+(`EDUVULCAN_CONVERSION_SWEEP_INTERVAL_SECONDS`), after a provider retry delay
+(`60,300` seconds), or after the next restart.
+
+In admin, filter **Entries → Powiadomienia przychodzące** by status:
+
+- `pending` — waiting for its first attempt or a scheduled retry
+  (`next attempt at`).
+- `processing` — a worker holds a lease until `lease expires at`; a lease that
+  outlives a crash is reclaimed by the next sweep.
+- `processed` — entries saved; the inline lists each generated entry, and an
+  empty entry link means a parent deleted it (it is never recreated).
+- `failed` — terminal until an operator requeues it.
+
+`last error code` holds a safe category only: `provider_<reason>` (for example
+`provider_timeout`), `database_busy`, `database_error`, `conversion_error`,
+`lease_expired`, `attempts_exhausted`, `empty_notification`, or
+`invalid_output`. A `processed` row with a `provider_*` code fell back to a
+general family note after the provider stayed unavailable.
+
+To retry `failed` rows after fixing the cause, a superuser selects them and runs
+**Requeue selected failed notifications**. They return to `pending` with a
+fresh attempt budget, keep their payload and existing outputs, and are
+converted by the next sweep; rows in other statuses are ignored.
+
+Raw title, message, and payload of `processed` rows are scrubbed hourly once
+they are older than `EDUVULCAN_RAW_RETENTION_DAYS` (default `90`); admin then
+shows `Raw data pruned`. Notification IDs, content hashes, and output links stay,
+so duplicate detection still works. `pending`, `processing`, and `failed` rows are
+never scrubbed, so requeue does not lose data.
+
+Manual checks use anonymized payloads only (fictional names, as in the README
+`curl` example). Do not paste real notification text, admin title or message
+values, or token secrets into shells, tickets, or chat; quote notification IDs,
+statuses, and error codes instead.
+
 ### Disable conversion
 
 Set `EDUVULCAN_WORKER_ENABLED=False`, restart as root, and confirm `health`
@@ -1121,6 +1161,16 @@ separate, human-approved incident procedure.
   `EduVulcan conversion` warnings (for example `error=<CLASS>`, or
   `worker not started` from the Gunicorn hook).
   A database outage also reports `unavailable`; check `health` first.
+- **Notifications stay `pending` or turn `failed`:** check `conversion-health`
+  first (`disabled` means the worker is switched off; rows wait safely). For
+  `failed` rows read only `last error code` and `attempt count` in admin:
+  `database_*` points to the database, `provider_*` to classification (see
+  [Enable Classification](#enable-classification)), and `lease_expired` to a
+  worker that repeatedly died or overran its lease. Fix the cause, then
+  requeue as in step 4 of
+  [Enable EduVulcan Conversion](#enable-eduvulcan-conversion). Only `WARNING`
+  and above reach journald, so successful conversions and scheduled retries are
+  not logged.
 - **`readiness exhausted for release`:** the new release is active and its backup
   is in place. Run the printed `status`, `logs`, and `health` commands, then choose
   a forward fix or the manual application rollback.

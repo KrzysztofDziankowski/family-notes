@@ -20,13 +20,21 @@ from django.urls import include, path
 from entries.health_views import conversion_healthz
 from family_notes.views import healthz, home
 
+# Token-authenticated automation API: one namespace, routes owned by their apps.
+automation_api_patterns = (
+    [
+        path('', include('family_access.api_urls')),
+        path('', include('entries.api_urls')),
+    ],
+    'automation',
+)
+
 urlpatterns = [
     path('', home, name='home'),
     path('account/', include('family_access.urls')),
     path('accounts/', include('allauth.urls')),
     path('admin/', admin.site.urls),
-    path('api/automation/', include('family_access.api_urls')),
-    path('api/automation/', include('entries.api_urls')),
+    path('api/automation/', include(automation_api_patterns)),
     path('entries/', include('entries.urls')),
     path('healthz/', healthz, name='healthz'),
     path('healthz/conversion/', conversion_healthz, name='conversion_healthz'),

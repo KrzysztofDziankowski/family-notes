@@ -10,14 +10,14 @@ from entries.eduvulcan.conversion import convert_notification, prune_raw_notific
 from entries.eduvulcan.types import OutputKind
 from entries.models import Entry, InboundNotification
 from family_access.models import AutomationToken
-from family_access.test_automation import AutomationFixtureMixin
+from family_access.tests.test_automation import AutomationFixtureMixin
 
 from .test_notification_intake import sample_payload
 
 Status = InboundNotification.Status
 NOW = datetime.datetime(2027, 1, 10, 12, 0, tzinfo=datetime.timezone.utc)
 OLD = NOW - datetime.timedelta(days=90)
-URL = reverse('automation_notification_submit')
+URL = reverse('automation:notification_submit')
 
 
 class RawDataPruningTests(AutomationFixtureMixin, TestCase):
