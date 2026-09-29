@@ -243,8 +243,8 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Manual
 
-- [ ] 2.7 Lokalny `curl` z aktywnym tokenem zwraca oczekiwane wpisy rodziny.
-- [ ] 2.8 Ten sam `curl` po cofnięciu tokenu natychmiast zwraca 401.
+- [x] 2.7 Lokalny `curl` z aktywnym tokenem zwraca oczekiwane wpisy rodziny.
+- [x] 2.8 Ten sam `curl` po cofnięciu tokenu natychmiast zwraca 401.
 
 ### Phase 3: Dokumentacja i akceptacja
 
@@ -257,6 +257,6 @@ Brak migracji i transformacji danych. Wycofanie funkcji polega na usunięciu rou
 
 #### Manual
 
-- [ ] 3.5 Produkcyjny lub lokalny `curl` dla jawnego zakresu dziś → +28 dni zwraca tylko wpisy datowane w tym zakresie.
-- [ ] 3.6 Dodanie `include_undated=true` do tego samego zakresu dołącza wpisy bez daty.
-- [ ] 3.7 Odpowiedź i logi nie ujawniają tokenu, nagłówka Authorization ani danych innej rodziny.
+- [x] 3.5 Produkcyjny lub lokalny `curl` dla jawnego zakresu dziś → +28 dni zwraca tylko wpisy datowane w tym zakresie.
+- [x] 3.6 Dodanie `include_undated=true` do tego samego zakresu dołącza wpisy bez daty.
+- [x] 3.7 Odpowiedź i logi nie ujawniają tokenu, nagłówka Authorization ani danych innej rodziny.
