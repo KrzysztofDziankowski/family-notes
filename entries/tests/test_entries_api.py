@@ -67,7 +67,8 @@ class EntriesQueryParserTests(TestCase):
     def test_offset_is_non_negative_integer(self):
         self.assertEqual(parse_entries_query(query(offset='0')).offset, 0)
         self.assertEqual(parse_entries_query(query(offset='1000')).offset, 1000)
-        for value in ('-1', '', 'x', '2.0'):
+        self.assertEqual(parse_entries_query(query(offset='9' * 18)).offset, int('9' * 18))
+        for value in ('-1', '', 'x', '2.0', '9223372036854775808', '0' * 5000):
             with self.subTest(offset=value):
                 self.assertIsNone(parse_entries_query(query(offset=value)))
 
@@ -537,6 +538,9 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
             {'limit': '501'},
             {'limit': 'abc'},
             {'offset': '-1'},
+            {'offset': '9223372036854775808'},
+            {'offset': '0' * 5000},
+            {'limit': '0' * 5000},
             {'date_from': '2026-02-30'},
             {'date_to': '28.09.2026'},
             {'date_from': '2026-09-02', 'date_to': '2026-09-01'},

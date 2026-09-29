@@ -142,7 +142,8 @@ def submit_notification(request):
 
 DEFAULT_LIMIT = 100
 MAX_LIMIT = 500
-_UNSIGNED_INT = re.compile(r'[0-9]+')
+# At most 18 digits: stays below the 64-bit SQL OFFSET limit and int()'s digit cap.
+_UNSIGNED_INT = re.compile(r'[0-9]{1,18}')
 _ISO_DATE = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}')
 _BOOLEANS = {'true': True, 'false': False}
 

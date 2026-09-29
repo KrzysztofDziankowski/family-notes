@@ -233,7 +233,7 @@ Query parameters (all optional; unknown parameters are ignored):
 | Parameter | Values | Default |
 | --- | --- | --- |
 | `limit` | integer `1`–`500` | `100` |
-| `offset` | integer `0` or more | `0` |
+| `offset` | integer `0` or more, at most 18 digits | `0` |
 | `date_from` | ISO date `YYYY-MM-DD`, inclusive | no lower bound |
 | `date_to` | ISO date `YYYY-MM-DD`, inclusive | no upper bound |
 | `include_undated` | `true` or `false`, case-insensitive | `true` without date bounds, `false` with at least one bound |
