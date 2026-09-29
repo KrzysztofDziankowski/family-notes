@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 1
 status: draft
 created: 2026-09-22
-updated: 2026-09-28
+updated: 2026-09-29
 prd_version: 2
 main_goal: speed
 top_blocker: capacity
@@ -48,7 +48,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | done     |
 | S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | proposed |
 | S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | in-progress |
-| S-06 | family-entries-rest-api               | parent-owned automation can retrieve all entries of its family through a read-only REST API | F-04, S-01 | MS-01, NFR family privacy, NFR token revocation | in-progress |
+| S-06 | family-entries-rest-api               | parent-owned automation can retrieve all entries of its family through a read-only REST API | F-04, S-01 | MS-01, NFR family privacy, NFR token revocation | done |
 
 ## Streams
 
@@ -210,7 +210,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - What response contract and pagination behavior should clients rely on as the number of entries grows? - Owner: user. Block: no; `/10x-plan` should select and document a minimal stable contract.
 - **Risk:** This deliberately expands automation-token authority beyond the PRD v2 write-only intake boundary. Every read must be scoped from the authenticated token owner's active parent membership, revoked or invalid tokens must fail closed, foreign-family data must never be distinguishable or returned, and the endpoint must expose no mutation capability.
-- **Status:** in-progress
+- **Status:** done
 
 ## Backlog Handoff
 
@@ -254,3 +254,4 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **S-01: parent can classify, review, correct, and save one school event from natural-language text.** — Archived 2026-09-28 → `context/archive/2026-09-27-first-school-event-capture/`. Lesson: —.
 - **S-03: child can read only entries assigned to that child in a personal view.** — Archived 2026-09-28 → `context/archive/2026-09-28-child-assigned-entry-view/`. Lesson: —.
 - **S-02: parent can create, read, update, and delete saved family entries in a shared family view.** — Archived 2026-09-28 → `context/archive/2026-09-28-parent-family-entry-management/`. Lesson: —.
+- **S-06: an automation holding an active parent's token can retrieve all entries belonging to that parent's family through a read-only REST API.** — Archived 2026-09-29 → `context/archive/2026-09-28-family-entries-rest-api/`. Lesson: —.
