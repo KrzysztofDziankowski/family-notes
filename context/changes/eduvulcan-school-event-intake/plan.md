@@ -327,8 +327,8 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Manual
 
-- [ ] 1.5 Review anonymized fixtures against the local sample corpus and confirm that no real names or identifiers remain.
-- [ ] 1.6 Review representative Polish entry text for clarity and preservation of notification meaning.
+- [x] 1.5 Review anonymized fixtures against the local sample corpus and confirm that no real names or identifiers remain.
+- [x] 1.6 Review representative Polish entry text for clarity and preservation of notification meaning.
 
 ### Phase 2: Atomic Conversion Lifecycle
 
@@ -341,8 +341,8 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Manual
 
-- [ ] 2.5 In admin, a failed row exposes only sanitized diagnostics and can be requeued.
-- [ ] 2.6 A processed row remains traceable to its output metadata after raw fields are pruned.
+- [x] 2.5 In admin, a failed row exposes only sanitized diagnostics and can be requeued.
+- [x] 2.6 A processed row remains traceable to its output metadata after raw fields are pruned.
 
 ### Phase 3: Worker and Intake Integration
 
@@ -355,7 +355,7 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Manual
 
-- [ ] 3.5 Restarting Gunicorn with pending notifications causes them to be swept and converted.
+- [x] 3.5 Restarting Gunicorn with pending notifications causes them to be swept and converted.
 - [ ] 3.6 Stopping conversion activity leaves intake operational while health reports the expected degradation.
 
 ### Phase 4: Compatibility and Acceptance
@@ -369,6 +369,6 @@ Finish integration cleanup, operator documentation, and end-to-end acceptance wi
 
 #### Manual
 
-- [ ] 4.5 An anonymized notification sent with a real local automation token is acknowledged immediately and later appears correctly in parent and assigned-child views.
+- [x] 4.5 An anonymized notification sent with a real local automation token is acknowledged immediately and later appears correctly in parent and assigned-child views.
 - [ ] 4.6 On PostgreSQL with two Gunicorn workers, concurrent wake-ups and a restart produce no duplicate outputs.
 - [ ] 4.7 Operator review confirms logs, admin diagnostics, and health responses contain no family notification text.
