@@ -68,12 +68,34 @@ def env_positive_int_tuple(name, default):
     return values
 
 
-def validate_eduvulcan_worker_settings(*, heartbeat_seconds, heartbeat_max_age_seconds):
-    """Reject a freshness window that a healthy worker could never satisfy."""
+# Headroom the conversion lease keeps above the classification deadline, for
+# the database work around one classification call.
+EDUVULCAN_LEASE_MARGIN_SECONDS = 30
+
+
+def validate_eduvulcan_worker_settings(
+    *,
+    heartbeat_seconds,
+    heartbeat_max_age_seconds,
+    lease_seconds,
+    classification_deadline_seconds,
+):
+    """Reject worker timing that a healthy worker could never satisfy.
+
+    The freshness window must exceed the heartbeat interval, and one attempt's
+    lease must outlast the classification deadline plus
+    ``EDUVULCAN_LEASE_MARGIN_SECONDS``, or slow classifications would lose
+    their lease and their paid-for results. Messages name variables only.
+    """
     if not heartbeat_max_age_seconds > heartbeat_seconds:
         raise ImproperlyConfigured(
             'EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS must be greater than '
             'EDUVULCAN_WORKER_HEARTBEAT_SECONDS.'
+        )
+    if not lease_seconds >= classification_deadline_seconds + EDUVULCAN_LEASE_MARGIN_SECONDS:
+        raise ImproperlyConfigured(
+            'EDUVULCAN_CONVERSION_LEASE_SECONDS must be at least '
+            f'CLASSIFICATION_DEADLINE_SECONDS plus {EDUVULCAN_LEASE_MARGIN_SECONDS} seconds.'
         )
 
 
@@ -331,7 +353,35 @@ EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS = env_positive_int(
 validate_eduvulcan_worker_settings(
     heartbeat_seconds=EDUVULCAN_WORKER_HEARTBEAT_SECONDS,
     heartbeat_max_age_seconds=EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS,
+    lease_seconds=EDUVULCAN_CONVERSION_LEASE_SECONDS,
+    classification_deadline_seconds=CLASSIFICATION_DEADLINE_SECONDS,
 )
+
+# Identity of the running release. Heartbeats record it, and
+# /healthz/conversion/ counts only heartbeats of this release. The fallback is
+# the resolved project directory's name: deployed releases live in
+# /srv/family-notes/releases/<RELEASE_ID> behind the ``current`` symlink, and
+# BASE_DIR is resolved, so every process of one release shares the value.
+FAMILY_NOTES_RELEASE_ID = os.getenv('FAMILY_NOTES_RELEASE_ID', '').strip() or BASE_DIR.name
+
+# Logging: Django's defaults stay in place; the EduVulcan conversion logger
+# additionally sends INFO (sweeps, processed rows, retries, requeues, pruning)
+# to the console, which systemd forwards to journald. Its messages carry only
+# IDs, counts, codes, and exception class names.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler'},
+    },
+    'loggers': {
+        'entries.eduvulcan': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {

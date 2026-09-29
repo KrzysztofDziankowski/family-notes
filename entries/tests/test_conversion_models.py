@@ -14,8 +14,14 @@ from django.utils import timezone
 from entries.api_views import content_hash
 from entries.classification.types import EntryType, SchoolItemKind
 from entries.eduvulcan.types import OutputKind
-from entries.models import Entry, InboundNotification, NotificationConversionOutput
+from entries.models import (
+    ConversionWorkerHeartbeat,
+    Entry,
+    InboundNotification,
+    NotificationConversionOutput,
+)
 from entries.services import delete_family_entry
+from family_access.models import Family
 
 from .test_classification_service import FamilyFixtureMixin
 
@@ -285,3 +291,76 @@ class ConversionMigrationTests(TransactionTestCase):
         self.assertFalse(
             new_apps.get_model('entries', 'NotificationConversionOutput').objects.exists()
         )
+
+
+class CodeRollbackCompatibilityTests(TestCase):
+    """The previous release's models still insert into the migrated schema.
+
+    ``family-notes-deploy rollback`` switches code without unapplying
+    migrations, so columns added since then need database-level defaults.
+    Historical models from before those migrations omit the new columns in
+    their INSERT, exactly like the previous release's code.
+    """
+
+    def historical_apps(self, migration):
+        loader = MigrationExecutor(connection).loader
+        return loader.project_state([('entries', migration)]).apps
+
+    def test_pre_conversion_code_can_still_store_a_notification(self):
+        old_apps = self.historical_apps('0002_inboundnotification')
+        family = old_apps.get_model('family_access', 'Family').objects.create(
+            name='Rodzina Testowa'
+        )
+        OldNotification = old_apps.get_model('entries', 'InboundNotification')
+        self.assertFalse(
+            {'attempt_count', 'last_error_code'}
+            & {field.name for field in OldNotification._meta.get_fields()}
+        )
+
+        row = OldNotification.objects.create(
+            family=family,
+            notification_id='anon-rollback',
+            title='Ocena',
+            message='Nowa ocena: 5, Plastyka',
+            captured_at=CAPTURED_AT,
+            captured_date=CAPTURED_AT.date(),
+            content_hash='1' * 64,
+            payload={},
+        )
+
+        stored = InboundNotification.objects.get(pk=row.pk)
+        self.assertEqual(stored.status, Status.PENDING)
+        self.assertEqual(stored.attempt_count, 0)
+        self.assertEqual(stored.last_error_code, '')
+        self.assertIsNone(stored.lease_expires_at)
+        self.assertIsNone(stored.next_attempt_at)
+        self.assertIsNone(stored.raw_pruned_at)
+
+    def test_raw_insert_without_lifecycle_columns_uses_database_defaults(self):
+        family = Family.objects.create(name='Rodzina Testowa')
+        table = connection.ops.quote_name(InboundNotification._meta.db_table)
+        columns = (
+            'family_id', 'notification_id', 'title', 'message', 'captured_at',
+            'captured_date', 'content_hash', 'payload', 'status', 'received_at', 'error',
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'INSERT INTO {table} ({", ".join(columns)}) '
+                f'VALUES ({", ".join(["%s"] * len(columns))})',
+                [
+                    family.pk, 'anon-raw', 'Ocena', 'Treść', NOW, NOW.date(), '2' * 64,
+                    '{}', 'pending', NOW, '',
+                ],
+            )
+
+        stored = InboundNotification.objects.get(notification_id='anon-raw')
+        self.assertEqual((stored.attempt_count, stored.last_error_code), (0, ''))
+
+    def test_previous_heartbeat_code_can_still_record_a_heartbeat(self):
+        OldHeartbeat = self.historical_apps('0004_conversion_worker_heartbeat').get_model(
+            'entries', 'ConversionWorkerHeartbeat'
+        )
+
+        row = OldHeartbeat.objects.create(name='eduvulcan-conversion', beat_at=NOW)
+
+        self.assertEqual(ConversionWorkerHeartbeat.objects.get(pk=row.pk).release, '')

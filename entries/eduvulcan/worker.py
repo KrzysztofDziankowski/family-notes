@@ -21,6 +21,10 @@ in-memory queue only carries post-commit wake-ups, so a lost queue (restart,
 full queue, stopped worker) costs latency, never data. Startup and periodic
 sweeps pick up pending, retry-due, and stale-processing rows.
 
+Each process's thread records its own heartbeat row (hostname and PID, plus
+the running release) only while the thread runs; hourly maintenance deletes
+rows of exited processes and old releases. See ``health.py``.
+
 Global concurrency is one: on PostgreSQL a stable session-level advisory lock
 (``pg_try_advisory_lock``) guards every conversion batch, so with two
 Gunicorn processes only one converts at a time and the other retries shortly
@@ -50,7 +54,13 @@ from django.conf import settings
 from django.db import DatabaseError, close_old_connections, connection, connections, transaction
 
 from . import conversion
-from .health import heartbeat_seconds, record_heartbeat, worker_enabled
+from .health import (
+    heartbeat_seconds,
+    process_identity,
+    prune_stale_heartbeats,
+    record_heartbeat,
+    worker_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +137,8 @@ class ConversionWorker:
         queue_size: int = QUEUE_MAX_SIZE,
     ):
         self.pid = os.getpid()
+        # Constructed in the forked Gunicorn worker, so the PID is this process's.
+        self.identity = process_identity(self.pid)
         self._backend = backend
         self._monotonic = monotonic
         self._queue: queue.Queue = queue.Queue(maxsize=queue_size)
@@ -279,7 +291,11 @@ class ConversionWorker:
         return attempted
 
     def maintain(self) -> int:
-        """Scrub raw data of old processed rows (bounded batch)."""
+        """Scrub raw data of old processed rows (bounded batch).
+
+        Also deletes heartbeat rows left by exited processes and old releases.
+        """
+        prune_stale_heartbeats()
         limit = conversion.batch_size()
         pruned = conversion.prune_raw_notifications(limit=limit)
         if pruned >= limit:
@@ -309,7 +325,7 @@ class ConversionWorker:
         if not self._due(self._next_heartbeat):
             return
         self._next_heartbeat = self._monotonic() + heartbeat_seconds()
-        record_heartbeat()
+        record_heartbeat(identity=self.identity)
 
 
 # --- Process-wide worker ------------------------------------------------------

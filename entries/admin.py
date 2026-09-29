@@ -79,6 +79,11 @@ class InboundNotificationAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    def has_delete_permission(self, request, obj=None):
+        # Deleting a row would cascade away its output tombstones and dedup
+        # keys, so a re-forwarded copy could recreate entries a parent deleted.
+        return False
+
     def has_requeue_permission(self, request):
         user = request.user
         return user.is_active and user.is_staff and user.is_superuser

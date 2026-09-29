@@ -773,11 +773,13 @@ sudo -n /usr/local/sbin/family-notes-deploy conversion-health
 ```
 
 It prints only `conversion health: <STATE>`. `disabled` (worker switched off)
-and `ok` (a heartbeat within `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS`) exit
-`0`; `unavailable` (enabled but no fresh heartbeat) and `unexpected` (transport
+and `ok` (a worker process of the active release recorded a heartbeat within
+`EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS`) exit `0`; `unavailable` (enabled
+but no fresh heartbeat from the active release) and `unexpected` (transport
 error or any other response) exit nonzero. After enabling conversion, `ok` is
 expected within a few seconds of the restart, because each worker records a
-heartbeat as it starts.
+heartbeat as it starts. Heartbeats of the previous release never count, so
+`ok` right after a release proves that the new release's workers started.
 
 The release script's gate proves internal, database-backed readiness only. Public
 HTTPS remains a manual acceptance step. From the development machine:
@@ -985,8 +987,13 @@ thread inside each Gunicorn worker process. It ships disabled
 (`EDUVULCAN_WORKER_ENABLED=False`); enabling it is an operator-approved
 configuration change that keeps the two Gunicorn workers, `--timeout 45`, and
 the release gate unchanged. With both processes enabled, a PostgreSQL advisory
-lock lets only one of them convert at a time; the other keeps its heartbeat and
-takes over when the lock is free. Conversion calls classification only for
+lock lets only one of them convert at a time; the other keeps its own heartbeat
+and takes over when the lock is free. Each process's heartbeat carries the
+release it runs: the name of the resolved release directory
+(`/srv/family-notes/releases/<RELEASE_ID>`), because Django resolves the
+`current` symlink. Do not set `FAMILY_NOTES_RELEASE_ID` in
+`/etc/family-notes/env` or the unit; the environment is shared by every
+release, so a fixed value would let an old release's heartbeats count. Conversion calls classification only for
 notifications that the fixed school rules do not recognise, so the
 [Enable Classification](#enable-classification) prerequisites apply to those; with
 classification disabled they become general family notes.
@@ -1012,16 +1019,17 @@ EDUVULCAN_WORKER_ENABLED=True
 | `EDUVULCAN_WORKER_ENABLED` | `False` | Master switch for the conversion thread. |
 | `EDUVULCAN_CONVERSION_SWEEP_INTERVAL_SECONDS` | `60` | Seconds between database sweeps for pending, retry-due, and stale rows. |
 | `EDUVULCAN_CONVERSION_BATCH_SIZE` | `50` | Rows per sweep (and per pruning batch). |
-| `EDUVULCAN_CONVERSION_LEASE_SECONDS` | `120` | How long one attempt owns a row before another sweep may reclaim it. |
+| `EDUVULCAN_CONVERSION_LEASE_SECONDS` | `120` | How long one attempt owns a row before another sweep may reclaim it; must be at least `CLASSIFICATION_DEADLINE_SECONDS` + 30. |
 | `EDUVULCAN_CONVERSION_MAX_ATTEMPTS` | `3` | Total attempts before a row fails or falls back to a general note. |
 | `EDUVULCAN_CONVERSION_RETRY_DELAYS_SECONDS` | `60,300` | Delays before attempt 2 and attempt 3. |
 | `EDUVULCAN_RAW_RETENTION_DAYS` | `90` | Age after which raw title, message, and payload of processed rows are scrubbed (hourly). |
 | `EDUVULCAN_WORKER_HEARTBEAT_SECONDS` | `30` | How often an active worker records its heartbeat. |
-| `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS` | `180` | Heartbeat age after which `/healthz/conversion/` reports `unavailable`; must exceed the heartbeat interval. |
+| `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS` | `180` | Heartbeat age after which `/healthz/conversion/` stops counting a process; must exceed the heartbeat interval. Rows older than ten times this are deleted hourly. |
 
 Leave the tuning variables unset unless a reviewed change says otherwise. An
-invalid number (not a positive whole number) stops Django at startup and names
-only the variable, so run the helper's `check` action against the active release
+invalid number (not a positive whole number), or a lease shorter than the
+classification deadline plus 30 seconds, stops Django at startup and names only
+the variable, so run the helper's `check` action against the active release
 first, then restart as root and verify as `deploy`:
 
 ```bash
@@ -1155,8 +1163,8 @@ separate, human-approved incident procedure.
 - **`release: release gate protocol check failed` or `unexpected release gate
   protocol`:** the release stopped before fetching or creating a release. Check
   `sudo -n /usr/local/sbin/family-notes-deploy gate-version`; it must print `1`.
-- **`conversion health: unavailable`:** the worker is enabled but no process
-  recorded a heartbeat within the max age. Intake still works. Confirm the unit's
+- **`conversion health: unavailable`:** the worker is enabled but no process of
+  the active release recorded a heartbeat within the max age. Intake still works. Confirm the unit's
   `ExecStart` includes `--config gunicorn.conf.py`, then inspect `logs` for
   `EduVulcan conversion` warnings (for example `error=<CLASS>`, or
   `worker not started` from the Gunicorn hook).
@@ -1168,9 +1176,11 @@ separate, human-approved incident procedure.
   [Enable Classification](#enable-classification)), and `lease_expired` to a
   worker that repeatedly died or overran its lease. Fix the cause, then
   requeue as in step 4 of
-  [Enable EduVulcan Conversion](#enable-eduvulcan-conversion). Only `WARNING`
-  and above reach journald, so successful conversions and scheduled retries are
-  not logged.
+  [Enable EduVulcan Conversion](#enable-eduvulcan-conversion). The
+  `EduVulcan conversion` lines in `logs` (from `INFO` up) show sweeps, processed
+  rows, scheduled retries, and failures with their notification ID, attempt,
+  and code; an unexpected failure also names the exception class
+  (`error=<CLASS>`).
 - **`readiness exhausted for release`:** the new release is active and its backup
   is in place. Run the printed `status`, `logs`, and `health` commands, then choose
   a forward fix or the manual application rollback.

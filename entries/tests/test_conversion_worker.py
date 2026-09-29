@@ -23,7 +23,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from entries.eduvulcan import conversion, worker as worker_module
-from entries.eduvulcan.health import HEARTBEAT_NAME
+from entries.eduvulcan.health import STALE_HEARTBEAT_MAX_AGE_MULTIPLIER, process_identity
 from entries.eduvulcan.worker import (
     ADVISORY_LOCK_KEY,
     LOCK_RETRY_SECONDS,
@@ -108,7 +108,9 @@ class StartupAndPeriodicSweepTests(WorkerTestCase):
 
         self.assertEqual([self.status(row) for row in rows], [Status.PROCESSED] * 2)
         self.assertEqual(Entry.objects.filter(source=Entry.Source.EDUVULCAN).count(), 2)
-        self.assertTrue(ConversionWorkerHeartbeat.objects.filter(name=HEARTBEAT_NAME).exists())
+        heartbeat = ConversionWorkerHeartbeat.objects.get()
+        self.assertEqual(heartbeat.name, process_identity())
+        self.assertEqual(heartbeat.release, settings.FAMILY_NOTES_RELEASE_ID)
         prune.assert_called_once()
 
     @override_settings(
@@ -212,6 +214,39 @@ class HeartbeatScheduleTests(WorkerTestCase):
             self.worker.run_once()
 
         self.assertEqual(heartbeat.call_count, 2)
+
+
+class HeartbeatCleanupTests(WorkerTestCase):
+    @override_settings(EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS=180)
+    def test_maintenance_deletes_heartbeats_of_exited_processes_and_old_releases(self):
+        long_ago = timezone.now() - datetime.timedelta(
+            seconds=180 * STALE_HEARTBEAT_MAX_AGE_MULTIPLIER + 60
+        )
+        ConversionWorkerHeartbeat.objects.create(
+            name='old-host:1', release='20260921T203945Z-ea1ff26284aa', beat_at=long_ago
+        )
+        ConversionWorkerHeartbeat.objects.create(
+            name='old-host:2', release=settings.FAMILY_NOTES_RELEASE_ID, beat_at=long_ago
+        )
+
+        self.worker.run_once()
+
+        self.assertEqual(
+            list(ConversionWorkerHeartbeat.objects.values_list('name', flat=True)),
+            [self.worker.identity],
+        )
+
+    def test_each_worker_process_beats_under_its_own_identity(self):
+        other = ConversionWorker(backend=NoProviderBackend(), monotonic=self.clock)
+        other.identity = 'other-host:2'
+
+        self.worker.run_once()
+        other.run_once()
+
+        self.assertEqual(
+            set(ConversionWorkerHeartbeat.objects.values_list('name', flat=True)),
+            {self.worker.identity, 'other-host:2'},
+        )
 
 
 class AdvisoryLockTests(WorkerTestCase):

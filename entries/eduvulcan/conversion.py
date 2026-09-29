@@ -266,8 +266,11 @@ def process_claim(
         return _record_failure(claim, ERROR_DATABASE_BUSY, retryable=True, now=now)
     except DatabaseError:
         return _record_failure(claim, ERROR_DATABASE, retryable=False, now=now)
-    except Exception:
-        return _record_failure(claim, ERROR_UNEXPECTED, retryable=False, now=now)
+    except Exception as exc:
+        # Class name only: an exception message may quote notification text.
+        return _record_failure(
+            claim, ERROR_UNEXPECTED, retryable=False, now=now, error_class=type(exc).__name__
+        )
 
 
 def _convert(claim: Claim, *, backend, now) -> ConversionResult:
@@ -277,9 +280,7 @@ def _convert(claim: Claim, *, backend, now) -> ConversionResult:
         return _record_failure(claim, ERROR_EMPTY_NOTIFICATION, retryable=False, now=now)
     children = snapshot_active_children(row.family)
 
-    rule_proposals = propose_entries(
-        row.title, row.message, captured_at=row.captured_at, children=children
-    )
+    rule_proposals = _propose_from_rules(claim, row, children)
     if rule_proposals is not None:
         result = _try_persist(claim, row, rule_proposals, now=now)
         if result is not None:
@@ -319,6 +320,25 @@ def _convert(claim: Claim, *, backend, now) -> ConversionResult:
     if result is not None:
         return result
     return _record_failure(claim, ERROR_INVALID_OUTPUT, retryable=False, now=now)
+
+
+def _propose_from_rules(claim, row, children):
+    """Fixed-rule proposals, or ``None`` when the rules do not apply.
+
+    An unexpected error inside the rules is treated like an unrecognised
+    notification: it is logged by class name and the row falls through to
+    classification and the general note, so a rules bug never loses it.
+    """
+    try:
+        return propose_entries(
+            row.title, row.message, captured_at=row.captured_at, children=children
+        )
+    except Exception as exc:
+        logger.warning(
+            'EduVulcan conversion rules error: notification=%s attempt=%s error=%s',
+            claim.notification_id, claim.attempt, type(exc).__name__,
+        )
+        return None
 
 
 def _try_persist(claim, row, proposals, *, now, error_code=''):
@@ -398,9 +418,18 @@ def _persist(
 
 
 def _record_failure(
-    claim: Claim, code: str, *, retryable: bool, now: Optional[datetime.datetime]
+    claim: Claim,
+    code: str,
+    *,
+    retryable: bool,
+    now: Optional[datetime.datetime],
+    error_class: str = '',
 ) -> ConversionResult:
-    """Schedule a retry while attempts remain, otherwise fail the row."""
+    """Schedule a retry while attempts remain, otherwise fail the row.
+
+    ``error_class`` is an exception class name for the log line only; it is
+    never stored.
+    """
     now = _now(now)
     if retryable and claim.attempt < max_attempts():
         outcome = ConversionOutcome.RETRY_SCHEDULED
@@ -414,10 +443,12 @@ def _record_failure(
     if not _owned(claim, now).update(lease_expires_at=None, last_error_code=code, **updates):
         return _lease_lost(claim)
     log = logger.info if outcome == ConversionOutcome.RETRY_SCHEDULED else logger.warning
-    log(
-        'EduVulcan conversion %s: notification=%s attempt=%s code=%s',
-        outcome.value, claim.notification_id, claim.attempt, code,
-    )
+    message = 'EduVulcan conversion %s: notification=%s attempt=%s code=%s'
+    args = [outcome.value, claim.notification_id, claim.attempt, code]
+    if error_class:
+        message += ' error=%s'
+        args.append(error_class)
+    log(message, *args)
     return ConversionResult(
         claim.notification_id, outcome, attempt=claim.attempt, error_code=code
     )

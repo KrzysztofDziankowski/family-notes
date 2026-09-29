@@ -13,12 +13,20 @@ from django.urls import reverse
 from django.utils import timezone
 
 from entries.eduvulcan import conversion
-from entries.eduvulcan.health import HEARTBEAT_NAME, record_heartbeat
+from entries.eduvulcan.health import (
+    STALE_HEARTBEAT_MAX_AGE_MULTIPLIER,
+    conversion_health,
+    process_identity,
+    prune_stale_heartbeats,
+    record_heartbeat,
+)
 from entries.models import ConversionWorkerHeartbeat
 from family_notes import settings as settings_module
 
 URL = reverse('conversion_healthz')
 SECRET = 'SENTINEL-4d1f'
+RELEASE = '20260929T101500Z-0123456789ab'
+OLD_RELEASE = '20260921T203945Z-ea1ff26284aa'
 
 WORKER_SETTINGS = {
     'EDUVULCAN_WORKER_ENABLED': False,
@@ -41,11 +49,15 @@ def evaluate_settings(**environ):
         return runpy.run_path(settings_module.__file__)
 
 
+@override_settings(FAMILY_NOTES_RELEASE_ID=RELEASE)
 class ConversionHealthEndpointTests(TestCase):
-    def beat(self, age_seconds):
+    def beat(self, age_seconds, *, name='host:100', release=RELEASE):
         ConversionWorkerHeartbeat.objects.update_or_create(
-            name=HEARTBEAT_NAME,
-            defaults={'beat_at': timezone.now() - datetime.timedelta(seconds=age_seconds)},
+            name=name,
+            defaults={
+                'release': release,
+                'beat_at': timezone.now() - datetime.timedelta(seconds=age_seconds),
+            },
         )
 
     def test_database_health_body_is_unchanged(self):
@@ -94,6 +106,32 @@ class ConversionHealthEndpointTests(TestCase):
         self.assertEqual(response.content, b'{"status": "unavailable"}')
 
     @override_settings(EDUVULCAN_WORKER_ENABLED=True)
+    def test_fresh_heartbeat_of_a_previous_release_does_not_count(self):
+        # Right after a deploy restart the old release's workers still look
+        # fresh; health must not report a release whose workers never started.
+        self.beat(age_seconds=1, name='host:100', release=OLD_RELEASE)
+        self.beat(age_seconds=1, name='host:101', release='')
+
+        response = self.client.get(URL)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.content, b'{"status": "unavailable"}')
+
+    @override_settings(
+        EDUVULCAN_WORKER_ENABLED=True, EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS=180
+    )
+    def test_one_fresh_current_release_process_is_enough(self):
+        self.beat(age_seconds=5, name='host:100', release=OLD_RELEASE)
+        self.beat(age_seconds=500, name='host:200', release=RELEASE)
+        self.assertEqual(self.client.get(URL).status_code, 503)
+
+        self.beat(age_seconds=5, name='host:201', release=RELEASE)
+        response = self.client.get(URL)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'{"status": "ok"}')
+
+    @override_settings(EDUVULCAN_WORKER_ENABLED=True)
     def test_database_failure_is_unavailable_without_details(self):
         with mock.patch.object(
             ConversionWorkerHeartbeat.objects, 'filter', side_effect=DatabaseError(SECRET)
@@ -111,32 +149,98 @@ class ConversionHealthEndpointTests(TestCase):
         self.assertEqual(self.client.post(URL).status_code, 405)
 
 
+@override_settings(FAMILY_NOTES_RELEASE_ID=RELEASE)
 class HeartbeatRecordTests(TestCase):
-    def test_heartbeat_upserts_one_shared_row(self):
+    def test_each_process_upserts_its_own_row_with_the_release(self):
         first = timezone.now()
-        record_heartbeat(now=first)
-        record_heartbeat(now=first + datetime.timedelta(seconds=30))
+        record_heartbeat(identity='host:100', now=first)
+        record_heartbeat(identity='host:101', now=first)
+        record_heartbeat(identity='host:100', now=first + datetime.timedelta(seconds=30))
+
+        rows = {
+            row.name: (row.release, row.beat_at)
+            for row in ConversionWorkerHeartbeat.objects.all()
+        }
+        self.assertEqual(
+            rows,
+            {
+                'host:100': (RELEASE, first + datetime.timedelta(seconds=30)),
+                'host:101': (RELEASE, first),
+            },
+        )
+
+    def test_reused_identity_takes_over_the_row_for_the_new_release(self):
+        now = timezone.now()
+        ConversionWorkerHeartbeat.objects.create(
+            name='host:100', release=OLD_RELEASE, beat_at=now - datetime.timedelta(hours=1)
+        )
+
+        record_heartbeat(identity='host:100', now=now)
 
         row = ConversionWorkerHeartbeat.objects.get()
-        self.assertEqual(row.name, HEARTBEAT_NAME)
-        self.assertEqual(row.beat_at, first + datetime.timedelta(seconds=30))
+        self.assertEqual((row.release, row.beat_at), (RELEASE, now))
+
+    def test_default_identity_is_hostname_and_pid(self):
+        with mock.patch('entries.eduvulcan.health.socket.gethostname', return_value='web-1'), \
+                mock.patch('entries.eduvulcan.health.os.getpid', return_value=4321):
+            self.assertEqual(process_identity(), 'web-1:4321')
+            record_heartbeat()
+
+        self.assertEqual(ConversionWorkerHeartbeat.objects.get().name, 'web-1:4321')
+
+    def test_long_hostname_keeps_the_pid(self):
+        with mock.patch('entries.eduvulcan.health.socket.gethostname', return_value='h' * 300):
+            identity = process_identity(987654)
+
+        self.assertLessEqual(len(identity), 64)
+        self.assertTrue(identity.endswith(':987654'))
 
     def test_concurrent_first_heartbeat_falls_back_to_update(self):
         now = timezone.now()
         real_create = ConversionWorkerHeartbeat.objects.create
 
         def lose_race(**kwargs):
-            # Another process inserts the row between our update and create.
-            real_create(name=HEARTBEAT_NAME, beat_at=now - datetime.timedelta(hours=1))
+            # A row with this identity appears between our update and create.
+            real_create(name='host:100', beat_at=now - datetime.timedelta(hours=1))
             raise IntegrityError
 
         # Without the savepoint the competing insert survives our failed one.
         with mock.patch.object(
             ConversionWorkerHeartbeat.objects, 'create', side_effect=lose_race
         ), mock.patch('entries.eduvulcan.health.transaction.atomic', contextlib.nullcontext):
-            record_heartbeat(now=now)
+            record_heartbeat(identity='host:100', now=now)
 
-        self.assertEqual(ConversionWorkerHeartbeat.objects.get().beat_at, now)
+        row = ConversionWorkerHeartbeat.objects.get()
+        self.assertEqual((row.beat_at, row.release), (now, RELEASE))
+
+    @override_settings(EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS=180)
+    def test_prune_deletes_only_long_stale_rows_of_any_release(self):
+        now = timezone.now()
+        window = datetime.timedelta(seconds=180 * STALE_HEARTBEAT_MAX_AGE_MULTIPLIER)
+        for name, release, age in (
+            ('host:1', OLD_RELEASE, window + datetime.timedelta(seconds=1)),
+            ('host:2', RELEASE, window + datetime.timedelta(seconds=1)),
+            ('host:3', OLD_RELEASE, window - datetime.timedelta(seconds=1)),
+            ('host:4', RELEASE, datetime.timedelta(seconds=1)),
+        ):
+            ConversionWorkerHeartbeat.objects.create(
+                name=name, release=release, beat_at=now - age
+            )
+
+        self.assertEqual(prune_stale_heartbeats(now=now), 2)
+
+        self.assertEqual(
+            set(ConversionWorkerHeartbeat.objects.values_list('name', flat=True)),
+            {'host:3', 'host:4'},
+        )
+
+    @override_settings(EDUVULCAN_WORKER_ENABLED=True)
+    def test_health_follows_the_configured_release(self):
+        record_heartbeat(identity='host:100')
+
+        self.assertEqual(conversion_health(), 'ok')
+        with override_settings(FAMILY_NOTES_RELEASE_ID=OLD_RELEASE):
+            self.assertEqual(conversion_health(), 'unavailable')
 
 
 class WorkerSettingsTests(SimpleTestCase):
@@ -201,6 +305,45 @@ class WorkerSettingsTests(SimpleTestCase):
                     evaluate_settings(**{name: raw})
                 self.assertIn(name, str(caught.exception))
                 self.assertNotIn(SECRET, str(caught.exception))
+
+    def test_lease_must_exceed_the_classification_deadline_with_a_margin(self):
+        # Default deadline 25 s + 30 s margin: 55 s is the smallest valid lease.
+        for lease, deadline in (('54', '25'), ('25', '25'), ('120', '100')):
+            with self.subTest(lease=lease, deadline=deadline):
+                with self.assertRaises(ImproperlyConfigured) as caught:
+                    evaluate_settings(
+                        EDUVULCAN_CONVERSION_LEASE_SECONDS=lease,
+                        CLASSIFICATION_DEADLINE_SECONDS=deadline,
+                    )
+                message = str(caught.exception)
+                self.assertIn('EDUVULCAN_CONVERSION_LEASE_SECONDS', message)
+                self.assertIn('CLASSIFICATION_DEADLINE_SECONDS', message)
+                # Names the variables, never the configured values.
+                self.assertNotIn(lease, message)
+
+        values = evaluate_settings(
+            EDUVULCAN_CONVERSION_LEASE_SECONDS='55', CLASSIFICATION_DEADLINE_SECONDS='25'
+        )
+        self.assertEqual(values['EDUVULCAN_CONVERSION_LEASE_SECONDS'], 55)
+
+    def test_release_id_comes_from_the_environment_or_the_resolved_project_directory(self):
+        self.assertEqual(
+            evaluate_settings(FAMILY_NOTES_RELEASE_ID=f' {RELEASE} ')['FAMILY_NOTES_RELEASE_ID'],
+            RELEASE,
+        )
+        values = evaluate_settings()
+        self.assertEqual(values['FAMILY_NOTES_RELEASE_ID'], values['BASE_DIR'].name)
+        self.assertEqual(values['BASE_DIR'], values['BASE_DIR'].resolve())
+
+    def test_conversion_logs_reach_the_console_at_info(self):
+        logging_config = evaluate_settings()['LOGGING']
+
+        self.assertFalse(logging_config['disable_existing_loggers'])
+        self.assertEqual(
+            logging_config['loggers']['entries.eduvulcan'],
+            {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        )
+        self.assertEqual(set(logging_config['loggers']), {'entries.eduvulcan'})
 
     def test_heartbeat_freshness_must_exceed_the_interval(self):
         for max_age in ('30', '10'):

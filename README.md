@@ -338,10 +338,18 @@ Two health checks exist:
 - `/healthz/` returns exactly `{"status": "ok"}` while the database is
   available. It is the release gate and ignores conversion.
 - `/healthz/conversion/` returns `200 {"status": "disabled"}` when the worker is
-  switched off, `200 {"status": "ok"}` when a worker recorded a heartbeat within
+  switched off, `200 {"status": "ok"}` when at least one worker process of the
+  running release recorded a heartbeat within
   `EDUVULCAN_WORKER_HEARTBEAT_MAX_AGE_SECONDS`, and
   `503 {"status": "unavailable"}` otherwise. Intake keeps answering `202`
   either way.
+
+Each worker process records its own heartbeat (host name and PID) together with
+the release it runs, so heartbeats left by a previous release or an exited
+process never count. The release is `FAMILY_NOTES_RELEASE_ID` when set, and
+otherwise the name of the resolved project directory (on the server,
+`/srv/family-notes/releases/<RELEASE_ID>`). Heartbeat rows older than ten
+max-age windows are deleted by the worker's hourly maintenance.
 
 Neither health check returns notification data, counts, or error details.
 
@@ -360,9 +368,11 @@ statuses:
 Filter the list by status. Use `attempt count` and `last error code` for
 diagnosis; the codes are safe categories such as `provider_timeout`,
 `database_busy`, `conversion_error`, `lease_expired`, or `attempts_exhausted`,
-never notification text or provider responses. A `processed` row may also keep
-a `provider_*` code when repeated provider outages made it fall back to a
-general family note.
+never notification text or provider responses. `last error code` is
+historical: it records the most recent error seen and is not cleared on
+success, so a `processed` row may still show, for example, `provider_timeout`
+from an earlier attempt, or a `provider_*` code when repeated provider outages
+made it fall back to a general family note.
 
 Fixed school rules convert the known categories (for example the PRD example
 `Sprawdzian` becomes a dated calendar entry for the named child). Anything the
@@ -391,62 +401,10 @@ pending rows, and a stale `processing` lease is reclaimed once it expires.
 
 Logs and error codes name only notification IDs, attempt numbers, and codes.
 When reporting a problem, quote those, never the admin's title, message, or
-payload values, and never a token secret. Only `WARNING` and above reach the
-service logs by default, so a healthy conversion is silent; check the admin
-status instead.
-
-Neither health check returns notification data, counts, or error details.
-
-#### Inspect conversion status
-
-Each row in **Entries → Powiadomienia przychodzące** moves through these
-statuses:
-
-| Status | Meaning |
-| --- | --- |
-| `pending` | Stored and waiting for its first attempt, or for a scheduled retry (`next attempt at`). |
-| `processing` | One worker holds a lease (`lease expires at`) for the current attempt. |
-| `processed` | Its entries were saved; the inline lists every generated entry (a deleted entry leaves an empty link). |
-| `failed` | Attempts ran out or the row cannot be converted; it waits for an operator. |
-
-Filter the list by status. Use `attempt count` and `last error code` for
-diagnosis; the codes are safe categories such as `provider_timeout`,
-`database_busy`, `conversion_error`, `lease_expired`, or `attempts_exhausted`,
-never notification text or provider responses. A `processed` row may also keep
-a `provider_*` code when repeated provider outages made it fall back to a
-general family note.
-
-Fixed school rules convert the known categories (for example the PRD example
-`Sprawdzian` becomes a dated calendar entry for the named child). Anything the
-rules do not recognise goes to classification, and if that cannot place it, it
-becomes an unassigned family note with the notification text, so nothing is
-dropped.
-
-#### Requeue failed rows
-
-After fixing the cause (for example a database or provider outage), select the
-`failed` rows in the admin list and run **Requeue selected failed
-notifications** (superusers only). They return to `pending` with a fresh
-attempt budget; other statuses are ignored, and outputs already created are
-never duplicated. The next sweep or restart converts them.
-
-#### Retention and restarts
-
-Raw title, message, and payload of `processed` rows are scrubbed after
-`EDUVULCAN_RAW_RETENTION_DAYS` (default 90); admin then shows
-`[pruned]`-style placeholders while IDs, content hashes (for duplicate
-detection), and output links remain. `pending`, `processing`, and `failed` rows
-are never scrubbed. A restart loses nothing: rows live in the database, the
-startup sweep converts pending rows, and a stale `processing` lease is
-reclaimed once it expires.
-
-#### Troubleshoot without exposing family data
-
-Logs and error codes name only notification IDs, attempt numbers, and codes.
-When reporting a problem, quote those, never the admin's title, message, or
-payload columns, and never a token secret. Only `WARNING` and above reach the
-service logs by default, so a healthy conversion is silent; check the admin
-status instead.
+payload values, and never a token secret. The `entries.eduvulcan` logger
+writes `INFO` and above to the console (the service logs), so sweeps, processed
+rows, scheduled retries, requeues, and pruning are visible there; other loggers
+keep Django's defaults.
 
 ## Verify the project
 

@@ -132,11 +132,15 @@ class InboundNotification(models.Model):
     error = models.TextField('błąd', blank=True)
     # Conversion lifecycle (S-05). Admin-only metadata, so labels are English.
     # ``last_error_code`` holds a safe category code only, never notification
-    # text, provider responses, or tokens.
-    attempt_count = models.PositiveSmallIntegerField('attempt count', default=0)
+    # text, provider responses, or tokens. The NOT NULL columns also carry a
+    # database default, so the previous release's code (which does not know
+    # them) can still insert rows after a code-only rollback.
+    attempt_count = models.PositiveSmallIntegerField('attempt count', default=0, db_default=0)
     next_attempt_at = models.DateTimeField('next attempt at', null=True, blank=True)
     lease_expires_at = models.DateTimeField('lease expires at', null=True, blank=True)
-    last_error_code = models.CharField('last error code', max_length=64, blank=True)
+    last_error_code = models.CharField(
+        'last error code', max_length=64, blank=True, default='', db_default=''
+    )
     raw_pruned_at = models.DateTimeField('raw data pruned at', null=True, blank=True)
 
     class Meta:
@@ -231,20 +235,29 @@ class NotificationConversionOutput(models.Model):
 
 
 class ConversionWorkerHeartbeat(models.Model):
-    """Last time an active EduVulcan conversion worker proved it was alive.
+    """Last time one conversion worker process proved it was alive.
 
-    Every Gunicorn process's worker writes the same named row, so the row
-    answers "is conversion running somewhere" for ``/healthz/conversion/``.
-    It holds a timestamp only, never queue contents or family data.
-    Admin-only metadata, so labels are English.
+    Each Gunicorn process's worker writes its own row, keyed by a stable
+    process identity (hostname and PID), and records the release it runs.
+    ``/healthz/conversion/`` counts only fresh rows of the current release, so
+    heartbeats left by a previous release or an exited process never mask a
+    release whose workers did not start. Stale rows are deleted by the
+    worker's maintenance. Rows hold identities and timestamps only, never
+    queue contents or family data. Admin-only metadata, so labels are English.
     """
 
     name = models.CharField('name', max_length=64, unique=True)
+    release = models.CharField(
+        'release', max_length=128, blank=True, default='', db_default=''
+    )
     beat_at = models.DateTimeField('last heartbeat at')
 
     class Meta:
         verbose_name = 'conversion worker heartbeat'
         verbose_name_plural = 'conversion worker heartbeats'
+        indexes = [
+            models.Index(fields=('release', 'beat_at'), name='heartbeat_release_beat_idx'),
+        ]
 
     def __str__(self):
         return f'{self.name} heartbeat'

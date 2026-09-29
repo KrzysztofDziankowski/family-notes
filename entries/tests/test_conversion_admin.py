@@ -81,6 +81,25 @@ class ConversionAdminTests(AutomationFixtureMixin, TestCase):
         self.failed.refresh_from_db()
         self.assertEqual((self.failed.status, self.failed.title), (Status.FAILED, 'Sprawdzian'))
 
+    def test_superuser_cannot_delete_notifications(self):
+        self.client.force_login(self.superuser)
+        model_admin = admin.site._registry[InboundNotification]
+        request = RequestFactory().get('/')
+        request.user = self.superuser
+
+        self.assertIs(model_admin.has_delete_permission(request), False)
+        self.assertIs(model_admin.has_delete_permission(request, self.failed), False)
+        self.assertNotIn('delete_selected', model_admin.get_actions(request))
+        delete_url = reverse('admin:entries_inboundnotification_delete', args=(self.failed.pk,))
+        self.assertEqual(self.client.get(delete_url).status_code, 403)
+        self.client.post(
+            CHANGELIST,
+            {'action': 'delete_selected', 'index': 0, '_selected_action': [self.failed.pk]},
+        )
+        self.client.post(delete_url, {'post': 'yes'})
+
+        self.assertTrue(InboundNotification.objects.filter(pk=self.failed.pk).exists())
+
     def test_staff_without_superuser_cannot_requeue(self):
         staff = get_user_model().objects.create_user(
             username='staff', email='staff@example.test', is_staff=True

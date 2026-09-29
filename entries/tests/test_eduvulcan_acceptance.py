@@ -8,6 +8,7 @@ Payloads are anonymized; "Mateusz" is the PRD's own example name.
 import datetime
 import json
 import logging
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -372,7 +373,7 @@ class SanitizedFailureTests(EduVulcanAcceptanceTestCase):
         backend = RaisingBackend(RuntimeError(self.PROVIDER_BODY))
         response = self.submit(self.unknown())
 
-        with self.assertLogs('entries', logging.INFO) as logs:
+        with self.assertLogs('entries.eduvulcan', logging.INFO) as logs:
             result = convert_notification(response.json()['id'], backend=backend)
 
         self.assertEqual(result.outcome, ConversionOutcome.FAILED)
@@ -383,13 +384,57 @@ class SanitizedFailureTests(EduVulcanAcceptanceTestCase):
         diagnostics = '\n'.join(logs.output) + row.last_error_code + str(row)
         self.assert_sanitized(diagnostics)
         self.assertIn(f'notification={row.pk}', diagnostics)
+        self.assertIn('error=RuntimeError', diagnostics)
+
+    def test_rules_bug_falls_through_to_classification_and_a_general_note(self):
+        backend = RaisingBackend(ClassificationBackendError(UnavailableReason.REFUSED))
+        row_id = self.submit(self.unknown()).json()['id']
+
+        with mock.patch(
+            'entries.eduvulcan.conversion.propose_entries',
+            side_effect=RuntimeError(f'rules crashed on {self.SENTINEL} Mateusz'),
+        ), self.assertLogs('entries.eduvulcan', logging.INFO) as logs:
+            result = convert_notification(row_id, backend=backend)
+
+        self.assertEqual(result.outcome, ConversionOutcome.PROCESSED)
+        self.assertEqual(backend.calls, 1)
+        row = InboundNotification.objects.get()
+        self.assertEqual((row.status, row.last_error_code), (Status.PROCESSED, ''))
+        entry = Entry.objects.get()
+        self.assertEqual(entry.conversion_output.kind, OutputKind.GENERAL_NOTE.value)
+        self.assertIn(self.SENTINEL, entry.content)
+        output = '\n'.join(logs.output)
+        self.assert_sanitized(output)
+        self.assertIn(
+            f'rules error: notification={row_id} attempt=1 error=RuntimeError', output
+        )
+        self.assertNotIn('rules crashed', output)
+
+    def test_unexpected_persistence_error_still_fails_the_row(self):
+        row_id = self.submit(self.unknown()).json()['id']
+
+        with mock.patch(
+            'entries.eduvulcan.conversion.create_automated_entry',
+            side_effect=RuntimeError(self.SENTINEL),
+        ), self.assertLogs('entries.eduvulcan', logging.INFO) as logs:
+            result = convert_notification(
+                row_id,
+                backend=RaisingBackend(ClassificationBackendError(UnavailableReason.REFUSED)),
+            )
+
+        self.assertEqual(result.outcome, ConversionOutcome.FAILED)
+        row = InboundNotification.objects.get()
+        self.assertEqual((row.status, row.last_error_code), (Status.FAILED, 'conversion_error'))
+        output = '\n'.join(logs.output)
+        self.assert_sanitized(output)
+        self.assertIn('code=conversion_error error=RuntimeError', output)
 
     @override_settings(EDUVULCAN_CONVERSION_RETRY_DELAYS_SECONDS=(0, 0))
     def test_exhausted_provider_outage_saves_a_note_with_a_safe_code(self):
         backend = RaisingBackend(ClassificationBackendError(UnavailableReason.TIMEOUT))
         row_id = self.submit(self.unknown()).json()['id']
 
-        with self.assertLogs('entries', logging.INFO) as logs:
+        with self.assertLogs('entries.eduvulcan', logging.INFO) as logs:
             outcomes = [
                 convert_notification(row_id, backend=backend).outcome for _ in range(3)
             ]
