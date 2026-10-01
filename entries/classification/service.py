@@ -18,6 +18,10 @@ invocation, validation, and local member resolution in one auditable place:
 The service performs only reads and returns transient objects; it never
 creates, updates, or deletes database rows.
 
+``classify_follow_up_answer`` handles the parent's answer to a follow-up
+question under the same rules. Only the values the draft was missing are
+taken from the answer's classification; everything else stays as drafted.
+
 ``classify_for_family`` is the automated counterpart used for EduVulcan
 notifications. It impersonates no user: the caller passes a snapshot of the
 family's active children, and only their display names reach the backend.
@@ -42,12 +46,15 @@ from family_access.models import FamilyMember
 from ..eduvulcan.children import match_child
 from ..eduvulcan.types import ChildSnapshot
 from .backends import BackendOutput, BackendRequest, ClassificationBackend
+from .follow_up import follow_up_question
 from .types import (
     ClassificationError,
+    ClassificationFollowUp,
     ClassificationProposal,
     ClassificationResult,
     ClassificationUnavailable,
     EntryType,
+    MissingField,
     UnavailableReason,
 )
 from .validation import classify_output, normalize_member_name
@@ -55,6 +62,11 @@ from .validation import classify_output, normalize_member_name
 DEFAULT_LOCALE = 'pl-PL'
 # Upper bound on text sent to the provider; bounds cost and latency.
 MAX_SUBMITTED_TEXT_LENGTH = 2000
+# Upper bound on a parent's answer to a follow-up question.
+MAX_FOLLOW_UP_ANSWER_LENGTH = 500
+_MEMBER_FIELDS = frozenset(
+    {MissingField.AFFECTED_MEMBER, MissingField.AMBIGUOUS_MEMBER}
+)
 
 
 @dataclass(frozen=True)
@@ -112,6 +124,95 @@ def classify_for_parent(
 
     result = classify_output(request, output)
     return _resolve_member(result, candidates)
+
+
+@sensitive_variables('submitted_text', 'answer')
+def classify_follow_up_answer(
+    user,
+    submitted_text: str,
+    draft: ClassificationFollowUp,
+    answer: str,
+    *,
+    reference_date: datetime.date,
+    draft_member: Optional[FamilyMember] = None,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ParentClassification:
+    """Fill the missing values of ``draft`` from the parent's ``answer``.
+
+    Authorization, candidates, and privacy match ``classify_for_parent``. The
+    backend is called once with the original instruction, the generated
+    question, and the answer. Its output is merged into the draft before a
+    single validation: only the fields listed in ``draft.missing_fields`` (and
+    ``grounded``) come from the output, so a changed title, type, or echoed
+    name cannot override or veto the draft. ``draft_member`` is the draft's
+    resolved member; it is dropped unless it is an active member of the
+    parent's family. Raises ``ValueError`` if ``draft`` has no missing fields.
+    """
+    membership = get_active_membership(user)
+    if not is_parent(membership):
+        raise PermissionDenied('An active parent membership is required.')
+    if (
+        len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH
+        or len(answer) > MAX_FOLLOW_UP_ANSWER_LENGTH
+    ):
+        return ParentClassification(
+            result=ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG)
+        )
+
+    candidates = _active_family_members(membership)
+    if isinstance(reference_date, datetime.datetime):
+        reference_date = reference_date.date()
+    request = BackendRequest(
+        submitted_text=submitted_text,
+        allowed_member_names=tuple(member.display_name for member in candidates),
+        reference_date=reference_date,
+        locale=locale,
+        follow_up_question=follow_up_question(draft),
+        follow_up_answer=answer,
+    )
+
+    try:
+        output = _invoke_backend(request, backend)
+    except ClassificationError as error:
+        return ParentClassification(result=error.to_result())
+
+    merged = _merge_answer(draft, _known_member_name(draft, draft_member, candidates), output)
+    result = classify_output(request, merged)
+    return _resolve_member(result, candidates)
+
+
+def _known_member_name(
+    draft: ClassificationFollowUp,
+    draft_member: Optional[FamilyMember],
+    candidates: Sequence[FamilyMember],
+) -> Optional[str]:
+    """The draft's member name, trusted only for a current family candidate."""
+    if draft_member is None:
+        return draft.member_name
+    for candidate in candidates:
+        if candidate.pk == draft_member.pk:
+            return candidate.display_name
+    # A stale or foreign member is dropped, never replaced by the draft name.
+    return None
+
+
+def _merge_answer(
+    draft: ClassificationFollowUp,
+    member_name: Optional[str],
+    output: BackendOutput,
+) -> BackendOutput:
+    """Draft values, with only the missing fields taken from ``output``."""
+    missing = set(draft.missing_fields)
+    return BackendOutput(
+        entry_type=draft.entry_type,
+        content=draft.content,
+        grounded=output.grounded,
+        date=output.date if MissingField.DATE in missing else draft.date,
+        time=draft.time,
+        school_item=draft.school_item,
+        member_name=output.member_name if missing & _MEMBER_FIELDS else member_name,
+    )
 
 
 def _invoke_backend(

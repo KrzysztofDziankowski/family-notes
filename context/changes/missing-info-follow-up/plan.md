@@ -253,13 +253,13 @@ No schema change. Rolling back means reverting the code. Saved entries are unaff
 
 #### Automated
 
-- [ ] 1.1 Follow-up answer service and question tests pass
-- [ ] 1.2 Adapter tests pass, including the unchanged input without a follow-up
-- [ ] 1.3 Full suite and Django checks pass
+- [x] 1.1 Follow-up answer service and question tests pass
+- [x] 1.2 Adapter tests pass, including the unchanged input without a follow-up
+- [x] 1.3 Full suite and Django checks pass
 
 #### Manual
 
-- [ ] 1.4 Reading `follow_up_question` output for date, member, ambiguous and combined cases confirms natural Polish wording
+- [x] 1.4 Reading `follow_up_question` output for date, member, ambiguous and combined cases confirms natural Polish wording
 
 ### Phase 2: Question step in the capture flow
 

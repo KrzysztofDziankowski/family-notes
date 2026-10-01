@@ -236,8 +236,16 @@ class FamilyScopeAndRequestTests(FamilyFixtureMixin, TestCase):
         request = backend.requests[0]
         self.assertEqual(
             set(vars(request)),
-            {'submitted_text', 'allowed_member_names', 'reference_date', 'locale'},
+            {
+                'submitted_text',
+                'allowed_member_names',
+                'reference_date',
+                'locale',
+                'follow_up_question',
+                'follow_up_answer',
+            },
         )
+        self.assertIsNone(request.follow_up_answer)
         ids = {str(pk) for pk in FamilyMember.objects.values_list('pk', flat=True)}
         ids |= {str(pk) for pk in Family.objects.values_list('pk', flat=True)}
         self.assertFalse(ids & set(request.allowed_member_names))

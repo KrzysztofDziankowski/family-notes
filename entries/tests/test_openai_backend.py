@@ -48,6 +48,8 @@ OTHER_MEMBER_SENTINEL = 'SENTINEL-MEMBER-Kuba-17ce'
 CONTENT_SENTINEL = 'SENTINEL-CONTENT-5f8a21'
 ERROR_BODY_SENTINEL = 'SENTINEL-ERRORBODY-c03e9d'
 REFUSAL_SENTINEL = 'SENTINEL-REFUSAL-d7714b'
+ANSWER_SENTINEL = 'SENTINEL-ANSWER-8b40e2'
+QUESTION_SENTINEL = 'SENTINEL-QUESTION-2c9d51'
 SENTINELS = (
     API_KEY_SENTINEL,
     SUBMITTED_SENTINEL,
@@ -56,6 +58,8 @@ SENTINELS = (
     CONTENT_SENTINEL,
     ERROR_BODY_SENTINEL,
     REFUSAL_SENTINEL,
+    ANSWER_SENTINEL,
+    QUESTION_SENTINEL,
 )
 
 ALLOWED_REQUEST_FIELDS = {
@@ -83,12 +87,23 @@ STATEFUL_FIELDS = {
 }
 
 
-def make_request(text=f'{MEMBER_SENTINEL} ma sprawdzian w poniedziałek {SUBMITTED_SENTINEL}'):
+def make_request(
+    text=f'{MEMBER_SENTINEL} ma sprawdzian w poniedziałek {SUBMITTED_SENTINEL}',
+    **follow_up,
+):
     return BackendRequest(
         submitted_text=text,
         allowed_member_names=(MEMBER_SENTINEL, OTHER_MEMBER_SENTINEL),
         reference_date=REFERENCE_DATE,
         locale='pl-PL',
+        **follow_up,
+    )
+
+
+def make_follow_up_request():
+    return make_request(
+        follow_up_question=f'Kiedy odbędzie się „Sprawdzian {QUESTION_SENTINEL}”?',
+        follow_up_answer=f'w poniedziałek {ANSWER_SENTINEL}',
     )
 
 
@@ -272,6 +287,34 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
                 'polecenie': make_request().submitted_text,
             },
         )
+
+    def test_input_carries_follow_up_question_and_answer_when_answered(self):
+        backend = self.make_backend([ok()])
+        request = make_follow_up_request()
+
+        backend.classify(request)
+
+        (body,) = self.transport.bodies()
+        self.assertEqual(
+            json.loads(body['input']),
+            {
+                'data_odniesienia': '2026-09-17',
+                'dzien_tygodnia': 'czwartek',
+                'ustawienia_regionalne': 'pl-PL',
+                'dozwolone_osoby': [MEMBER_SENTINEL, OTHER_MEMBER_SENTINEL],
+                'polecenie': request.submitted_text,
+                'pytanie_uzupelniajace': request.follow_up_question,
+                'odpowiedz_rodzica': request.follow_up_answer,
+            },
+        )
+        self.assertEqual(body['instructions'], INSTRUCTIONS)
+        self.assertIn('odpowiedź rodzica', INSTRUCTIONS)
+
+    def test_follow_up_text_is_excluded_from_request_repr(self):
+        text = repr(make_follow_up_request())
+
+        self.assertNotIn(ANSWER_SENTINEL, text)
+        self.assertNotIn(QUESTION_SENTINEL, text)
 
     def test_request_has_no_stateful_openai_features(self):
         backend = self.make_backend([ok()])
@@ -602,6 +645,23 @@ class LogPrivacyTests(BackendHarness, SimpleTestCase):
                     ) + repr(error) + str(error)
                     for sentinel in SENTINELS:
                         self.assertNotIn(sentinel, exposed)
+
+    def test_follow_up_answer_never_logged_or_attached(self):
+        for label in ('success', 'malformed', '5xx twice', 'timeout twice'):
+            with self.subTest(label):
+                backend = self.make_backend(self.SCENARIOS[label])
+                error = None
+                with self.assertLogs(level=logging.DEBUG) as captured:
+                    try:
+                        backend.classify(make_follow_up_request())
+                    except ClassificationBackendError as caught:
+                        error = caught
+                exposed = '\n'.join(record.getMessage() for record in captured.records)
+                if error is not None:
+                    exposed += repr(error) + str(error)
+
+                self.assertNotIn(ANSWER_SENTINEL, exposed)
+                self.assertNotIn(QUESTION_SENTINEL, exposed)
 
     def test_log_line_contains_only_safe_operational_fields(self):
         _, records, _ = self.run_scenario(self.SCENARIOS['5xx twice'])

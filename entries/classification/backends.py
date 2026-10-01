@@ -17,12 +17,19 @@ from .types import ClassificationError, EntryType, SchoolItemKind
 
 @dataclass(frozen=True)
 class BackendRequest:
-    """Everything a backend may see: text, allowed names, date, and locale."""
+    """Everything a backend may see: text, allowed names, date, and locale.
+
+    ``follow_up_question`` and ``follow_up_answer`` are set only when the
+    parent answers a follow-up question about a draft; the answer supplements
+    ``submitted_text``. Both are family text and stay out of ``repr``.
+    """
 
     submitted_text: str = field(repr=False)
     allowed_member_names: Tuple[str, ...] = field(repr=False)
     reference_date: datetime.date
     locale: str
+    follow_up_question: Optional[str] = field(default=None, repr=False)
+    follow_up_answer: Optional[str] = field(default=None, repr=False)
 
     def __post_init__(self):
         # Normalize to an immutable tuple so callers cannot mutate it later.

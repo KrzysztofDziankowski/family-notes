@@ -273,8 +273,17 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
         } | {str(pk) for pk in Family.objects.values_list('pk', flat=True)}
         self.assertEqual(
             set(vars(request)),
-            {'submitted_text', 'allowed_member_names', 'reference_date', 'locale'},
+            {
+                'submitted_text',
+                'allowed_member_names',
+                'reference_date',
+                'locale',
+                'follow_up_question',
+                'follow_up_answer',
+            },
         )
+        self.assertIsNone(request.follow_up_question)
+        self.assertIsNone(request.follow_up_answer)
         for name in request.allowed_member_names:
             self.assertNotIn(name, ids)
 
