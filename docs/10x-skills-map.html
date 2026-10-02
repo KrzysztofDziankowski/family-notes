@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10x Skills Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&display=swap">
+<style>
+/* Layout: single reading column; wide diagram and table blocks scroll inside their own containers */
+:root {
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --fg: #1d2420;
+  --muted: #5a665f;
+  --line: #d9dfda;
+  --accent: #1f6b57;
+  --accent-soft: #e3efe9;
+  --file: #7a4b12;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131815; --surface: #1b211e; --fg: #e4ebe6; --muted: #9aa8a0;
+    --line: #2e3833; --accent: #6cc4a6; --accent-soft: #1f2f28; --file: #e0b073;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131815; --surface: #1b211e; --fg: #e4ebe6; --muted: #9aa8a0;
+  --line: #2e3833; --accent: #6cc4a6; --accent-soft: #1f2f28; --file: #e0b073;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 64px; display: grid; gap: 40px; }
+header { display: grid; gap: 10px; max-width: 70ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 44px); line-height: 1.1; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-size: 24px; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: 16px; }
+section { display: grid; gap: 14px; min-width: 0; }
+section > p { max-width: 72ch; color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { color: var(--file); }
+.skill { font-family: var(--font-mono); font-size: 0.86em; color: var(--accent); font-weight: 500; white-space: nowrap; }
+.diagram { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; }
+.diagram pre.mermaid { margin: 0; min-width: 640px; display: flex; justify-content: center; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 18px; height: 12px; border: 1.5px solid var(--fg); border-radius: 4px; }
+.sw.file { border-style: dashed; border-radius: 0; transform: skewX(-12deg); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--accent-soft); }
+tr.group td { background: var(--bg); font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); padding-block: 8px; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { width: 150px; }
+.none { color: var(--muted); font-style: italic; }
+.notes { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.note { border-top: 2px solid var(--accent); padding-top: 10px; display: grid; gap: 6px; min-width: 0; }
+.note h3 { margin: 0; font-size: 15px; }
+.note p { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">.claude/skills · 26 skills</div>
+    <h1>10x Skills Map</h1>
+    <p class="lede">Every skill in the 10xDevs toolkit, the file it produces, and the files it reads. Everything lives under <code>context/</code>. <code>foundation/</code> holds project-wide documents, <code>changes/{id}/</code> holds one unit of work, and <code>archive/</code> holds finished changes, which no skill writes to.</p>
+  </header>
+
+  <section>
+    <h2>1 · Foundation pipeline</h2>
+    <p>The idea becomes a PRD. The PRD forks into a greenfield or brownfield track, and both tracks feed the roadmap. Quality gates and agent rules sit beside the pipeline.</p>
+    <div class="legend"><span><i class="sw"></i>skill</span><span><i class="sw file"></i>file in context/foundation/ (unless noted)</span><span>solid arrow: writes · dashed arrow: reads</span></div>
+    <div class="diagram"><pre class="mermaid">
+flowchart TB
+  classDef file stroke-dasharray:4 3
+  init(["/10x-init"]) --> ctx[/"context/ + README.md x3"/]:::file
+  idea(["/10x-idea-check"]) -. "verdict only, no file" .-> shape
+  shape(["/10x-shape"]) --> sn[/"shape-notes.md"/]:::file
+  sn -.-> prd(["/10x-prd"])
+  prd --> PRD[/"prd.md"/]:::file
+
+  subgraph GF["Greenfield"]
+    tss(["/10x-tech-stack-selector"]) --> TS[/"tech-stack.md"/]:::file
+    TS -.-> boot(["/10x-bootstrapper"])
+    boot --> scaf[/"app scaffold + changes/bootstrap-verification/verification.md"/]:::file
+    infra(["/10x-infra-research"]) --> INF[/"infrastructure.md"/]:::file
+  end
+  subgraph BF["Brownfield"]
+    sa(["/10x-stack-assess"]) --> SA[/"stack-assessment.md"/]:::file
+    SA -.-> hc(["/10x-health-check"])
+    hc --> HC[/"health-check.md"/]:::file
+  end
+  PRD -.-> tss
+  PRD -.-> infra
+  TS -.-> infra
+  PRD -.-> sa
+  PRD -.-> hc
+
+  PRD -.-> rm(["/10x-roadmap"])
+  TS -.-> rm
+  rm --> RM[/"roadmap.md: milestones, slices, Change IDs"/]:::file
+  RM ==> chain{{"change chain (diagram 2)"}}
+
+  subgraph Q["Quality gates (brownfield)"]
+    tp(["/10x-test-plan"]) --> TP[/"test-plan.md: phased rollout + Quality Gates"/]:::file
+    TP -.-> hook(["/10x-configure-hook"])
+    hook --> HK[/".claude/settings.json hooks + scripts"/]:::file
+  end
+  PRD -.-> tp
+  RM -.-> tp
+  tp == "each phase opens a testing-* change" ==> chain
+
+  subgraph R["Agent rules"]
+    am(["/10x-agents-md"]) --> AG[/"AGENTS.md"/]:::file
+    AG -.-> rr(["/10x-rule-review"])
+    rr --> sc[/"scorecard in chat, file untouched"/]:::file
+  end
+</pre></div>
+  </section>
+
+  <section>
+    <h2>2 · The change chain</h2>
+    <p>One folder per change: <code>context/changes/{id}/</code>. <code>change.md</code> stores the status and <code>plan.md ## Progress</code> stores step-level progress. Every skill reads <code>lessons.md</code> as prior knowledge, and three skills also update the matching item in <code>roadmap.md</code>.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart LR
+  classDef file stroke-dasharray:4 3
+  new(["/10x-new"]) --> CM[/"change.md"/]:::file
+  CM --> frame(["/10x-frame (optional)"])
+  CM --> res(["/10x-research (optional)"])
+  frame --> FR[/"frame.md"/]:::file
+  res --> RS[/"research.md"/]:::file
+  FR -.-> plan(["/10x-plan"])
+  RS -.-> plan
+  plan --> PL[/"plan.md + plan-brief.md"/]:::file
+  PL -.-> pr(["/10x-plan-review (optional)"])
+  pr --> PRV[/"reviews/plan-review.md"/]:::file
+  PL -.-> impl(["/10x-implement"])
+  PL -.-> tdd(["/10x-tdd (test-first)"])
+  impl --> CODE[/"code + 1 commit per phase, SHAs written into Progress"/]:::file
+  tdd --> CODE
+  CODE -.-> ir(["/10x-impl-review"])
+  ir --> IRV[/"reviews/impl-review.md + follow-ups/review-fixes.md"/]:::file
+  ir -. "Record as lesson" .-> les(["/10x-lesson"])
+  les --> LS[/"foundation/lessons.md"/]:::file
+  LS -. "read by research, frame, plan, reviews, implement, tdd, ui, roadmap" .-> plan
+  IRV --> arc(["/10x-archive"])
+  arc --> AR[/"git mv to archive/{date}-{id}/"/]:::file
+  st(["/10x-status (read-only)"]) -. "change.md + Progress" .-> CM
+  ui(["/10x-ui"]) == "opens a change for one view, then drives research, plan, implement" ==> new
+</pre></div>
+  </section>
+
+  <section>
+    <h2>3 · Status writes</h2>
+    <p>Each change in <code>change.md</code> status comes from one skill. The skills record status but do not enforce the order, so any step can be skipped. <span class="skill">/10x-status</span> flags gaps, such as a <code>plan_reviewed</code> status with no review file. The roadmap item for the change follows the same path: <span class="mono">planning</span> after /10x-plan, <span class="mono">in-progress</span> after /10x-implement, and <span class="mono">done</span> after /10x-archive.</p>
+    <div class="diagram"><pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> new : /10x-new
+  new --> preparing : /10x-research or /10x-frame
+  new --> planned : /10x-plan
+  preparing --> planned : /10x-plan
+  planned --> plan_reviewed : /10x-plan-review
+  planned --> implementing : /10x-implement or /10x-tdd
+  plan_reviewed --> implementing : /10x-implement or /10x-tdd
+  implementing --> implemented : last phase done
+  implementing --> impl_reviewed : /10x-impl-review
+  implemented --> impl_reviewed : /10x-impl-review
+  implemented --> archived : /10x-archive
+  impl_reviewed --> archived : /10x-archive
+  archived --> [*]
+</pre></div>
+  </section>
+
+  <section>
+    <h2>4 · Skill index</h2>
+    <p>Paths in the Reads and Writes columns are relative to <code>context/</code> unless they begin with a dot or name a repo-root file.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Skill</th><th>What it does</th><th>Reads</th><th>Writes</th><th>Next</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="5">Setup &amp; discovery</td></tr>
+          <tr><td class="skill">/10x-init</td><td>Creates the context folder structure.</td><td class="none">nothing</td><td><code>changes/ archive/ foundation/</code> plus README.md in each</td><td>/10x-shape or /10x-new</td></tr>
+          <tr><td class="skill">/10x-idea-check</td><td>Checks whether an idea fits your experience, time and the course deadline.</td><td>conversation, course dates and certification references</td><td class="none">nothing, the verdict stays in chat</td><td>/10x-shape</td></tr>
+          <tr><td class="skill">/10x-shape</td><td>Runs a discovery interview. Detects greenfield or brownfield from the repo.</td><td>the idea, the repo when brownfield</td><td><code>foundation/shape-notes.md</code>, earlier version moved to <code>foundation/archive/</code></td><td>/10x-prd</td></tr>
+          <tr><td class="skill">/10x-prd</td><td>Writes the PRD from a locked schema: 10 sections for greenfield, 11 for brownfield.</td><td><code>shape-notes.md</code> or raw notes</td><td><code>foundation/prd.md</code> (or <code>prd-vN.md</code>)</td><td>stack-selector, or stack-assess</td></tr>
+
+          <tr class="group"><td colspan="5">Greenfield track</td></tr>
+          <tr><td class="skill">/10x-tech-stack-selector</td><td>Picks a starter from a registry, scored against 4 agent-friendliness gates.</td><td><code>prd.md</code></td><td><code>foundation/tech-stack.md</code></td><td>/10x-bootstrapper</td></tr>
+          <tr><td class="skill">/10x-bootstrapper</td><td>Runs the starter CLI. Never overwrites <code>context/</code>.</td><td><code>tech-stack.md</code></td><td>project scaffold, <code>changes/bootstrap-verification/verification.md</code></td><td>/10x-roadmap</td></tr>
+          <tr><td class="skill">/10x-infra-research</td><td>Interviews you, researches platforms on the web, and recommends where to deploy.</td><td><code>prd.md</code>, <code>tech-stack.md</code></td><td><code>foundation/infrastructure.md</code></td><td>/10x-implement</td></tr>
+
+          <tr class="group"><td colspan="5">Brownfield track</td></tr>
+          <tr><td class="skill">/10x-stack-assess</td><td>Scores the existing stack against the same 4 gates.</td><td><code>prd.md</code>, the repo</td><td><code>foundation/stack-assessment.md</code></td><td>/10x-health-check</td></tr>
+          <tr><td class="skill">/10x-health-check</td><td>Audits dependencies, security, tests, CI and config, then gives an agent-readiness verdict.</td><td><code>stack-assessment.md</code>, <code>prd.md</code>, the repo</td><td><code>foundation/health-check.md</code></td><td>agent onboarding</td></tr>
+
+          <tr class="group"><td colspan="5">Planning across changes</td></tr>
+          <tr><td class="skill">/10x-roadmap</td><td>Opens a milestone and splits it into vertical slices, each with a Change ID. Tracks and closes milestones.</td><td><code>prd.md</code>, <code>tech-stack.md</code>, <code>shape-notes.md</code>, <code>lessons.md</code></td><td><code>foundation/roadmap.md</code>, earlier version moved to <code>foundation/archive/</code></td><td>/10x-plan {change-id}</td></tr>
+
+          <tr class="group"><td colspan="5">Change chain</td></tr>
+          <tr><td class="skill">/10x-new</td><td>Opens a change folder.</td><td class="none">nothing</td><td><code>changes/{id}/change.md</code> (status: new)</td><td>/10x-frame, /10x-research or /10x-plan</td></tr>
+          <tr><td class="skill">/10x-frame</td><td>Questions the problem framing before any plan.</td><td><code>change.md</code>, <code>lessons.md</code></td><td><code>frame.md</code>, status preparing</td><td>/10x-plan</td></tr>
+          <tr><td class="skill">/10x-research</td><td>Researches the codebase with parallel subagents, citing sources.</td><td>repo, <code>lessons.md</code></td><td><code>research.md</code>, status preparing</td><td>/10x-plan</td></tr>
+          <tr><td class="skill">/10x-plan</td><td>Interviews you and writes a phased plan with success criteria.</td><td><code>research.md</code>, <code>frame.md</code>, <code>lessons.md</code>, <code>roadmap.md</code></td><td><code>plan.md</code> (with ## Progress) and <code>plan-brief.md</code>, status planned, roadmap item set to planning</td><td>/10x-plan-review or /10x-implement</td></tr>
+          <tr><td class="skill">/10x-plan-review</td><td>Reviews the plan's substance, feasibility and architectural fit.</td><td><code>plan.md</code>, <code>lessons.md</code></td><td><code>reviews/plan-review.md</code>, status plan_reviewed</td><td>/10x-implement</td></tr>
+          <tr><td class="skill">/10x-implement</td><td>Runs each phase, checks the gates, commits once per phase. Edits only the ## Progress section of the plan.</td><td><code>plan.md</code>, <code>lessons.md</code>, <code>roadmap.md</code></td><td>code, commits, SHAs in ## Progress, status implementing then implemented, roadmap item set to in-progress</td><td>/10x-impl-review</td></tr>
+          <tr><td class="skill">/10x-tdd</td><td>Implements testable phases red → green → refactor and hands the remaining phases to /10x-implement.</td><td><code>plan.md</code>, <code>lessons.md</code></td><td>tests, code, commits, Progress and status (same as implement)</td><td>/10x-impl-review</td></tr>
+          <tr><td class="skill">/10x-impl-review</td><td>Compares the implementation with the plan to find drift, risky decisions and pattern violations.</td><td><code>plan.md</code>, git diff, <code>lessons.md</code></td><td><code>reviews/impl-review.md</code>, <code>follow-ups/review-fixes.md</code>, status impl_reviewed</td><td>/10x-lesson or /10x-archive</td></tr>
+          <tr><td class="skill">/10x-archive</td><td>Moves the change folder to the archive with git mv and commits.</td><td><code>change.md</code>, Progress, <code>roadmap.md</code></td><td><code>archive/{date}-{id}/</code>, status archived, roadmap item set to done</td><td>next roadmap item</td></tr>
+          <tr><td class="skill">/10x-status</td><td>Shows the status of every change and flags drift. Never fixes anything.</td><td>all <code>change.md</code> files, Progress in each plan, <code>archive/</code></td><td class="none">nothing</td><td>suggested resume command</td></tr>
+          <tr><td class="skill">/10x-lesson</td><td>Records a rule that keeps coming up so later skills apply it.</td><td>a finding, often from impl-review</td><td><code>foundation/lessons.md</code></td><td class="none">read by most skills</td></tr>
+
+          <tr class="group"><td colspan="5">Quality, UI &amp; agent rules</td></tr>
+          <tr><td class="skill">/10x-test-plan</td><td>Plans a phased test rollout and works through it one phase at a time. Running it again picks up at the next phase.</td><td><code>prd.md</code>, <code>roadmap.md</code>, <code>tech-stack.md</code>, archived plans</td><td><code>foundation/test-plan.md</code> (§3 status table); opens <code>changes/testing-*</code></td><td>new → research → plan → implement</td></tr>
+          <tr><td class="skill">/10x-configure-hook</td><td>Turns the plan's quality gates into harness hooks and tests each one on a deliberately broken file.</td><td><code>test-plan.md</code> "Quality Gates", existing hook config</td><td><code>.claude/settings.json</code> hooks and scripts; git hooks are recommended, never written</td><td class="none">none</td></tr>
+          <tr><td class="skill">/10x-ui</td><td>Audits and restyles one existing view against a design-system contract.</td><td>the view, <code>change.md</code>, <code>lessons.md</code></td><td><code>change.md</code> (view and token source), then the usual chain files</td><td>research → plan → implement</td></tr>
+          <tr><td class="skill">/10x-agents-md</td><td>Writes an onboarding guide for AI agents from the repo itself.</td><td>manifest, README, scripts, lint and test config, git log</td><td><code>AGENTS.md</code></td><td>/10x-rule-review</td></tr>
+          <tr><td class="skill">/10x-rule-review</td><td>Scores an AI rules file on 5 points. Changes the file only if you approve a reorder.</td><td><code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.mdc</code> files and similar</td><td class="none">scorecard in chat</td><td class="none">none</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rules every skill follows</h2>
+    <div class="notes">
+      <div class="note"><h3>Archive is read-only</h3><p>Every skill that writes refuses a path starting with <code>context/archive/</code>. Reopen work with /10x-new.</p></div>
+      <div class="note"><h3>Progress is the single source of truth</h3><p>The <code>## Progress</code> section of <code>plan.md</code> is the only progress record, with no state files. implement and tdd tick its boxes and add commit SHAs. status and archive read it.</p></div>
+      <div class="note"><h3>Old versions are kept</h3><p>When a foundation file already exists, the skill asks whether to overwrite it, save a <code>-vN.md</code> copy, or move the old file to <code>foundation/archive/</code>.</p></div>
+      <div class="note"><h3>Plans don't cover multiple changes</h3><p>roadmap.md splits work into slices and plan.md plans one change. The two connect through the Change ID.</p></div>
+    </div>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true, theme: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default"});</script>
+</body>
+</html>
