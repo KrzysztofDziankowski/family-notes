@@ -737,10 +737,14 @@ class RepositoryHygieneTests(SimpleTestCase):
         self.assertEqual(sorted(set(findings)), [])
 
     def test_no_payload_or_family_text_fixtures_are_committed(self):
+        # Harness configuration is not a captured family/provider fixture.
+        # contents() still scans these files for payloads and provider keys.
+        hook_configs = {'.codex/hooks.json', '.claude/settings.json'}
         fixture_files = [
             relative
             for relative in self.paths
-            if Path(relative).suffix.lower() in self.FIXTURE_SUFFIXES
+            if (Path(relative).suffix.lower() in self.FIXTURE_SUFFIXES
+                and relative not in hook_configs)
             or self.FIXTURE_DIRECTORIES & set(Path(relative).parts)
         ]
         payloads = [
