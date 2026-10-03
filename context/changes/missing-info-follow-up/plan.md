@@ -276,10 +276,10 @@ No schema change. Rolling back means reverting the code. Saved entries are unaff
 
 #### Automated
 
-- [x] 3.1 States page tests pass
-- [x] 3.2 Full suite passes
+- [x] 3.1 States page tests pass — 215c246
+- [x] 3.2 Full suite passes — 215c246
 
 #### Manual
 
-- [x] 3.3 Screenshots of the four new states at 360 px width are taken and saved under `context/changes/missing-info-follow-up/screenshots/`, with nothing clipped or overflowing
-- [x] 3.4 A live run with an OpenAI key: a missing-date instruction plus a relative-date answer („w piątek”) yields the correct date within 30 s per step
+- [x] 3.3 Screenshots of the four new states at 360 px width are taken and saved under `context/changes/missing-info-follow-up/screenshots/`, with nothing clipped or overflowing — 215c246
+- [x] 3.4 A live run with an OpenAI key: a missing-date instruction plus a relative-date answer („w piątek”) yields the correct date within 30 s per step — 215c246
