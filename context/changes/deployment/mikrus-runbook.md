@@ -895,7 +895,7 @@ OPENAI_CLASSIFICATION_MODEL=<OPENAI_CLASSIFICATION_MODEL>
 | --- | --- |
 | `CLASSIFICATION_ENABLED` | Master switch; `False` disables every provider call. |
 | `OPENAI_API_KEY` | Project key of the production OpenAI project. Secret. |
-| `OPENAI_CLASSIFICATION_MODEL` | A model that supports Structured Outputs with the Responses API. |
+| `OPENAI_CLASSIFICATION_MODEL` | A model that supports Structured Outputs with the Responses API. Recommended: `gpt-5.4-nano` with `OPENAI_REASONING_EFFORT=none`. |
 | `OPENAI_REASONING_EFFORT` | Required in practice for reasoning models (for example `low` for the gpt-5 family); leave empty for non-reasoning models. Otherwise `reason=incomplete_output`. |
 | `CLASSIFICATION_DEADLINE_SECONDS` | Optional; default `25`. Keep it at or below 25. |
 | `CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS` | Optional; default `10`. |
