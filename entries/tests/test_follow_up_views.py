@@ -150,6 +150,21 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertEqual(entry.content, CONTENT)
         self.assertEqual(entry.school_item, SchoolItemKind.QUIZ.value)
 
+    def test_answer_resolving_to_a_past_date_warns_on_the_proposal(self):
+        _, data = self.ask()
+        past = SATURDAY - datetime.timedelta(days=1)
+
+        response = self.answer(data, output(date=past), answer='wczoraj')
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertContains(
+            response,
+            'Data 18.09.2026 jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
+            'Jeśli nie, popraw datę powyżej.',
+        )
+        self.assertIn('aria-invalid="true"', str(response.context['review_form']['date']))
+        self.assertFalse(Entry.objects.exists())
+
     def test_member_still_missing_falls_back_to_highlighted_review(self):
         _, data = self.ask(first=output(member_name=None), text='Kartkówka z matematyki')
         self.assertEqual(data['missing'], ['date', 'affected_member'])

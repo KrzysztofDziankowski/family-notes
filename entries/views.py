@@ -99,7 +99,8 @@ def capture(request):
         return _render(request, 'empty', capture_form=capture_form)
 
     text = capture_form.cleaned_data['text']
-    outcome = classify_for_parent(request.user, text, reference_date=timezone.localdate())
+    today = timezone.localdate()
+    outcome = classify_for_parent(request.user, text, reference_date=today)
     result = outcome.result
 
     if isinstance(result, ClassificationUnavailable) and (
@@ -115,7 +116,7 @@ def capture(request):
             follow_up_form=follow_up_form_from_classification(membership, outcome, text),
         )
 
-    review_form, _ = review_form_from_classification(membership, outcome, text)
+    review_form, _ = review_form_from_classification(membership, outcome, text, today=today)
     state = 'proposal' if isinstance(result, ClassificationProposal) else 'unavailable'
     return _render(
         request,
@@ -142,11 +143,15 @@ def answer(request):
         return _render(request, 'question', follow_up_form=form)
 
     text = form.cleaned_data['text']
+    today = timezone.localdate()
     draft, member = draft_from_form(form)
     if not draft.missing_fields:
         # A stale or tampered form: nothing is left to ask, so no backend call.
         review_form, _ = review_form_from_classification(
-            membership, ParentClassification(result=proposal_from_draft(draft), member=member), text
+            membership,
+            ParentClassification(result=proposal_from_draft(draft), member=member),
+            text,
+            today=today,
         )
         return _render(request, 'proposal', review_form=review_form)
 
@@ -154,7 +159,7 @@ def answer(request):
         return _render(
             request,
             'skipped',
-            review_form=skip_review_form(membership, draft, member),
+            review_form=skip_review_form(membership, draft, member, today=today),
             notice=SKIPPED_NOTICE,
         )
 
@@ -163,7 +168,7 @@ def answer(request):
         text,
         draft,
         form.cleaned_data['answer'],
-        reference_date=timezone.localdate(),
+        reference_date=today,
         draft_member=member,
     )
     result = outcome.result
@@ -176,7 +181,7 @@ def answer(request):
         state = 'follow_up'
         outcome = ParentClassification(result=draft, member=member)
         notice = ANSWER_UNAVAILABLE_NOTICE
-    review_form, _ = review_form_from_classification(membership, outcome, text)
+    review_form, _ = review_form_from_classification(membership, outcome, text, today=today)
     return _render(request, state, review_form=review_form, notice=notice)
 
 
@@ -224,6 +229,7 @@ def _saved_entry(membership, saved):
 
 # Fictional kitchen-sink data: never real family members or saved rows.
 STATES_MEMBER_CHOICES = [('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek')]
+# Also the gallery's fictional "today", so the past-date warning is deterministic.
 STATES_DATE = datetime.date(2026, 10, 5)
 
 
@@ -237,7 +243,7 @@ def states(request):
 
     def synthetic_review(result, member_value='', text=''):
         form, _ = review_form_from_classification(
-            membership, ParentClassification(result=result), text
+            membership, ParentClassification(result=result), text, today=STATES_DATE
         )
         _use_synthetic_members(form)
         form.initial['assigned_member'] = member_value
@@ -249,6 +255,11 @@ def states(request):
         date=STATES_DATE,
         time=datetime.time(8, 0),
         school_item=SchoolItemKind.TEST,
+    )
+    past_proposal = ClassificationProposal(
+        entry_type=EntryType.TODO,
+        content='Oddać zgodę na wycieczkę',
+        date=STATES_DATE - datetime.timedelta(days=4),
     )
     invalid_form = EntryReviewForm(
         membership,
@@ -272,12 +283,36 @@ def states(request):
         assigned_member=FamilyMember(display_name='Kasia'),
     )
 
+    def synthetic_question(draft, text):
+        return follow_up_form_from_classification(
+            membership, ParentClassification(result=draft), text
+        )
+
+    date_draft = ClassificationFollowUp(
+        missing_fields=(MissingField.DATE,),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Wywiadówka w szkole',
+    )
+    combined_draft = ClassificationFollowUp(
+        missing_fields=(MissingField.DATE, MissingField.AMBIGUOUS_MEMBER),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Sprawdzian z angielskiego',
+        school_item=SchoolItemKind.TEST,
+    )
+    skipped_form = skip_review_form(membership, combined_draft, None, today=STATES_DATE)
+    _use_synthetic_members(skipped_form)
+
     sections = [
         {'name': 'empty', 'label': 'Pusty formularz', 'capture_form': CaptureForm()},
         {
             'name': 'proposal',
             'label': 'Propozycja do sprawdzenia',
             'review_form': synthetic_review(proposal, member_value='s1'),
+        },
+        {
+            'name': 'past_date',
+            'label': 'Propozycja z datą w przeszłości',
+            'review_form': synthetic_review(past_proposal, member_value='s2'),
         },
         {
             'name': 'follow_up',
@@ -313,6 +348,30 @@ def states(request):
                 ClassificationUnavailable(reason=UnavailableReason.TIMEOUT),
                 text='Kupić blok techniczny na plastykę',
             ),
+        },
+        {
+            'name': 'question',
+            'label': 'Pytanie: brakująca data',
+            'follow_up_form': synthetic_question(date_draft, 'Wywiadówka w szkole'),
+        },
+        {
+            'name': 'question_combined',
+            'label': 'Pytanie: brakująca data i osoba',
+            'follow_up_form': synthetic_question(
+                combined_draft, 'Sprawdzian z angielskiego, trzeba się przygotować'
+            ),
+        },
+        {
+            'name': 'answer_unavailable',
+            'label': 'Odpowiedź nierozpoznana',
+            'notice': ANSWER_UNAVAILABLE_NOTICE,
+            'review_form': synthetic_review(combined_draft),
+        },
+        {
+            'name': 'skipped',
+            'label': 'Pytanie pominięte',
+            'notice': SKIPPED_NOTICE,
+            'review_form': skipped_form,
         },
         {'name': 'invalid', 'label': 'Błędy w formularzu', 'review_form': invalid_form},
         {

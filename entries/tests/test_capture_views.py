@@ -135,6 +135,7 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
                     entry_type='calendar_event',
                     content=PRD_CONTENT,
                     date=PRD_MONDAY.isoformat(),
+                    date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
                 )
@@ -315,6 +316,54 @@ class FollowUpAndUnavailableTests(CaptureViewMixin, TestCase):
             _, classify = self.classify_with(self.proposal(), member=self.child)
 
         self.assertEqual(classify.call_args.kwargs['reference_date'], datetime.date(2026, 9, 19))
+
+
+class PastDateWarningTests(CaptureViewMixin, TestCase):
+    WARNING = (
+        'Data 18.09.2026 jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
+        'Jeśli nie, popraw datę powyżej.'
+    )
+
+    def classify_on(self, today, **proposal_overrides):
+        with mock.patch('entries.views.timezone.localdate', return_value=today):
+            response, _ = self.classify_with(
+                self.proposal(**proposal_overrides), member=self.child
+            )
+        return response
+
+    def test_past_date_is_warned_and_still_saved_unchanged(self):
+        past = datetime.date(2026, 9, 18)
+
+        response = self.classify_on(PRD_REFERENCE_DATE, date=past)
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertContains(response, self.WARNING)
+        form = response.context['review_form']
+        date_input = str(form['date'])
+        self.assertIn('aria-invalid="true"', date_input)
+        self.assertIn('aria-describedby="id_date-hint"', date_input)
+        self.assertContains(response, 'id="id_date-hint"')
+        self.assertNotIn('aria-invalid', str(form['content']))
+
+        data = {name: '' if value is None else str(value) for name, value in form.initial.items()}
+        confirmed = self.client.post(CONFIRM_URL, data)
+
+        entry = Entry.objects.get()
+        self.assertRedirects(confirmed, f'{CAPTURE_URL}?saved={entry.pk}')
+        self.assertEqual(entry.date, past)
+
+    def test_no_warning_for_today_future_or_no_date(self):
+        cases = {
+            'today': dict(date=PRD_REFERENCE_DATE),
+            'future': dict(date=PRD_MONDAY),
+            'no date': dict(entry_type=EntryType.NOTE, date=None, school_item=None),
+        }
+        for name, overrides in cases.items():
+            with self.subTest(name):
+                response = self.classify_on(PRD_REFERENCE_DATE, **overrides)
+                self.assertEqual(response.context['state'], 'proposal')
+                self.assertNotContains(response, 'jest w przeszłości')
+                self.assertNotIn('aria-invalid', str(response.context['review_form']['date']))
 
 
 class IdempotencyAndSavedPanelTests(CaptureViewMixin, TestCase):

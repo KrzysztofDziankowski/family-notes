@@ -336,7 +336,7 @@ class FamilyClassificationPrivacyTests(TestCase):
         clock = FakeClock()
         body = response_body(
             '{"entry_type": "note", "content": "Wycieczka %s", "grounded": true, '
-            '"date": null, "time": null, "school_item": null, "member_name": "Łucja"}'
+            '"date": null, "date_source": null, "time": null, "school_item": null, "member_name": "Łucja"}'
             % TEXT_SENTINEL
         )
         transport = ScriptedTransport(clock, [(1.0, ok(body))])

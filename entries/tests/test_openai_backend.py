@@ -6,6 +6,7 @@ exactly as in production, with no network access and no real sleeps. A fake
 monotonic clock advances only when the scripted transport or backoff says so.
 """
 
+import dataclasses
 import datetime
 import json
 import logging
@@ -50,6 +51,7 @@ ERROR_BODY_SENTINEL = 'SENTINEL-ERRORBODY-c03e9d'
 REFUSAL_SENTINEL = 'SENTINEL-REFUSAL-d7714b'
 ANSWER_SENTINEL = 'SENTINEL-ANSWER-8b40e2'
 QUESTION_SENTINEL = 'SENTINEL-QUESTION-2c9d51'
+DATE_SOURCE_SENTINEL = 'SENTINEL-DATESOURCE-71af3e'
 SENTINELS = (
     API_KEY_SENTINEL,
     SUBMITTED_SENTINEL,
@@ -60,6 +62,7 @@ SENTINELS = (
     REFUSAL_SENTINEL,
     ANSWER_SENTINEL,
     QUESTION_SENTINEL,
+    DATE_SOURCE_SENTINEL,
 )
 
 ALLOWED_REQUEST_FIELDS = {
@@ -113,6 +116,7 @@ def structured(**overrides):
         content=f'Sprawdzian {CONTENT_SENTINEL}',
         grounded=True,
         date=MONDAY.isoformat(),
+        date_source='w poniedziałek',
         time='08:00',
         school_item='test',
         member_name=MEMBER_SENTINEL,
@@ -268,7 +272,16 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         self.assertEqual(set(schema['required']), set(schema['properties']))
         self.assertEqual(
             set(schema['properties']),
-            {'entry_type', 'content', 'grounded', 'date', 'time', 'school_item', 'member_name'},
+            {
+                'entry_type',
+                'content',
+                'grounded',
+                'date',
+                'date_source',
+                'time',
+                'school_item',
+                'member_name',
+            },
         )
 
     def test_input_is_minimal_payload(self):
@@ -427,6 +440,121 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         error = self.classify_error(backend)
 
         self.assertEqual(error.reason, UnavailableReason.PROVIDER_ERROR)
+
+
+class DateGroundingTests(BackendHarness, SimpleTestCase):
+    """A date survives only when its ``date_source`` occurs in the parent's text."""
+
+    def classify_with(self, request=None, **overrides):
+        backend = self.make_backend([ok(response_body(json.dumps(structured(**overrides))))])
+        return backend.classify(request or make_request())
+
+    def test_instructions_forbid_reference_date_as_default(self):
+        self.assertIn('nigdy nie używaj daty odniesienia jako domyślnej', INSTRUCTIONS)
+        self.assertIn('date_source', INSTRUCTIONS)
+
+    def test_invented_date_without_evidence_is_dropped(self):
+        for date_source in (None, '', '   ', '„”'):
+            with self.subTest(date_source=date_source):
+                output = self.classify_with(
+                    make_request(text=f'{MEMBER_SENTINEL} ma kartkówkę z matematyki'),
+                    date=REFERENCE_DATE.isoformat(),
+                    date_source=date_source,
+                )
+
+                self.assertIsNone(output.date)
+
+    def test_date_with_evidence_absent_from_text_is_dropped_other_fields_kept(self):
+        output = self.classify_with(date_source='w piątek')
+
+        self.assertIsNone(output.date)
+        self.assertEqual(output.time, datetime.time(8, 0))
+        self.assertEqual(output.entry_type, EntryType.CALENDAR_EVENT)
+        self.assertEqual(output.school_item, SchoolItemKind.TEST)
+        self.assertEqual(output.member_name, MEMBER_SENTINEL)
+        self.assertTrue(output.grounded)
+
+    def test_date_with_evidence_in_text_is_kept(self):
+        request = make_request(text=f'{MEMBER_SENTINEL} ma sprawdzian  W\nPoniedziałek, sala 12')
+        for date_source in (
+            'w poniedziałek',
+            'W PONIEDZIAŁEK',
+            '  w   poniedziałek ',
+            '„w poniedziałek”',
+            'ma sprawdzian w poniedziałek',
+        ):
+            with self.subTest(date_source=date_source):
+                output = self.classify_with(request, date_source=date_source)
+
+                self.assertEqual(output.date, MONDAY)
+
+    def test_follow_up_answer_grounds_the_date(self):
+        request = make_request(
+            text=f'{MEMBER_SENTINEL} ma sprawdzian',
+            follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
+            follow_up_answer='W poniedziałek rano',
+        )
+
+        output = self.classify_with(request, date_source='w poniedziałek')
+
+        self.assertEqual(output.date, MONDAY)
+
+    def test_follow_up_question_does_not_ground_the_date(self):
+        request = make_request(
+            text=f'{MEMBER_SENTINEL} ma sprawdzian',
+            follow_up_question='Czy to w poniedziałek?',
+            follow_up_answer='nie wiem',
+        )
+
+        output = self.classify_with(request, date_source='w poniedziałek')
+
+        self.assertIsNone(output.date)
+
+    def test_follow_up_answer_cited_by_key_or_whole_answer_grounds_the_date(self):
+        request = make_request(
+            text=f'{MEMBER_SENTINEL} ma sprawdzian',
+            follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
+            follow_up_answer='W poniedziałek',
+        )
+        for date_source in (
+            'odpowiedz_rodzica',
+            'odpowiedź_rodzica',
+            '„odpowiedz_rodzica”',
+            'pytanie_uzupelniajace: Kiedy odbędzie się „Sprawdzian”? odpowiedz_rodzica: w poniedziałek',
+        ):
+            with self.subTest(date_source=date_source):
+                output = self.classify_with(request, date_source=date_source)
+
+                self.assertEqual(output.date, MONDAY)
+
+    def test_question_key_or_answer_key_without_answer_does_not_ground_the_date(self):
+        cases = (
+            (make_request(
+                text=f'{MEMBER_SENTINEL} ma sprawdzian',
+                follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
+                follow_up_answer='W poniedziałek',
+            ), 'pytanie_uzupelniajace'),
+            (make_request(
+                text=f'{MEMBER_SENTINEL} ma sprawdzian',
+                follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
+                follow_up_answer='W poniedziałek',
+            ), 'Kiedy odbędzie się „Sprawdzian”?'),
+            (make_request(text=f'{MEMBER_SENTINEL} ma sprawdzian'), 'odpowiedz_rodzica'),
+        )
+        for request, date_source in cases:
+            with self.subTest(date_source=date_source):
+                output = self.classify_with(request, date_source=date_source)
+
+                self.assertIsNone(output.date)
+
+    def test_date_source_is_not_part_of_backend_output(self):
+        request = make_request(text=f'{MEMBER_SENTINEL} ma sprawdzian {DATE_SOURCE_SENTINEL}')
+
+        output = self.classify_with(request, date_source=DATE_SOURCE_SENTINEL)
+
+        self.assertEqual(output.date, MONDAY)
+        self.assertNotIn('date_source', {field.name for field in dataclasses.fields(output)})
+        self.assertNotIn(DATE_SOURCE_SENTINEL, repr(output))
 
 
 class TimingAndRetryTests(BackendHarness, SimpleTestCase):
@@ -603,6 +731,9 @@ class LogPrivacyTests(BackendHarness, SimpleTestCase):
         'success': [(1.0, ok(request_id='req_success'))],
         'refusal': [(1.0, ok(response_body(refusal=REFUSAL_SENTINEL), request_id='req_refusal'))],
         'malformed': [(1.0, ok(response_body(f'{{"content": "{CONTENT_SENTINEL}"'), 'req_bad'))],
+        'ungrounded date evidence': [
+            (1.0, ok(response_body(json.dumps(structured(date_source=DATE_SOURCE_SENTINEL)))))
+        ],
         'schema invalid': [
             (1.0, ok(response_body(json.dumps(structured(extra=CONTENT_SENTINEL))), 'req_bad'))
         ],
@@ -645,6 +776,18 @@ class LogPrivacyTests(BackendHarness, SimpleTestCase):
                     ) + repr(error) + str(error)
                     for sentinel in SENTINELS:
                         self.assertNotIn(sentinel, exposed)
+
+    def test_grounded_date_evidence_never_logged(self):
+        request = make_request(text=f'{MEMBER_SENTINEL} ma sprawdzian {DATE_SOURCE_SENTINEL}')
+        backend = self.make_backend(
+            [(1.0, ok(response_body(json.dumps(structured(date_source=DATE_SOURCE_SENTINEL)))))]
+        )
+        with self.assertLogs(level=logging.DEBUG) as captured:
+            output = backend.classify(request)
+
+        self.assertEqual(output.date, MONDAY)
+        exposed = '\n'.join(record.getMessage() for record in captured.records)
+        self.assertNotIn(DATE_SOURCE_SENTINEL, exposed + repr(output))
 
     def test_follow_up_answer_never_logged_or_attached(self):
         for label in ('success', 'malformed', '5xx twice', 'timeout twice'):

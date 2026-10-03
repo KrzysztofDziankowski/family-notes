@@ -15,6 +15,9 @@
     {% if section.notice %}
         {% include "entries/_notice.html" with message=section.notice %}
     {% endif %}
+    {% if section.follow_up_form %}
+        {% include "entries/_follow_up_form.html" with form=section.follow_up_form %}
+    {% endif %}
     {% if section.review_form %}
         {% include "entries/_review_form.html" with form=section.review_form %}
     {% endif %}

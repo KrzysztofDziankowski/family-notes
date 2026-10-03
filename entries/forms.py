@@ -23,6 +23,10 @@ MISSING_FIELD_HINTS = {
     MissingField.AFFECTED_MEMBER: ('assigned_member', 'Wybierz osobę, której dotyczy wpis.'),
     MissingField.AMBIGUOUS_MEMBER: ('assigned_member', 'Wybierz osobę.'),
 }
+PAST_DATE_WARNING = (
+    'Data {date} jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
+    'Jeśli nie, popraw datę powyżej.'
+)
 
 
 class CaptureForm(forms.Form):
@@ -114,9 +118,15 @@ class EntryReviewForm(EntryFieldsForm):
     )
     submission_key = forms.UUIDField(widget=forms.HiddenInput)
 
-    def __init__(self, membership, *args, missing=None, **kwargs):
+    def __init__(self, membership, *args, missing=None, today=None, **kwargs):
         super().__init__(membership, *args, **kwargs)
         self.missing = dict(missing or {})
+        shown_date = self.display_date()
+        if today is not None and shown_date is not None and shown_date < today:
+            # A warning, not a validation error: confirm still saves the date.
+            self.missing.setdefault(
+                'date', PAST_DATE_WARNING.format(date=shown_date.strftime('%d.%m.%Y'))
+            )
         for name in self.missing:
             attrs = self.fields[name].widget.attrs
             attrs['aria-invalid'] = 'true'
@@ -210,11 +220,13 @@ class EntryEditForm(ManagedEntryForm):
             ).order_by('pk')
 
 
-def review_form_from_classification(membership, outcome, submitted_text):
+def review_form_from_classification(membership, outcome, submitted_text, *, today=None):
     """Build the prefilled review form and the list of fields to highlight.
 
     Returns ``(form, missing_field_names)``. Unavailable outcomes fall back to a
-    note containing the submitted text so the parent is never stuck.
+    note containing the submitted text so the parent is never stuck. A date
+    before ``today`` (the classification reference date) is flagged with a
+    warning hint; it is not counted as missing.
     """
     result = outcome.result
     initial = {'submission_key': uuid.uuid4()}
@@ -234,7 +246,7 @@ def review_form_from_classification(membership, outcome, submitted_text):
                 missing.setdefault(name, hint)
     else:
         initial.update(entry_type=EntryType.NOTE.value, content=submitted_text, school_item='')
-    form = EntryReviewForm(membership, initial=initial, missing=missing)
+    form = EntryReviewForm(membership, initial=initial, missing=missing, today=today)
     return form, list(missing)
 
 
@@ -398,7 +410,7 @@ def proposal_from_draft(draft):
     )
 
 
-def skip_review_form(membership, draft, member):
+def skip_review_form(membership, draft, member, *, today=None):
     """The review form prefilled as a note, keeping the known values."""
     return EntryReviewForm(
         membership,
@@ -411,4 +423,5 @@ def skip_review_form(membership, draft, member):
             'school_item': '',
             'submission_key': uuid.uuid4(),
         },
+        today=today,
     )

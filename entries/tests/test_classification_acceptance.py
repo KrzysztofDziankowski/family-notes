@@ -74,6 +74,7 @@ def model_output(**fields):
         content='',
         grounded=True,
         date=None,
+        date_source=None,
         time=None,
         school_item=None,
         member_name=None,
@@ -116,6 +117,7 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                     entry_type='calendar_event',
                     content=PRD_CONTENT,
                     date=PRD_MONDAY.isoformat(),
+                    date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
                 )
@@ -164,6 +166,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 entry_type='calendar_event',
                 content='Kartkówka z angielskiego',
                 date='2026-09-22',
+                date_source='Jutro',
                 school_item='quiz',
                 member_name='Ania',
             ),
@@ -177,6 +180,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 entry_type='calendar_event',
                 content='Zebranie rodziców',
                 date='2026-09-25',
+                date_source='Pojutrze',
                 time='18:00',
             ),
             EntryType.CALENDAR_EVENT,
@@ -189,6 +193,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 entry_type='calendar_event',
                 content='Zadanie domowe z polskiego',
                 date='2026-10-02',
+                date_source='W przyszły piątek',
                 school_item='homework',
                 member_name='Michał',
             ),
@@ -198,7 +203,12 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
             'W niedzielę kupić prezent dla babci',
             datetime.date(2026, 9, 26),
             'sobota',
-            dict(entry_type='todo', content='Kupić prezent dla babci', date='2026-09-27'),
+            dict(
+                entry_type='todo',
+                content='Kupić prezent dla babci',
+                date='2026-09-27',
+                date_source='W niedzielę',
+            ),
             EntryType.TODO,
         ),
     )
@@ -231,6 +241,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     entry_type='calendar_event',
                     content='Wizyta u dentysty',
                     date='2026-09-22',
+                    date_source='w poniedziałek',
                     time='16:30',
                 ),
                 EntryType.CALENDAR_EVENT,
@@ -241,6 +252,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     entry_type='calendar_event',
                     content='Praca klasowa z matematyki',
                     date='2026-09-24',
+                    date_source='w poniedziałek',
                     school_item='class_test',
                     member_name='Michał',
                 ),
@@ -252,6 +264,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     entry_type='calendar_event',
                     content='Zadanie domowe z przyrody',
                     date='2026-09-23',
+                    date_source='w poniedziałek',
                     school_item='homework',
                     member_name='Ania',
                 ),
@@ -263,6 +276,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     entry_type='note',
                     content='Zmiana sali na 12',
                     date='2026-09-22',
+                    date_source='w poniedziałek',
                     school_item='room_change',
                 ),
                 EntryType.NOTE,
@@ -337,6 +351,7 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
                     entry_type='calendar_event',
                     content='Kartkówka z fizyki',
                     date='2026-09-22',
+                    date_source='w poniedziałek',
                     school_item='quiz',
                 ),
                 (MissingField.AFFECTED_MEMBER,),
@@ -362,6 +377,29 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
                 self.assertEqual(outcome.result.missing_fields, missing)
 
 
+    def test_invented_reference_date_becomes_date_follow_up(self):
+        # Live gpt-5-nano answered an undated instruction with the reference
+        # date; without a verbatim date_source the adapter drops it.
+        text = 'Ania ma kartkówkę z matematyki'
+        answer = dict(
+            entry_type='calendar_event',
+            content='Kartkówka z matematyki',
+            date=PRD_REFERENCE_DATE.isoformat(),
+            school_item='quiz',
+            member_name='Ania',
+        )
+        for date_source in (None, 'w sobotę'):
+            with self.subTest(date_source=date_source):
+                outcome = self.run_service(
+                    [model_output(**answer, date_source=date_source)], text=text
+                )
+
+                self.assertIsInstance(outcome.result, ClassificationFollowUp)
+                self.assertEqual(outcome.result.missing_fields, (MissingField.DATE,))
+                self.assertIsNone(outcome.result.date)
+                self.assertEqual(outcome.member, self.other_child)
+
+
 class AmbiguityAndInventionTests(AdapterPathMixin, TestCase):
     def test_duplicate_names_become_ambiguous_follow_up(self):
         self._member('second-michal', FamilyMember.Role.CHILD, 'Michał')
@@ -372,6 +410,7 @@ class AmbiguityAndInventionTests(AdapterPathMixin, TestCase):
                     entry_type='calendar_event',
                     content=PRD_CONTENT,
                     date=PRD_MONDAY.isoformat(),
+                    date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
                 )
@@ -389,6 +428,7 @@ class AmbiguityAndInventionTests(AdapterPathMixin, TestCase):
             entry_type='calendar_event',
             content=PRD_CONTENT,
             date=PRD_MONDAY.isoformat(),
+            date_source='w poniedziałek',
             school_item='test',
         )
         cases = {

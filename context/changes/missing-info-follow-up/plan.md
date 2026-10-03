@@ -265,21 +265,21 @@ No schema change. Rolling back means reverting the code. Saved entries are unaff
 
 #### Automated
 
-- [x] 2.1 Capture and follow-up view tests pass
-- [x] 2.2 Full suite, Django checks and migration check pass
+- [x] 2.1 Capture and follow-up view tests pass — 7e9b93e
+- [x] 2.2 Full suite, Django checks and migration check pass — 7e9b93e
 
 #### Manual
 
-- [x] 2.3 With a stubbed or live backend, a parent on a phone-width browser answers a missing-date question and saves the entry, and „Pomiń” leads to a note
+- [x] 2.3 With a stubbed or live backend, a parent on a phone-width browser answers a missing-date question and saves the entry, and „Pomiń” leads to a note — 7e9b93e
 
 ### Phase 3: States page and screenshot gate
 
 #### Automated
 
-- [ ] 3.1 States page tests pass
-- [ ] 3.2 Full suite passes
+- [x] 3.1 States page tests pass
+- [x] 3.2 Full suite passes
 
 #### Manual
 
-- [ ] 3.3 Screenshots of the four new states at 360 px width are taken and saved under `context/changes/missing-info-follow-up/screenshots/`, with nothing clipped or overflowing
-- [ ] 3.4 A live run with an OpenAI key: a missing-date instruction plus a relative-date answer („w piątek”) yields the correct date within 30 s per step
+- [x] 3.3 Screenshots of the four new states at 360 px width are taken and saved under `context/changes/missing-info-follow-up/screenshots/`, with nothing clipped or overflowing
+- [x] 3.4 A live run with an OpenAI key: a missing-date instruction plus a relative-date answer („w piątek”) yields the correct date within 30 s per step
