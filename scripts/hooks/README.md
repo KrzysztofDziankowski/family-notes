@@ -53,6 +53,19 @@ remaining failures must be reported by the agent. The runner also guards
 ## Loading and verification
 
 Codex: open `/hooks`, review and trust both definitions. Re-trust after changes.
+Project trust alone does not approve hook definitions. If edits produce no
+feedback, inspect both entries in `/hooks`: enabled hooks with `untrusted`
+status are discovered but skipped. Review and trust the `PostToolUse` and
+`Stop` commands from `.codex/hooks.json`, then repeat the syntax-error probe
+with `apply_patch`. Do not treat a manual script invocation as proof of
+automatic delivery.
+
+Diagnosis on 2026-10-04, using Codex CLI 0.158.0 `hooks/list`: both project
+hooks were discovered with `enabled: true`, `trustStatus: untrusted`, no
+warnings and no errors. The `hooks` feature was already enabled and the
+project was trusted. No matcher, feature flag or command change was needed;
+the remaining activation step is review and trust in `/hooks`.
+
 Claude Code: restart the session and inspect `/hooks` for both project entries;
 use its debug log to confirm event matching and feedback delivery.
 
