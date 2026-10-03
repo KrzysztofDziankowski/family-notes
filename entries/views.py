@@ -16,7 +16,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from family_access.access import require_active_membership, scope_queryset_to_family
 from family_access.models import FamilyMember
 
-from .classification.service import classify_for_parent
+from .classification.service import classify_follow_up_answer, classify_for_parent
 from .classification.service import ParentClassification
 from .classification.types import (
     EntryType,
@@ -32,7 +32,12 @@ from .forms import (
     EntryCreateForm,
     EntryEditForm,
     EntryReviewForm,
+    FollowUpAnswerForm,
+    draft_from_form,
+    follow_up_form_from_classification,
+    proposal_from_draft,
     review_form_from_classification,
+    skip_review_form,
 )
 from .listing import (
     LIST_MODES,
@@ -62,6 +67,8 @@ UNAVAILABLE_NOTICE = (
 )
 INPUT_TOO_LONG_ERROR = 'Tekst jest za długi. Skróć go i spróbuj ponownie.'
 SAVE_FAILED_ERROR = 'Nie udało się zapisać wpisu. Sprawdź dane i spróbuj ponownie.'
+SKIPPED_NOTICE = 'Brakujące dane pominięte — wpis zostanie zapisany jako notatka.'
+ANSWER_UNAVAILABLE_NOTICE = 'Nie udało się rozpoznać odpowiedzi. Uzupełnij brakujące pola.'
 
 
 def _require_parent(request):
@@ -101,19 +108,76 @@ def capture(request):
         capture_form.add_error('text', INPUT_TOO_LONG_ERROR)
         return _render(request, 'empty', capture_form=capture_form)
 
+    if isinstance(result, ClassificationFollowUp):
+        return _render(
+            request,
+            'question',
+            follow_up_form=follow_up_form_from_classification(membership, outcome, text),
+        )
+
     review_form, _ = review_form_from_classification(membership, outcome, text)
-    if isinstance(result, ClassificationProposal):
-        state = 'proposal'
-    elif isinstance(result, ClassificationFollowUp):
-        state = 'follow_up'
-    else:
-        state = 'unavailable'
+    state = 'proposal' if isinstance(result, ClassificationProposal) else 'unavailable'
     return _render(
         request,
         state,
         review_form=review_form,
         notice=UNAVAILABLE_NOTICE if state == 'unavailable' else '',
     )
+
+
+@sensitive_post_parameters('text', 'content', 'answer')
+@require_POST
+@login_required
+def answer(request):
+    """Classify the parent's answer to the follow-up question, or skip it.
+
+    Nothing is saved here: every path ends on a review form posted to
+    ``confirm``. The draft comes back from hidden fields and is re-validated.
+    """
+    membership = _require_parent(request)
+    skip = request.POST.get('action') == 'skip'
+    form = FollowUpAnswerForm(membership, request.POST, skip=skip)
+    if not form.is_valid():
+        _mark_invalid_fields(form)
+        return _render(request, 'question', follow_up_form=form)
+
+    text = form.cleaned_data['text']
+    draft, member = draft_from_form(form)
+    if not draft.missing_fields:
+        # A stale or tampered form: nothing is left to ask, so no backend call.
+        review_form, _ = review_form_from_classification(
+            membership, ParentClassification(result=proposal_from_draft(draft), member=member), text
+        )
+        return _render(request, 'proposal', review_form=review_form)
+
+    if skip:
+        return _render(
+            request,
+            'skipped',
+            review_form=skip_review_form(membership, draft, member),
+            notice=SKIPPED_NOTICE,
+        )
+
+    outcome = classify_follow_up_answer(
+        request.user,
+        text,
+        draft,
+        form.cleaned_data['answer'],
+        reference_date=timezone.localdate(),
+        draft_member=member,
+    )
+    result = outcome.result
+    notice = ''
+    if isinstance(result, ClassificationProposal):
+        state = 'proposal'
+    elif isinstance(result, ClassificationFollowUp):
+        state = 'follow_up'
+    else:
+        state = 'follow_up'
+        outcome = ParentClassification(result=draft, member=member)
+        notice = ANSWER_UNAVAILABLE_NOTICE
+    review_form, _ = review_form_from_classification(membership, outcome, text)
+    return _render(request, state, review_form=review_form, notice=notice)
 
 
 @sensitive_post_parameters('text', 'content')

@@ -8,10 +8,12 @@
 {% if state == "saved" %}
     {% include "entries/_saved_panel.html" with entry=saved_entry %}
 {% endif %}
-{% if state == "unavailable" %}
+{% if notice %}
     {% include "entries/_notice.html" with message=notice %}
 {% endif %}
-{% if review_form %}
+{% if follow_up_form %}
+    {% include "entries/_follow_up_form.html" with form=follow_up_form %}
+{% elif review_form %}
     {% include "entries/_review_form.html" with form=review_form %}
 {% else %}
     {% include "entries/_capture_form.html" with form=capture_form %}

@@ -7,7 +7,8 @@ from django.db.models import Q
 from family_access.access import scope_queryset_to_family
 from family_access.models import FamilyMember
 
-from .classification.service import MAX_SUBMITTED_TEXT_LENGTH
+from .classification.follow_up import follow_up_question
+from .classification.service import MAX_FOLLOW_UP_ANSWER_LENGTH, MAX_SUBMITTED_TEXT_LENGTH
 from .classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
@@ -235,3 +236,179 @@ def review_form_from_classification(membership, outcome, submitted_text):
         initial.update(entry_type=EntryType.NOTE.value, content=submitted_text, school_item='')
     form = EntryReviewForm(membership, initial=initial, missing=missing)
     return form, list(missing)
+
+
+class HiddenDateInput(forms.DateInput):
+    input_type = 'hidden'
+
+
+class HiddenTimeInput(forms.TimeInput):
+    input_type = 'hidden'
+
+
+FOLLOW_UP_DEFAULT_QUESTION = 'Uzupełnij brakujące informacje'
+FOLLOW_UP_ANSWER_REQUIRED_ERROR = 'Wpisz odpowiedź albo wybierz „Pomiń”.'
+FOLLOW_UP_STALE_ERROR = 'Nie udało się odczytać wpisu. Zacznij od nowa.'
+_DRAFT_FIELDS = ('entry_type', 'content', 'date', 'time', 'school_item', 'assigned_member', 'missing')
+
+
+class FollowUpAnswerForm(forms.Form):
+    """The follow-up question; the text and draft travel as untrusted hidden fields.
+
+    Every hidden value is re-validated on each post: the assignee must be an
+    active member of the parent's family, and ``draft_from_form`` recomputes
+    which missing fields the rules allow. ``skip`` makes the answer optional.
+    """
+
+    text = forms.CharField(max_length=MAX_SUBMITTED_TEXT_LENGTH, widget=forms.HiddenInput)
+    entry_type = forms.ChoiceField(choices=Entry.ENTRY_TYPE_CHOICES, widget=forms.HiddenInput)
+    content = forms.CharField(max_length=MAX_SUBMITTED_TEXT_LENGTH, widget=forms.HiddenInput)
+    date = forms.DateField(required=False, widget=HiddenDateInput(format='%Y-%m-%d'))
+    time = forms.TimeField(required=False, widget=HiddenTimeInput(format='%H:%M'))
+    school_item = forms.ChoiceField(
+        choices=[('', '')] + Entry.SCHOOL_ITEM_CHOICES,
+        required=False,
+        widget=forms.HiddenInput,
+    )
+    assigned_member = forms.ModelChoiceField(
+        queryset=FamilyMember.objects.none(),
+        required=False,
+        widget=forms.HiddenInput,
+    )
+    missing = forms.MultipleChoiceField(
+        choices=[(field.value, field.value) for field in MissingField],
+        widget=forms.MultipleHiddenInput,
+    )
+    answer = forms.CharField(
+        label=FOLLOW_UP_DEFAULT_QUESTION,
+        max_length=MAX_FOLLOW_UP_ANSWER_LENGTH,
+        strip=True,
+        widget=forms.Textarea(attrs={'rows': 2, 'autofocus': True}),
+        error_messages={'required': FOLLOW_UP_ANSWER_REQUIRED_ERROR},
+    )
+
+    stale_error = FOLLOW_UP_STALE_ERROR
+
+    def __init__(self, membership, *args, skip=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.skip = skip
+        self.fields['assigned_member'].queryset = scope_queryset_to_family(
+            FamilyMember.objects.filter(is_active=True), membership
+        ).order_by('pk')
+        if skip:
+            # A skipped question ignores whatever was typed into the answer.
+            answer = self.fields['answer']
+            answer.required = False
+            answer.validators = []
+
+    def set_question(self, question):
+        self.fields['answer'].label = question
+        # Validation already cached the bound field with the previous label.
+        self['answer'].label = question
+
+    def clean(self):
+        cleaned = super().clean()
+        if all(name in cleaned for name in _DRAFT_FIELDS):
+            draft, _ = _draft_from_cleaned(cleaned)
+            if draft.missing_fields:
+                self.set_question(follow_up_question(draft))
+        return cleaned
+
+    def has_stale_fields(self):
+        """True when a hidden draft value failed validation (tampered or stale)."""
+        return any(name != 'answer' for name in self.errors)
+
+    def recognized_type(self):
+        return dict(Entry.ENTRY_TYPE_CHOICES).get(self['entry_type'].value(), '')
+
+    def recognized_content(self):
+        return self['content'].value() or ''
+
+
+def follow_up_form_from_classification(membership, outcome, text):
+    """The question form prefilled from a ``ParentClassification`` follow-up."""
+    result = outcome.result
+    form = FollowUpAnswerForm(
+        membership,
+        initial={
+            'text': text,
+            'entry_type': result.entry_type.value,
+            'content': result.content,
+            'date': result.date,
+            'time': result.time,
+            'school_item': result.school_item.value if result.school_item else '',
+            'assigned_member': outcome.member.pk if outcome.member else None,
+            'missing': [field.value for field in result.missing_fields],
+        },
+    )
+    form.set_question(follow_up_question(result))
+    return form
+
+
+def draft_from_form(form):
+    """Rebuild ``(ClassificationFollowUp, member)`` from a valid answer form.
+
+    Posted ``missing`` values the rules would not produce for the draft's type,
+    school item, date and member are dropped, so the result may have none.
+    """
+    return _draft_from_cleaned(form.cleaned_data)
+
+
+def _draft_from_cleaned(cleaned):
+    school_item = SchoolItemKind(cleaned['school_item']) if cleaned['school_item'] else None
+    # A recognized school item fixes the entry type, as in classification.
+    entry_type = school_item.entry_type if school_item else EntryType(cleaned['entry_type'])
+    member = cleaned['assigned_member']
+    date = cleaned['date']
+
+    required = set(school_item.required_fields) if school_item else set()
+    if entry_type == EntryType.CALENDAR_EVENT:
+        required.add(MissingField.DATE)
+    allowed = set()
+    if MissingField.DATE in required and date is None:
+        allowed.add(MissingField.DATE)
+    if member is None:
+        allowed.add(MissingField.AMBIGUOUS_MEMBER)
+        if MissingField.AFFECTED_MEMBER in required:
+            allowed.add(MissingField.AFFECTED_MEMBER)
+    posted = {MissingField(value) for value in cleaned['missing']}
+    missing = tuple(field for field in MissingField if field in posted & allowed)
+
+    draft = ClassificationFollowUp(
+        missing_fields=missing,
+        entry_type=entry_type,
+        content=cleaned['content'],
+        date=date,
+        time=cleaned['time'],
+        school_item=school_item,
+        member_name=member.display_name if member else None,
+    )
+    return draft, member
+
+
+def proposal_from_draft(draft):
+    """The draft as a complete proposal, for a draft with nothing left missing."""
+    return ClassificationProposal(
+        entry_type=draft.entry_type,
+        content=draft.content,
+        date=draft.date,
+        time=draft.time,
+        school_item=draft.school_item,
+        member_name=draft.member_name,
+    )
+
+
+def skip_review_form(membership, draft, member):
+    """The review form prefilled as a note, keeping the known values."""
+    return EntryReviewForm(
+        membership,
+        initial={
+            'entry_type': EntryType.NOTE.value,
+            'content': draft.content,
+            'date': draft.date,
+            'time': draft.time,
+            'assigned_member': member.pk if member else None,
+            'school_item': '',
+            'submission_key': uuid.uuid4(),
+        },
+    )

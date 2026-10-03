@@ -244,7 +244,7 @@ class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
 
 
 class FollowUpAndUnavailableTests(CaptureViewMixin, TestCase):
-    def test_follow_up_marks_missing_date_and_saves_once_filled(self):
+    def test_follow_up_asks_a_question_instead_of_a_review_form(self):
         response, _ = self.classify_with(
             ClassificationFollowUp(
                 missing_fields=(MissingField.DATE,),
@@ -256,18 +256,18 @@ class FollowUpAndUnavailableTests(CaptureViewMixin, TestCase):
             member=self.child,
         )
 
-        self.assertEqual(response.context['state'], 'follow_up')
-        form = response.context['review_form']
-        self.assertIn('aria-invalid="true"', str(form['date']))
-        self.assertContains(response, 'Podaj datę.')
+        self.assertEqual(response.context['state'], 'question')
+        self.assertNotIn('review_form', response.context)
+        self.assertContains(response, 'data-state-part="question"')
+        self.assertContains(response, f'Kiedy odbędzie się „{PRD_CONTENT}”?')
+        self.assertContains(response, 'Dalej')
+        self.assertContains(response, 'Pomiń')
+        form = response.context['follow_up_form']
+        self.assertEqual(form.initial['assigned_member'], self.child.pk)
+        self.assertEqual(form.initial['missing'], ['date'])
+        self.assertFalse(Entry.objects.exists())
 
-        data = {name: '' if value is None else str(value) for name, value in form.initial.items()}
-        data['date'] = PRD_MONDAY.isoformat()
-        self.client.post(CONFIRM_URL, data)
-
-        self.assertEqual(Entry.objects.get().date, PRD_MONDAY)
-
-    def test_ambiguous_member_asks_to_choose_a_person(self):
+    def test_ambiguous_member_asks_which_person(self):
         response, _ = self.classify_with(
             ClassificationFollowUp(
                 missing_fields=(MissingField.AMBIGUOUS_MEMBER,),
@@ -277,8 +277,9 @@ class FollowUpAndUnavailableTests(CaptureViewMixin, TestCase):
             )
         )
 
-        self.assertContains(response, 'Wybierz osobę.')
-        self.assertIn('aria-invalid="true"', str(response.context['review_form']['assigned_member']))
+        self.assertEqual(response.context['state'], 'question')
+        self.assertContains(response, f'Której osoby dotyczy „{PRD_CONTENT}”?')
+        self.assertNotIn('review_form', response.context)
 
     def test_unavailable_reasons_fall_back_to_note_with_text(self):
         for reason in (

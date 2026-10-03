@@ -265,12 +265,12 @@ No schema change. Rolling back means reverting the code. Saved entries are unaff
 
 #### Automated
 
-- [ ] 2.1 Capture and follow-up view tests pass
-- [ ] 2.2 Full suite, Django checks and migration check pass
+- [x] 2.1 Capture and follow-up view tests pass
+- [x] 2.2 Full suite, Django checks and migration check pass
 
 #### Manual
 
-- [ ] 2.3 With a stubbed or live backend, a parent on a phone-width browser answers a missing-date question and saves the entry, and „Pomiń” leads to a note
+- [x] 2.3 With a stubbed or live backend, a parent on a phone-width browser answers a missing-date question and saves the entry, and „Pomiń” leads to a note
 
 ### Phase 3: States page and screenshot gate
 

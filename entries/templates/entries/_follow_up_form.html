@@ -1,0 +1,19 @@
+<form method="post" action="{% url 'entries:answer' %}" data-state-part="question">
+    {% csrf_token %}
+    <h2>Uzupełnij wpis</h2>
+    {% if form.has_stale_fields %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            <p>{{ form.stale_error }}</p>
+        </div>
+    {% endif %}
+    {% if form.recognized_content %}
+        <p class="fn-muted" data-recognized>Rozpoznano: {{ form.recognized_type|lower }} „{{ form.recognized_content }}”</p>
+    {% endif %}
+    {% include "entries/_field.html" with field=form.answer hint="" %}
+    {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+    <div class="fn-actions">
+        <button type="submit">Dalej</button>
+        <button type="submit" name="action" value="skip" class="secondary" formnovalidate>Pomiń</button>
+        <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+    </div>
+</form>

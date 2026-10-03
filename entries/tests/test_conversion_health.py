@@ -343,7 +343,13 @@ class WorkerSettingsTests(SimpleTestCase):
             logging_config['loggers']['entries.eduvulcan'],
             {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
         )
-        self.assertEqual(set(logging_config['loggers']), {'entries.eduvulcan'})
+        self.assertEqual(
+            logging_config['loggers']['entries.classification'],
+            {'handlers': ['console'], 'level': 'INFO', 'propagate': True},
+        )
+        self.assertEqual(
+            set(logging_config['loggers']), {'entries.eduvulcan', 'entries.classification'}
+        )
 
     def test_heartbeat_freshness_must_exceed_the_interval(self):
         for max_age in ('30', '10'):

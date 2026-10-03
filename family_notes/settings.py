@@ -380,6 +380,14 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        # One content-free line per provider call (outcome, status, request id).
+        # Propagates so root-level capture (privacy tests) still sees it; the
+        # root logger has no handler, so nothing is printed twice.
+        'entries.classification': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
     },
 }
 
