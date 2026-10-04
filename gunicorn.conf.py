@@ -20,7 +20,11 @@ def post_worker_init(worker):
 
         start_worker()
     except Exception as exc:
-        worker.log.warning('EduVulcan conversion worker not started: error=%s', type(exc).__name__)
+        from family_notes.log_safety import exception_summary
+
+        worker.log.warning(
+            'EduVulcan conversion worker not started: error=%s', exception_summary(exc)
+        )
 
 
 def worker_exit(server, worker):
@@ -29,4 +33,8 @@ def worker_exit(server, worker):
 
         stop_worker()
     except Exception as exc:
-        server.log.warning('EduVulcan conversion worker stop failed: error=%s', type(exc).__name__)
+        from family_notes.log_safety import exception_summary
+
+        server.log.warning(
+            'EduVulcan conversion worker stop failed: error=%s', exception_summary(exc)
+        )

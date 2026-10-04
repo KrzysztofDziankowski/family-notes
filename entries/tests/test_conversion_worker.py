@@ -456,7 +456,7 @@ class GunicornHookTests(SimpleTestCase):
             self.hooks['post_worker_init'](self.gunicorn_worker)
 
         message = self.gunicorn_worker.log.warning.call_args
-        self.assertIn('RuntimeError', message.args)
+        self.assertTrue(message.args[1].startswith('RuntimeError stack=gunicorn.conf.py:'))
         self.assertNotIn('SECRET', str(message))
 
     def test_config_defines_hooks_only(self):

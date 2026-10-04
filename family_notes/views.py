@@ -1,9 +1,14 @@
+import logging
+
 from django.db import DatabaseError, connection
 from django.http import JsonResponse
 from django.shortcuts import redirect
 
 from family_access.access import get_active_membership, is_parent
 from family_access.models import FamilyMember
+from family_notes.log_safety import exception_summary
+
+logger = logging.getLogger(__name__)
 
 
 def home(request):
@@ -24,7 +29,8 @@ def healthz(request):
         with connection.cursor() as cursor:
             cursor.execute('SELECT 1')
             cursor.fetchone()
-    except DatabaseError:
+    except DatabaseError as exc:
+        logger.warning('healthz database check failed: error=%s', exception_summary(exc))
         return JsonResponse({'status': 'unavailable'}, status=503)
 
     return JsonResponse({'status': 'ok'})

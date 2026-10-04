@@ -1,4 +1,5 @@
 import datetime
+import logging
 import uuid
 
 from django.conf import settings
@@ -15,6 +16,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from family_access.access import require_active_membership, scope_queryset_to_family
 from family_access.models import FamilyMember
+from family_notes.log_safety import exception_summary
 
 from .classification.service import classify_follow_up_answer, classify_for_parent
 from .classification.service import ParentClassification
@@ -70,6 +72,15 @@ INPUT_TOO_LONG_ERROR = 'Tekst jest za długi. Skróć go i spróbuj ponownie.'
 SAVE_FAILED_ERROR = 'Nie udało się zapisać wpisu. Sprawdź dane i spróbuj ponownie.'
 SKIPPED_NOTICE = 'Brakujące dane pominięte — wpis zostanie zapisany jako notatka.'
 ANSWER_UNAVAILABLE_NOTICE = 'Nie udało się rozpoznać odpowiedzi. Uzupełnij brakujące pola.'
+
+
+logger = logging.getLogger(__name__)
+
+
+def _log_rejected_save(error):
+    """A form-valid save the service rejected: shown to the parent as a
+    generic error, so record which check fired (location only, no data)."""
+    logger.warning('Entry save rejected by service: error=%s', exception_summary(error))
 
 
 def _require_parent(request):
@@ -207,7 +218,8 @@ def confirm(request):
             school_item=data['school_item'],
             submission_key=data['submission_key'],
         )
-    except ValidationError:
+    except ValidationError as error:
+        _log_rejected_save(error)
         retry_data = request.POST.copy()
         retry_data['submission_key'] = str(uuid.uuid4())
         retry_form = EntryReviewForm(membership, retry_data)
@@ -502,7 +514,8 @@ def create(request):
                 school_item=data['school_item'],
                 submission_key=data['submission_key'],
             )
-        except ValidationError:
+        except ValidationError as error:
+            _log_rejected_save(error)
             retry_data = request.POST.copy()
             retry_data['submission_key'] = str(uuid.uuid4())
             form = EntryCreateForm(membership, retry_data)
@@ -541,7 +554,8 @@ def edit(request, pk):
             )
         except Entry.DoesNotExist:
             raise Http404 from None
-        except ValidationError:
+        except ValidationError as error:
+            _log_rejected_save(error)
             form.add_error(None, SAVE_FAILED_ERROR)
         else:
             messages.success(request, ENTRY_UPDATED_MESSAGE)

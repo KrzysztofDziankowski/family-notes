@@ -38,6 +38,8 @@ from django.db import DatabaseError, OperationalError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from family_notes.log_safety import exception_summary
+
 from ..classification.service import FamilyOutcome, classify_for_family
 from ..models import InboundNotification, NotificationConversionOutput
 from ..services import create_automated_entry
@@ -262,14 +264,18 @@ def process_claim(
         return _convert(claim, backend=backend, now=now)
     except _LeaseLost:
         return _lease_lost(claim)
-    except OperationalError:
-        return _record_failure(claim, ERROR_DATABASE_BUSY, retryable=True, now=now)
-    except DatabaseError:
-        return _record_failure(claim, ERROR_DATABASE, retryable=False, now=now)
-    except Exception as exc:
-        # Class name only: an exception message may quote notification text.
+    except OperationalError as exc:
         return _record_failure(
-            claim, ERROR_UNEXPECTED, retryable=False, now=now, error_class=type(exc).__name__
+            claim, ERROR_DATABASE_BUSY, retryable=True, now=now, error=exception_summary(exc)
+        )
+    except DatabaseError as exc:
+        return _record_failure(
+            claim, ERROR_DATABASE, retryable=False, now=now, error=exception_summary(exc)
+        )
+    except Exception as exc:
+        # Never the message: it may quote notification text.
+        return _record_failure(
+            claim, ERROR_UNEXPECTED, retryable=False, now=now, error=exception_summary(exc)
         )
 
 
@@ -336,7 +342,7 @@ def _propose_from_rules(claim, row, children):
     except Exception as exc:
         logger.warning(
             'EduVulcan conversion rules error: notification=%s attempt=%s error=%s',
-            claim.notification_id, claim.attempt, type(exc).__name__,
+            claim.notification_id, claim.attempt, exception_summary(exc),
         )
         return None
 
@@ -423,12 +429,12 @@ def _record_failure(
     *,
     retryable: bool,
     now: Optional[datetime.datetime],
-    error_class: str = '',
+    error: str = '',
 ) -> ConversionResult:
     """Schedule a retry while attempts remain, otherwise fail the row.
 
-    ``error_class`` is an exception class name for the log line only; it is
-    never stored.
+    ``error`` is a content-free ``exception_summary`` for the log line only;
+    it is never stored.
     """
     now = _now(now)
     if retryable and claim.attempt < max_attempts():
@@ -445,9 +451,9 @@ def _record_failure(
     log = logger.info if outcome == ConversionOutcome.RETRY_SCHEDULED else logger.warning
     message = 'EduVulcan conversion %s: notification=%s attempt=%s code=%s'
     args = [outcome.value, claim.notification_id, claim.attempt, code]
-    if error_class:
+    if error:
         message += ' error=%s'
-        args.append(error_class)
+        args.append(error)
     log(message, *args)
     return ConversionResult(
         claim.notification_id, outcome, attempt=claim.attempt, error_code=code

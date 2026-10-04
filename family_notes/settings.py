@@ -386,9 +386,17 @@ FAMILY_NOTES_RELEASE_ID = os.getenv('FAMILY_NOTES_RELEASE_ID', '').strip() or BA
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'handlers': {
-        'console': {'class': 'logging.StreamHandler'},
+    'formatters': {
+        # journald adds the timestamp; level and logger name make lines filterable.
+        'plain': {'format': '%(levelname)s %(name)s %(message)s'},
     },
+    'handlers': {
+        'console': {'class': 'logging.StreamHandler', 'formatter': 'plain'},
+    },
+    # Every other logger (family_access, family_notes, django.security, ...)
+    # reaches the console at WARNING. Django's defaults print only with DEBUG
+    # on, and handler-less loggers would fall back to a bare stderr line.
+    'root': {'handlers': ['console'], 'level': 'WARNING'},
     'loggers': {
         'entries.eduvulcan': {
             'handlers': ['console'],
@@ -396,12 +404,24 @@ LOGGING = {
             'propagate': False,
         },
         # One content-free line per provider call (outcome, status, request id).
-        # Propagates so root-level capture (privacy tests) still sees it; the
-        # root logger has no handler, so nothing is printed twice.
+        # Printed through the root handler, so root-level capture (privacy
+        # tests) still sees it and nothing is printed twice.
         'entries.classification': {
-            'handlers': ['console'],
             'level': 'INFO',
             'propagate': True,
+        },
+        # Django's own INFO chatter stays out; its warnings (django.security:
+        # CSRF failures, disallowed hosts) propagate to the root handler.
+        'django': {'level': 'WARNING'},
+        # Unhandled view exceptions (500s). Django's default prints these only
+        # with DEBUG on; without this a production 500 leaves no traceback.
+        # ERROR keeps routine 4xx warnings out. The traceback has no local
+        # variables or POST data, but its last line is the exception message,
+        # which for a database error can quote a column value.
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
         },
     },
 }

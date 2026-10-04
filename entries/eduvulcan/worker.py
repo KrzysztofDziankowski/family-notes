@@ -53,6 +53,8 @@ from typing import Callable, Iterable, List, Optional
 from django.conf import settings
 from django.db import DatabaseError, close_old_connections, connection, connections, transaction
 
+from family_notes.log_safety import exception_summary
+
 from . import conversion
 from .health import (
     heartbeat_seconds,
@@ -105,8 +107,11 @@ def release_advisory_lock() -> None:
     try:
         with connection.cursor() as cursor:
             cursor.execute('SELECT pg_advisory_unlock(%s)', [ADVISORY_LOCK_KEY])
-    except DatabaseError:
+    except DatabaseError as exc:
         # Ending the session always releases a session-level advisory lock.
+        logger.warning(
+            'EduVulcan conversion lock release failed: error=%s', exception_summary(exc)
+        )
         connection.close()
 
 
@@ -246,7 +251,7 @@ class ConversionWorker:
         except Exception as exc:
             logger.warning(
                 'EduVulcan conversion worker error: pid=%s error=%s',
-                self.pid, type(exc).__name__,
+                self.pid, exception_summary(exc),
             )
             close_thread_connections()
 
@@ -381,7 +386,7 @@ def enqueue_notification(notification_id: int) -> bool:
     except Exception as exc:
         logger.warning(
             'EduVulcan conversion wake-up failed: notification=%s error=%s',
-            notification_id, type(exc).__name__,
+            notification_id, exception_summary(exc),
         )
         return False
 
@@ -400,5 +405,5 @@ def schedule_wakeup(notification_id: int) -> None:
     except Exception as exc:
         logger.warning(
             'EduVulcan conversion wake-up failed: notification=%s error=%s',
-            notification_id, type(exc).__name__,
+            notification_id, exception_summary(exc),
         )
