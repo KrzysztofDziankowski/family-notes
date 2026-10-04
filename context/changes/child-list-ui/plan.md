@@ -430,8 +430,8 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [x] 2.1 `uv run python manage.py test entries` passes, including the updated child-view assertions: no `role="group"`, `aria-current="page"` on the current mode, and `fn-empty` on both empty states
-- [x] 2.2 `grep -n 'role="group"\|role="button"' entries/templates/entries/_child_list_body.html` returns nothing
+- [x] 2.1 `uv run python manage.py test entries` passes, including the updated child-view assertions: no `role="group"`, `aria-current="page"` on the current mode, and `fn-empty` on both empty states — 1528c6f
+- [x] 2.2 `grep -n 'role="group"\|role="button"' entries/templates/entries/_child_list_body.html` returns nothing — 1528c6f
 
 #### Manual
 
@@ -441,10 +441,10 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 3.1 Unit tests in `entries/tests/test_entry_listing.py` for `day_heading` with a fixed `today`: deltas 0, 1, −1, 2, 6, −6, 7, −7, and a date in another year
-- [ ] 3.2 Unit test that `group_by_day` keeps input order and groups an undated grade by its `effective_date`
-- [ ] 3.3 Child-view tests: upcoming shows "Dziś"/"Jutro" headings with a fixed `today` (`timezone.localdate` patched), past shows "Wczoraj", the parent list still shows full dates on rows
-- [ ] 3.4 `uv run python manage.py test` passes
+- [x] 3.1 Unit tests in `entries/tests/test_entry_listing.py` for `day_heading` with a fixed `today`: deltas 0, 1, −1, 2, 6, −6, 7, −7, and a date in another year
+- [x] 3.2 Unit test that `group_by_day` keeps input order and groups an undated grade by its `effective_date`
+- [x] 3.3 Child-view tests: upcoming shows "Dziś"/"Jutro" headings with a fixed `today` (`timezone.localdate` patched), past shows "Wczoraj", the parent list still shows full dates on rows
+- [x] 3.4 `uv run python manage.py test` passes
 
 #### Manual
 

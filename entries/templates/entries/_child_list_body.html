@@ -1,17 +1,20 @@
 {% comment %}
 Child list body (S-03), shared by child_list.html and the child_states gallery.
 Parameters: mode ("upcoming"/"past"), modes (list of (key, label)), sections (list of
-{key, undated, entries}; empty ones already dropped), detail_query (query string for row
-links), empty_message.
+{key, groups}; empty ones already dropped; each group is {heading, entries}, one per day,
+or "Bez daty" for the undated section), detail_query (query string for row links),
+empty_message.
 {% endcomment %}
 {% include "entries/_list_modes.html" with modes=modes mode=mode url_name="entries:child_list" only %}
 {% for section in sections %}
-    {% if section.undated %}<h2 class="fn-child-section-title">Bez daty</h2>{% endif %}
+    {% for group in section.groups %}
+    <h2 class="fn-day-heading">{{ group.heading }}</h2>
     <ul class="fn-entry-list" data-entry-section="{{ section.key }}">
-        {% for entry in section.entries %}
-            {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:child_detail" hide_assignee=True detail_query=detail_query only %}
+        {% for entry in group.entries %}
+            {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:child_detail" hide_assignee=True hide_date=True detail_query=detail_query only %}
         {% endfor %}
     </ul>
+    {% endfor %}
 {% empty %}
     <p class="fn-empty fn-muted" data-empty-state="{{ mode }}">{{ empty_message }}</p>
 {% endfor %}

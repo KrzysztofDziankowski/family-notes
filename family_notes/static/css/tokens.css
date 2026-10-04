@@ -292,7 +292,7 @@
 }
 
 /* Child view (S-03) */
-.fn-child-section-title {
+.fn-day-heading {
   font-size: 1rem;
   color: var(--fn-color-text-strong);
   margin: 0 0 var(--fn-space-2);

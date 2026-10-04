@@ -6,7 +6,7 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.test import TestCase, override_settings
 from django.urls import path
-from django.utils import timezone
+from django.utils import timezone, translation
 
 from entries.classification.types import EntryType, SchoolItemKind
 from entries.listing import (
@@ -17,6 +17,8 @@ from entries.listing import (
     SECTION_PAST,
     SECTION_UNDATED,
     UPCOMING,
+    day_heading,
+    group_by_day,
     normalize_list_mode,
     partition_entries,
 )
@@ -241,6 +243,77 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
         self.assertEqual([e.content for e in sections[0].entries], ['ours'])
 
 
+class DayHeadingTests(TestCase):
+    # TODAY (2026-09-28) is a Monday.
+    def _heading(self, days):
+        return day_heading(TODAY + datetime.timedelta(days=days), TODAY)
+
+    def test_relative_days(self):
+        self.assertEqual(self._heading(0), 'Dziś')
+        self.assertEqual(self._heading(1), 'Jutro')
+        self.assertEqual(self._heading(-1), 'Wczoraj')
+
+    def test_weekday_name_within_six_days(self):
+        self.assertEqual(self._heading(2), 'Środa')
+        self.assertEqual(self._heading(6), 'Niedziela')
+        self.assertEqual(self._heading(-6), 'Wtorek')
+
+    def test_full_date_from_seven_days(self):
+        self.assertEqual(self._heading(7), 'Poniedziałek, 5 października')
+        self.assertEqual(self._heading(-7), 'Poniedziałek, 21 września')
+
+    def test_other_year_adds_the_year(self):
+        self.assertEqual(
+            day_heading(datetime.date(2027, 1, 4), TODAY), 'Poniedziałek, 4 stycznia 2027'
+        )
+        self.assertEqual(
+            day_heading(datetime.date(2025, 12, 30), TODAY), 'Wtorek, 30 grudnia 2025'
+        )
+
+    def test_polish_regardless_of_active_language(self):
+        with translation.override('en'):
+            self.assertEqual(self._heading(2), 'Środa')
+            self.assertEqual(self._heading(7), 'Poniedziałek, 5 października')
+
+
+class GroupByDayTests(FamilyFixtureMixin, TestCase):
+    _entry = PartitionTests._entry
+    _set_timestamps = PartitionTests._set_timestamps
+
+    def test_keeps_input_order_and_groups_undated_grade_by_effective_date(self):
+        grade = self._entry('grade-today', school_item=SchoolItemKind.GRADE.value)
+        self._set_timestamps(
+            grade, created_at=datetime.datetime(2026, 9, 28, 10, 0, tzinfo=WARSAW)
+        )
+        self._entry('today-09', date=TODAY, time=datetime.time(9, 0))
+        self._entry('tomorrow', date=TOMORROW)
+        self._entry('in-a-week', date=TODAY + datetime.timedelta(days=7))
+        self._entry('yesterday', date=YESTERDAY)
+        self._entry('two-days-ago', date=YESTERDAY - datetime.timedelta(days=1))
+
+        upcoming = partition_entries(Entry.objects.all(), UPCOMING, TODAY)[0].entries
+        past = partition_entries(Entry.objects.all(), PAST, TODAY)[0].entries
+
+        def contents(groups):
+            return [(heading, [e.content for e in rows]) for heading, rows in groups]
+
+        self.assertEqual(
+            contents(group_by_day(upcoming, TODAY)),
+            [
+                ('Dziś', ['today-09', 'grade-today']),
+                ('Jutro', ['tomorrow']),
+                ('Poniedziałek, 5 października', ['in-a-week']),
+            ],
+        )
+        self.assertEqual(
+            contents(group_by_day(past, TODAY)),
+            [('Wczoraj', ['yesterday']), ('Sobota', ['two-days-ago'])],
+        )
+
+    def test_empty_input_has_no_groups(self):
+        self.assertEqual(group_by_day([], TODAY), [])
+
+
 @override_settings(ROOT_URLCONF='entries.tests.test_entry_listing')
 class EntryRowPartialTests(FamilyFixtureMixin, TestCase):
     def setUp(self):
@@ -280,6 +353,17 @@ class EntryRowPartialTests(FamilyFixtureMixin, TestCase):
 
         self.assertIn(f'href="/edit/{self.entry.pk}/"', html)
         self.assertIn('Edytuj', html)
+
+    def test_hide_date_shows_only_the_time(self):
+        html = self._render(hide_date=True)
+
+        self.assertIn('<span>08:15</span>', html)
+        self.assertNotIn('września', html)
+
+        self.entry.time = None
+        html = self._render(hide_date=True)
+        self.assertNotIn('września', html)
+        self.assertNotIn('Bez daty', html)
 
     def test_undated_entry_shows_polish_placeholder(self):
         self.entry.entry_type = EntryType.NOTE.value
