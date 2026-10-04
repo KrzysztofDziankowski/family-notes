@@ -209,6 +209,10 @@ class EmptyIndexTests(ManageViewMixin, TestCase):
         self.assertContains(past, 'Nie ma minionych wpisów.')
         self.assertNotContains(upcoming, 'data-entry-row')
         self.assertNotContains(past, 'data-entry-row')
+        self.assertContains(
+            upcoming, '<p class="fn-empty fn-muted" data-state-part="empty-upcoming">'
+        )
+        self.assertContains(past, '<p class="fn-empty fn-muted" data-state-part="empty-past">')
 
 
 class DetailTests(ManageViewMixin, TestCase):

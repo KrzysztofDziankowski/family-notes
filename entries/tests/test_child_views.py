@@ -87,6 +87,18 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         super().setUp()
         self.client.force_login(self.child.user)
 
+    def assertModeSwitch(self, response, current):
+        """The shared tab switch: both modes linked, only ``current`` marked as the page."""
+        body = response.content.decode()
+        self.assertNotIn('role="group"', body)
+        self.assertNotIn('role="button"', body)
+        self.assertIn('<nav class="fn-tabs" aria-label="Rodzaj listy"', body)
+        links = re.findall(r'<a href="(/entries/mine/[^"]*)"( aria-current="page")?>', body)
+        self.assertEqual(
+            [href for href, _ in links], ['/entries/mine/', '/entries/mine/?view=past']
+        )
+        self.assertEqual([href for href, marker in links if marker], [current])
+
     def test_default_list_shows_upcoming_then_undated(self):
         response = self.client.get(LIST_URL)
 
@@ -100,6 +112,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertNotContains(response, 'SENTINEL-OWN-PAST')
         self.assertContains(response, f'href="{detail_url(self.own_upcoming.pk)}"')
         self.assertRegex(body, r'href="/entries/mine/"\s+aria-current="page"')
+        self.assertModeSwitch(response, current='/entries/mine/')
         self.assertNoExcludedContent(response)
         self.assertReadOnly(response)
         # The child's own list hides the redundant assignee.
@@ -115,6 +128,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertRegex(
             response.content.decode(), r'href="/entries/mine/\?view=past"\s+aria-current="page"'
         )
+        self.assertModeSwitch(response, current='/entries/mine/?view=past')
         self.assertNoExcludedContent(response)
         self.assertReadOnly(response)
 
@@ -135,6 +149,12 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(upcoming, 'data-empty-state="upcoming"')
         self.assertContains(past, 'Nie masz żadnych minionych wpisów.')
         self.assertContains(past, 'data-empty-state="past"')
+        for response, mode in ((upcoming, 'upcoming'), (past, 'past')):
+            with self.subTest(mode=mode):
+                self.assertContains(
+                    response, f'<p class="fn-empty fn-muted" data-empty-state="{mode}">'
+                )
+                self.assertNotContains(response, 'class="fn-panel"')
 
     def test_parent_captured_entry_assigned_to_child_appears(self):
         save_confirmed_entry(

@@ -721,6 +721,7 @@ def _child_list_context(mode, sections):
     ]
     return {
         'mode': mode,
+        'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
         'detail_query': 'view=past' if mode == PAST else '',
         'sections': [section for section in sections if section['entries']],
         'empty_message': CHILD_EMPTY_MESSAGES[mode],

@@ -416,9 +416,9 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [x] 1.1 `uv run python manage.py test` passes
-- [x] 1.2 `grep -rn "fn-manage-tabs\|fn-manage-empty" entries/ family_notes/ family_access/` returns nothing
-- [x] 1.3 Hardcoded-value scan on the 5 child-view templates still returns 0 hits
+- [x] 1.1 `uv run python manage.py test` passes — aef2600
+- [x] 1.2 `grep -rn "fn-manage-tabs\|fn-manage-empty" entries/ family_notes/ family_access/` returns nothing — aef2600
+- [x] 1.3 Hardcoded-value scan on the 5 child-view templates still returns 0 hits — aef2600
 
 #### Manual
 
@@ -430,8 +430,8 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 2.1 `uv run python manage.py test entries` passes, including the updated child-view assertions: no `role="group"`, `aria-current="page"` on the current mode, and `fn-empty` on both empty states
-- [ ] 2.2 `grep -n 'role="group"\|role="button"' entries/templates/entries/_child_list_body.html` returns nothing
+- [x] 2.1 `uv run python manage.py test entries` passes, including the updated child-view assertions: no `role="group"`, `aria-current="page"` on the current mode, and `fn-empty` on both empty states
+- [x] 2.2 `grep -n 'role="group"\|role="button"' entries/templates/entries/_child_list_body.html` returns nothing
 
 #### Manual
 

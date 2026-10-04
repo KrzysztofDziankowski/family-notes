@@ -292,14 +292,6 @@
 }
 
 /* Child view (S-03) */
-.fn-child-modes {
-  margin-bottom: var(--fn-space-4);
-}
-
-.fn-child-modes [role="group"] {
-  margin-bottom: 0;
-}
-
 .fn-child-section-title {
   font-size: 1rem;
   color: var(--fn-color-text-strong);
