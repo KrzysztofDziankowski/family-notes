@@ -1,0 +1,9 @@
+{% comment %}
+Error panel shared by 403/404 (and the states gallery).
+Expects: heading, message.
+{% endcomment %}
+<h1>{{ heading }}</h1>
+<div class="fn-panel fn-panel--danger" role="alert">
+    <p>{{ message }}</p>
+    <p><a href="{% url 'home' %}">Wróć na stronę główną</a></p>
+</div>

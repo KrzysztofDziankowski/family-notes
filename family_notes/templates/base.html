@@ -14,6 +14,7 @@
                 <li><a class="fn-brand" href="{% url 'home' %}">FamilyNotes</a></li>
             </ul>
             <ul>
+                {% if user.is_authenticated %}
                 {% block nav %}
                 <li><a href="{% url 'account_status' %}">Konto</a></li>
                 <li>
@@ -23,11 +24,14 @@
                     </form>
                 </li>
                 {% endblock %}
+                {% endif %}
             </ul>
         </nav>
     </header>
     <main class="container">
+        {% block messages %}{% endblock %}
         {% block content %}{% endblock %}
     </main>
+    {% block extra_body %}{% endblock %}
 </body>
 </html>

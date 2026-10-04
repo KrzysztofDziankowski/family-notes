@@ -1,10 +1,22 @@
 from django.db import DatabaseError, connection
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect
+
+from family_access.access import get_active_membership, is_parent
+from family_access.models import FamilyMember
 
 
 def home(request):
-    return render(request, 'family_notes/home.html')
+    """Send each visitor to the home page of their role."""
+    if not request.user.is_authenticated:
+        return redirect('account_login')
+
+    membership = get_active_membership(request.user)
+    if membership is not None and membership.role == FamilyMember.Role.CHILD:
+        return redirect('entries:child_list')
+    if is_parent(membership):
+        return redirect('entries:index')
+    return redirect('account_status')
 
 
 def healthz(request):

@@ -3,17 +3,36 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.db import DatabaseError
 from django.conf import settings
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from entries.models import Entry
+from entries.tests.test_classification_service import FamilyFixtureMixin
 
-class RootRouteTests(TestCase):
-    def test_root_renders_homepage(self):
-        response = self.client.get(reverse('home'))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Hello, FamilyNotes!')
-        self.assertTemplateUsed(response, 'family_notes/home.html')
+class RootRouteTests(FamilyFixtureMixin, TestCase):
+    def test_root_redirects_each_visitor_to_their_home(self):
+        unconfigured = get_user_model().objects.create_user(username='unconfigured')
+        cases = {
+            'anonymous': (None, reverse('account_login')),
+            'child': (self.child.user, '/entries/mine/'),
+            'parent': (self.parent.user, '/entries/'),
+            'no membership': (unconfigured, '/account/'),
+        }
+        for name, (user, expected) in cases.items():
+            with self.subTest(name):
+                self.client.logout()
+                if user is not None:
+                    self.client.force_login(user)
+
+                response = self.client.get(reverse('home'))
+
+                self.assertRedirects(response, expected, fetch_redirect_response=False)
+
+    def test_login_redirects_to_root(self):
+        self.assertEqual(settings.LOGIN_REDIRECT_URL, '/')
+        self.assertEqual(settings.LOGOUT_REDIRECT_URL, '/')
 
     def test_account_status_requires_authentication(self):
         response = self.client.get(reverse('account_status'))
@@ -55,6 +74,78 @@ class RootRouteTests(TestCase):
         response = self.client.get(reverse('admin:index'))
 
         self.assertEqual(response.status_code, 200)
+
+
+class LoginPageTests(TestCase):
+    def test_login_page_uses_app_layout_and_offers_google_first(self):
+        response = self.client.get(reverse('account_login'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'account/login.html')
+        self.assertTemplateUsed(response, 'base.html')
+        self.assertContains(response, 'css/tokens.css')
+        self.assertContains(response, '<h1>Zaloguj się</h1>', html=True)
+        self.assertContains(response, 'Zaloguj przez Google')
+        self.assertContains(response, '/accounts/google/login/')
+        self.assertNotContains(response, 'Wyloguj')
+        self.assertNotContains(response, 'Menu:')
+        body = response.content.decode()
+        self.assertLess(body.index('/accounts/google/login/'), body.index('name="password"'))
+
+    def test_google_link_preserves_next(self):
+        response = self.client.get(reverse('account_login'), {'next': '/entries/mine/'})
+
+        self.assertContains(response, '/accounts/google/login/?next=%2Fentries%2Fmine%2F')
+
+
+class ErrorPageTests(FamilyFixtureMixin, TestCase):
+    def test_parent_on_child_list_gets_polish_403_in_base_layout(self):
+        self.client.force_login(self.parent.user)
+
+        response = self.client.get(reverse('entries:child_list'))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTemplateUsed(response, '403.html')
+        self.assertTemplateUsed(response, 'base.html')
+        self.assertContains(response, 'Brak dostępu', status_code=403)
+        self.assertContains(response, 'css/tokens.css', status_code=403)
+        self.assertContains(response, 'Wróć na stronę główną', status_code=403)
+        self.assertContains(response, f'href="{reverse("home")}"', status_code=403)
+
+    def test_foreign_and_missing_entries_get_identical_polish_404(self):
+        foreign = Entry.objects.create(
+            family=self.other_family,
+            entry_type='note',
+            content='SENTINEL-FOREIGN',
+            assigned_member=self.other_family_child,
+        )
+        missing_pk = foreign.pk + 100
+        self.client.force_login(self.child.user)
+
+        responses = [
+            self.client.get(reverse('entries:child_detail', args=[pk]))
+            for pk in (foreign.pk, missing_pk)
+        ]
+
+        for response in responses:
+            self.assertEqual(response.status_code, 404)
+            self.assertTemplateUsed(response, '404.html')
+            self.assertContains(response, 'Nie znaleziono', status_code=404)
+            self.assertNotContains(response, 'SENTINEL', status_code=404)
+        self.assertEqual(responses[0].content, responses[1].content)
+
+    def test_anonymous_404_shows_only_the_brand(self):
+        response = self.client.get('/does-not-exist/')
+
+        self.assertContains(response, 'Nie znaleziono', status_code=404)
+        self.assertNotContains(response, 'Wyloguj', status_code=404)
+        self.assertNotContains(response, 'Konto', status_code=404)
+
+    def test_500_renders_without_context(self):
+        body = render_to_string('500.html')
+
+        self.assertIn('css/tokens.css', body)
+        self.assertIn('href="/"', body)
 
 
 class HealthCheckTests(TestCase):

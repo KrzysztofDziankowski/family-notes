@@ -441,10 +441,10 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [x] 3.1 Unit tests in `entries/tests/test_entry_listing.py` for `day_heading` with a fixed `today`: deltas 0, 1, −1, 2, 6, −6, 7, −7, and a date in another year
-- [x] 3.2 Unit test that `group_by_day` keeps input order and groups an undated grade by its `effective_date`
-- [x] 3.3 Child-view tests: upcoming shows "Dziś"/"Jutro" headings with a fixed `today` (`timezone.localdate` patched), past shows "Wczoraj", the parent list still shows full dates on rows
-- [x] 3.4 `uv run python manage.py test` passes
+- [x] 3.1 Unit tests in `entries/tests/test_entry_listing.py` for `day_heading` with a fixed `today`: deltas 0, 1, −1, 2, 6, −6, 7, −7, and a date in another year — 661f96c
+- [x] 3.2 Unit test that `group_by_day` keeps input order and groups an undated grade by its `effective_date` — 661f96c
+- [x] 3.3 Child-view tests: upcoming shows "Dziś"/"Jutro" headings with a fixed `today` (`timezone.localdate` patched), past shows "Wczoraj", the parent list still shows full dates on rows — 661f96c
+- [x] 3.4 `uv run python manage.py test` passes — 661f96c
 
 #### Manual
 
@@ -455,11 +455,11 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 4.1 Root redirect matrix test: anonymous → login, child → `/entries/mine/`, parent → `/entries/`, no membership → `/account/`
-- [ ] 4.2 Login test: `GET /accounts/login/` uses `account/login.html`, contains `css/tokens.css`, "Zaloguj się" and the Google provider URL, and does not contain "Wyloguj" or "Menu:"
-- [ ] 4.3 Error tests: parent `GET /entries/mine/` returns 403 with "Brak dostępu" and the base layout; a foreign-entry detail returns 404 with "Nie znaleziono", with identical bodies for foreign and missing IDs; `render_to_string('500.html')` succeeds with no context and contains `tokens.css`
-- [ ] 4.4 Existing access-matrix tests in `entries/tests/test_child_views.py` still pass unchanged
-- [ ] 4.5 `uv run python manage.py test` and `uv run python manage.py check` pass
+- [x] 4.1 Root redirect matrix test: anonymous → login, child → `/entries/mine/`, parent → `/entries/`, no membership → `/account/`
+- [x] 4.2 Login test: `GET /accounts/login/` uses `account/login.html`, contains `css/tokens.css`, "Zaloguj się" and the Google provider URL, and does not contain "Wyloguj" or "Menu:"
+- [x] 4.3 Error tests: parent `GET /entries/mine/` returns 403 with "Brak dostępu" and the base layout; a foreign-entry detail returns 404 with "Nie znaleziono", with identical bodies for foreign and missing IDs; `render_to_string('500.html')` succeeds with no context and contains `tokens.css`
+- [x] 4.4 Existing access-matrix tests in `entries/tests/test_child_views.py` still pass unchanged
+- [x] 4.5 `uv run python manage.py test` and `uv run python manage.py check` pass
 
 #### Manual
 
