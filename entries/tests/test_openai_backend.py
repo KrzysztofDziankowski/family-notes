@@ -510,22 +510,41 @@ class DateGroundingTests(BackendHarness, SimpleTestCase):
 
         self.assertIsNone(output.date)
 
-    def test_follow_up_answer_cited_by_key_or_whole_answer_grounds_the_date(self):
+    def test_follow_up_answer_key_does_not_ground_the_date(self):
+        for answer in ('nie wiem', MEMBER_SENTINEL, 'W poniedziałek'):
+            request = make_request(
+                text=f'{MEMBER_SENTINEL} ma sprawdzian',
+                follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
+                follow_up_answer=answer,
+            )
+            for date_source in ('odpowiedz_rodzica', 'odpowiedź_rodzica', '„odpowiedz_rodzica”'):
+                with self.subTest(answer=answer, date_source=date_source):
+                    output = self.classify_with(request, date_source=date_source)
+                    self.assertIsNone(output.date)
+
+    def test_follow_up_answer_with_surrounding_input_does_not_ground_the_date(self):
+        for answer in ('nie wiem', MEMBER_SENTINEL, 'W poniedziałek'):
+            request = make_request(
+                text=f'{MEMBER_SENTINEL} ma sprawdzian',
+                follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
+                follow_up_answer=answer,
+            )
+            with self.subTest(answer=answer):
+                output = self.classify_with(
+                    request,
+                    date_source=f'pytanie_uzupelniajace: Kiedy? odpowiedz_rodzica: {answer}',
+                )
+                self.assertIsNone(output.date)
+
+    def test_literal_friday_answer_grounds_the_date(self):
+        friday = datetime.date(2026, 9, 25)
         request = make_request(
             text=f'{MEMBER_SENTINEL} ma sprawdzian',
             follow_up_question='Kiedy odbędzie się „Sprawdzian”?',
-            follow_up_answer='W poniedziałek',
+            follow_up_answer='W piątek',
         )
-        for date_source in (
-            'odpowiedz_rodzica',
-            'odpowiedź_rodzica',
-            '„odpowiedz_rodzica”',
-            'pytanie_uzupelniajace: Kiedy odbędzie się „Sprawdzian”? odpowiedz_rodzica: w poniedziałek',
-        ):
-            with self.subTest(date_source=date_source):
-                output = self.classify_with(request, date_source=date_source)
-
-                self.assertEqual(output.date, MONDAY)
+        output = self.classify_with(request, date=friday.isoformat(), date_source='w piątek')
+        self.assertEqual(output.date, friday)
 
     def test_question_key_or_answer_key_without_answer_does_not_ground_the_date(self):
         cases = (

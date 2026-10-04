@@ -369,26 +369,7 @@ def _date_is_grounded(date_source: Optional[str], request: BackendRequest) -> bo
     texts = [request.submitted_text]
     if request.follow_up_answer is not None:
         texts.append(request.follow_up_answer)
-        if _points_at_answer(needle, request.follow_up_answer):
-            return True
     return any(needle in _normalize_fragment(text) for text in texts)
-
-
-# Input keys small models cite instead of quoting the answer itself.
-_ANSWER_KEYS = frozenset({'odpowiedz_rodzica', 'odpowiedź_rodzica'})
-
-
-def _points_at_answer(needle: str, answer: str) -> bool:
-    """Whether ``needle`` cites the follow-up answer instead of quoting it.
-
-    Smaller models sometimes name the answer's input key, or copy the whole
-    answer with surrounding input, rather than a verbatim fragment. Either
-    still ties the date to the parent's answer. Citing the question does not.
-    """
-    if needle.strip(_QUOTE_CHARS + ' :') in _ANSWER_KEYS:
-        return True
-    answer_text = _normalize_fragment(answer).strip(_QUOTE_CHARS).strip()
-    return bool(answer_text) and answer_text in needle
 
 
 def _has_refusal(response: Any) -> bool:

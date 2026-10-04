@@ -245,6 +245,22 @@ No schema change. Rolling back means reverting the code. Saved entries are unaff
 - Follow-up rules: `entries/classification/validation.py:46-91`, `entries/classification/types.py:24-65`
 - Capture flow: `entries/views.py:75-148`, `entries/forms.py:205-237`
 
+## Implementation Addendum — 2026-10-04 review triage
+
+Phase 3 live checks exposed invented dates and proposals containing past dates. Commit `215c246` extended the shared OpenAI output schema with required nullable `date_source` and added a literal source check before passing dates to classification validation. This affects initial parent capture, follow-up answers and automated family intake through the same adapter. Missing evidence drops the date; callers apply their existing follow-up or note fallback. The adapter schema changed; application models and backend output interfaces did not.
+
+The same commit added advisory past-date hints to review forms and a synthetic `past_date` gallery state. These hints do not prevent confirmation. Related adapter, acceptance, family-classification, capture, follow-up and gallery tests cover the changes. IDE configuration removal and its ignore rule were repository hygiene work.
+
+Commit `8849d1e` documented `gpt-5.4-nano` with reasoning effort `none` as the recommended classification configuration in the environment example and deployment runbook, based on the live date checks described in that commit. This review did not independently repeat those paid checks.
+
+Review fix F1 removes acceptance of bare answer-field names and sources containing an answer surrounded by additional input. Only a normalized literal fragment occurring in the original instruction or answer can support a returned date. This restores the documented evidence contract; it does not prove semantic date correctness. Models returning only a field name now reach the existing manual fallback.
+
+### Manual verification evidence and waiver
+
+- Progress 3.3 was waived by the owner on 2026-10-03, as recorded in `change.md`. No screenshots were taken. Its historical checked marker represents closure by waiver, not screenshot evidence.
+- Progress 2.3 and 3.4 retain their historical completion declarations. No phone-browser artifact or measured two-step live follow-up transcript is saved in this change directory, so these declarations cannot be independently verified from the repository. The model-guidance commit records live date checks but does not establish both timed follow-up steps.
+- This triage records the limitations without repeating browser or paid live checks. Progress titles, checkboxes and commit references remain unchanged.
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles. See `references/progress-format.md`.
