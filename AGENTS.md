@@ -31,6 +31,15 @@ FamilyNotes is a Django 5.2 web application managed with `uv`. The repository cu
 - For every data visibility or mutation path, test parent access, assigned-child access, another child's access, and unauthenticated access as applicable.
 - Treat the MVP boundaries and unresolved classification cases in `@context/foundation/prd.md` as authoritative; do not silently expand deferred features.
 
+## UI Conventions
+
+- Design tokens and shared component classes live in `@family_notes/static/css/tokens.css`, layered on Pico.
+- Before creating markup, check the partials in `entries/templates/entries/_*.html` and `@family_notes/templates/_error.html`. Add new shared classes to `tokens.css`, built from existing tokens.
+- No literal colours, inline `style=` attributes or `<style>` blocks in templates; `scripts/hooks/quality_gate.py` flags them in the cleaned templates.
+- Every Django error page (403/404/500) extends the base layout.
+- DEBUG-only kitchen sinks: `/entries/_states/` (parent capture and management views) and `/entries/mine/_states/` (child views). Add new states there.
+- All user-facing copy is in Polish (Django admin excepted).
+
 ## Commits and Verification
 
 Recent history uses short imperative summaries such as `Add prd.md` and `Update skills m1l4`; match that style. Before handing off, run the relevant focused tests plus Django checks and the migration check. Run `uv run --locked pip-audit` after dependency changes.

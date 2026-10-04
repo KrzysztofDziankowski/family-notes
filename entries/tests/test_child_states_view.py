@@ -1,5 +1,7 @@
 """S-03 child-view kitchen sink: DEBUG gating, access and synthetic-only rendering."""
 
+import re
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase, override_settings
@@ -18,7 +20,20 @@ STATE_NAMES = (
     'past_empty',
     'detail_manual',
     'detail_eduvulcan',
+    'error_forbidden',
 )
+# STATES_DATE is Monday 2026-10-05; each list covers every day-heading kind.
+EXPECTED_DAY_HEADINGS = {
+    'upcoming': ['Dziś', 'Jutro', 'Czwartek', 'Poniedziałek, 26 października', 'Bez daty'],
+    'past': ['Wczoraj', 'Piątek', 'Środa', 'Sobota, 5 września'],
+}
+
+
+def _state_html(html, name):
+    match = re.search(
+        rf'<section data-kitchen-state="{name}">(.*?)</section>', html, re.DOTALL
+    )
+    return match.group(1) if match else ''
 
 
 class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
@@ -89,3 +104,21 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
                     [q['sql'] for q in queries.captured_queries if entry_table in q['sql']]
                 )
         self.assertEqual(Entry.objects.count(), 1)
+
+    @override_settings(DEBUG=True)
+    def test_day_headings_and_error_state_render_per_section(self):
+        self.client.force_login(self.child.user)
+
+        html = self.client.get(CHILD_STATES_URL).content.decode()
+
+        for name, headings in EXPECTED_DAY_HEADINGS.items():
+            with self.subTest(state=name):
+                self.assertEqual(
+                    re.findall(r'<h2 class="fn-day-heading">(.*?)</h2>', _state_html(html, name)),
+                    headings,
+                )
+        error = _state_html(html, 'error_forbidden')
+        self.assertIn('fn-panel--danger', error)
+        self.assertIn('Brak dostępu', error)
+        self.assertIn('Ta strona nie jest dostępna dla Twojego konta.', error)
+        self.assertIn('href="/"', error)

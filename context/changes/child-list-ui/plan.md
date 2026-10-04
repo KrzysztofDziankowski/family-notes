@@ -455,11 +455,11 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [x] 4.1 Root redirect matrix test: anonymous → login, child → `/entries/mine/`, parent → `/entries/`, no membership → `/account/`
-- [x] 4.2 Login test: `GET /accounts/login/` uses `account/login.html`, contains `css/tokens.css`, "Zaloguj się" and the Google provider URL, and does not contain "Wyloguj" or "Menu:"
-- [x] 4.3 Error tests: parent `GET /entries/mine/` returns 403 with "Brak dostępu" and the base layout; a foreign-entry detail returns 404 with "Nie znaleziono", with identical bodies for foreign and missing IDs; `render_to_string('500.html')` succeeds with no context and contains `tokens.css`
-- [x] 4.4 Existing access-matrix tests in `entries/tests/test_child_views.py` still pass unchanged
-- [x] 4.5 `uv run python manage.py test` and `uv run python manage.py check` pass
+- [x] 4.1 Root redirect matrix test: anonymous → login, child → `/entries/mine/`, parent → `/entries/`, no membership → `/account/` — 303f6f2
+- [x] 4.2 Login test: `GET /accounts/login/` uses `account/login.html`, contains `css/tokens.css`, "Zaloguj się" and the Google provider URL, and does not contain "Wyloguj" or "Menu:" — 303f6f2
+- [x] 4.3 Error tests: parent `GET /entries/mine/` returns 403 with "Brak dostępu" and the base layout; a foreign-entry detail returns 404 with "Nie znaleziono", with identical bodies for foreign and missing IDs; `render_to_string('500.html')` succeeds with no context and contains `tokens.css` — 303f6f2
+- [x] 4.4 Existing access-matrix tests in `entries/tests/test_child_views.py` still pass unchanged — 303f6f2
+- [x] 4.5 `uv run python manage.py test` and `uv run python manage.py check` pass — 303f6f2
 
 #### Manual
 
@@ -471,10 +471,10 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 5.1 `uv run python manage.py test entries.tests.test_child_states_view` passes with the new state markers and zero `Entry` queries
-- [ ] 5.2 Hardcoded-value scan over the allowlisted templates returns 0 hits
-- [ ] 5.3 `echo '{"tool_name":"Edit","tool_input":{"file_path":"entries/templates/entries/_entry_row.html"}}' | python3 scripts/hooks/quality_gate.py edit` exits 2 when a literal `#ff0000` is temporarily added to that file and exits 0 after reverting it
-- [ ] 5.4 `uv run python manage.py test`, `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass
+- [x] 5.1 `uv run python manage.py test entries.tests.test_child_states_view` passes with the new state markers and zero `Entry` queries
+- [x] 5.2 Hardcoded-value scan over the allowlisted templates returns 0 hits
+- [x] 5.3 `echo '{"tool_name":"Edit","tool_input":{"file_path":"entries/templates/entries/_entry_row.html"}}' | python3 scripts/hooks/quality_gate.py edit` exits 2 when a literal `#ff0000` is temporarily added to that file and exits 0 after reverting it
+- [x] 5.4 `uv run python manage.py test`, `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass
 
 #### Manual
 

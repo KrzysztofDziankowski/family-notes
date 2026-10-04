@@ -815,16 +815,32 @@ def child_states(request):
     returned = _child_states_entry(
         9006, 'Oddać książkę do biblioteki', EntryType.TODO, date=STATES_DATE - 5 * day,
     )
+    reading = _child_states_entry(
+        9007, 'Przeczytać rozdział lektury', EntryType.TODO, date=STATES_DATE + 3 * day,
+    )
+    meeting = _child_states_entry(
+        9008, 'Zebranie z rodzicami', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE + 21 * day, time=datetime.time(17, 30),
+    )
+    homework = _child_states_entry(
+        9009, 'Zadanie domowe z angielskiego', EntryType.TODO, date=STATES_DATE - day,
+    )
+    start = _child_states_entry(
+        9010, 'Rozpoczęcie roku szkolnego', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE - 30 * day, time=datetime.time(9, 0),
+    )
 
     def list_state(name, label, mode, sections):
         return {'name': name, 'label': label, 'list': _child_list_context(mode, sections, STATES_DATE)}
 
     sections = [
         list_state('upcoming', 'Nadchodzące', UPCOMING, [
-            EntrySection(SECTION_DATED, [test, grade, todo]),
+            EntrySection(SECTION_DATED, [test, grade, todo, reading, meeting]),
             EntrySection(SECTION_UNDATED, [undated]),
         ]),
-        list_state('past', 'Minione', PAST, [EntrySection(SECTION_PAST, [quiz, returned])]),
+        list_state('past', 'Minione', PAST, [
+            EntrySection(SECTION_PAST, [homework, quiz, returned, start]),
+        ]),
         list_state('upcoming_empty', 'Brak nadchodzących', UPCOMING, [
             EntrySection(SECTION_DATED, []),
             EntrySection(SECTION_UNDATED, []),
@@ -834,5 +850,8 @@ def child_states(request):
          'entry': undated, 'back_mode': UPCOMING},
         {'name': 'detail_eduvulcan', 'label': 'Szczegóły wpisu z EduVulcan',
          'entry': quiz, 'back_mode': PAST},
+        {'name': 'error_forbidden', 'label': 'Błąd: brak dostępu',
+         'error': {'heading': 'Brak dostępu',
+                   'message': 'Ta strona nie jest dostępna dla Twojego konta.'}},
     ]
     return render(request, 'entries/child_states.html', {'sections': sections})
