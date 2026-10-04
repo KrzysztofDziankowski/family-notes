@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 1
 status: draft
 created: 2026-09-22
-updated: 2026-10-03
+updated: 2026-10-04
 prd_version: 2
 main_goal: speed
 top_blocker: capacity
@@ -233,6 +233,9 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Parked
 
+- **Remove the sign-up option** - Remove the option for users to sign up. Why parked: owner-requested change, recorded 2026-10-04; pending implementation planning.
+- **Assign new notes to parents as well as children** - Allow a parent to create a note assigned to any parent in the same family, including themselves, as well as to a child. Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
+- **Group entries by child in the parent view** - Group the parent's family entry list by the child each entry is assigned to. Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
 - **Create multiple entries from one text instruction** - Allow a parent to request several entries at once. For example, "Add meeting with X today, tomorrow and next week on Monday at 18:00" should produce three meeting entries, one for each requested date, with the shared time of 18:00. Present all proposed entries for review and confirmation before saving. Why parked: owner-requested future feature, recorded 2026-10-03; extends the current single-entry classification flow and requires planning for multiple proposals and relative-date interpretation.
 - **Show background classification progress on mobile** - The current classification flow shows a loading page. When used as an application on a phone, show a visible progress or activity indicator that makes clear classification is still running in the background, then surface completion or failure. Why parked: owner-requested future feature, recorded 2026-10-03; pending definition of the mobile application experience and implementation planning.
 - **Submit form text with Enter** - Pressing Enter in the text input submits the form. Why parked: owner-requested future feature, recorded 2026-10-03; pending implementation planning.
