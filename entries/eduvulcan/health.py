@@ -19,6 +19,7 @@ or family data.
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 import socket
 from typing import Optional
@@ -27,7 +28,11 @@ from django.conf import settings
 from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
+from family_notes.log_safety import exception_summary
+
 from ..models import ConversionWorkerHeartbeat
+
+logger = logging.getLogger(__name__)
 
 HEALTH_DISABLED = 'disabled'
 HEALTH_OK = 'ok'
@@ -102,6 +107,7 @@ def conversion_health(*, now: Optional[datetime.datetime] = None) -> str:
         fresh = ConversionWorkerHeartbeat.objects.filter(
             release=current_release_id(), beat_at__gte=cutoff
         ).exists()
-    except DatabaseError:
+    except DatabaseError as exc:
+        logger.warning('EduVulcan conversion health check failed: error=%s', exception_summary(exc))
         return HEALTH_UNAVAILABLE
     return HEALTH_OK if fresh else HEALTH_UNAVAILABLE

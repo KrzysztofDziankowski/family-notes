@@ -17,6 +17,7 @@ from django.core.exceptions import ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 from family_notes.auth_cache import AuthCacheUnavailable
+from family_notes.log_safety import exception_summary
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class AuthCacheFailureMiddleware(MiddlewareMixin):
         # This cache is used only for authentication state. Deny rather
         # than return a traceback or retry with an unprotected cache.
         if isinstance(exception, AuthCacheUnavailable):
-            logger.error('authentication_cache_unavailable')
+            # The summary follows the suppressed database cause, never its text.
+            logger.error('authentication_cache_unavailable error=%s', exception_summary(exception))
             return HttpResponse(
                 'Logowanie jest chwilowo niedostępne. Spróbuj ponownie później.',
                 status=503,

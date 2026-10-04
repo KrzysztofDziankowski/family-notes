@@ -8,6 +8,7 @@ from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from entries.models import Entry
+from family_notes.log_safety import exception_summary
 from entries.tests.test_classification_service import FamilyFixtureMixin
 
 
@@ -171,3 +172,38 @@ class LocaleSettingsTests(SimpleTestCase):
         self.assertEqual(settings.LANGUAGE_CODE, 'pl')
         self.assertEqual(settings.TIME_ZONE, 'Europe/Warsaw')
         self.assertTrue(settings.USE_TZ)
+
+
+class ExceptionSummaryTests(SimpleTestCase):
+    def _raised(self, raise_it):
+        try:
+            raise_it()
+        except Exception as exc:
+            return exc
+        self.fail('expected an exception')
+
+    def test_names_class_and_location_but_never_the_message(self):
+        def fail():
+            raise RuntimeError('SECRET family text')
+
+        summary = exception_summary(self._raised(fail))
+
+        self.assertTrue(summary.startswith('RuntimeError stack=family_notes/tests.py:'))
+        self.assertIn(':fail', summary)
+        self.assertNotIn('SECRET', summary)
+
+    def test_follows_a_cause_suppressed_with_from_none(self):
+        class Driver(Exception):
+            sqlstate = '0A000'
+
+        def fail():
+            try:
+                raise Driver('SECRET key value')
+            except Driver:
+                raise DatabaseError('SECRET wrapper') from None
+
+        summary = exception_summary(self._raised(fail))
+
+        self.assertTrue(summary.startswith('DatabaseError stack='))
+        self.assertIn(' <- caused by Driver sqlstate=0A000 stack=', summary)
+        self.assertNotIn('SECRET', summary)

@@ -345,10 +345,16 @@ class WorkerSettingsTests(SimpleTestCase):
         )
         self.assertEqual(
             logging_config['loggers']['entries.classification'],
-            {'handlers': ['console'], 'level': 'INFO', 'propagate': True},
+            {'level': 'INFO', 'propagate': True},
+        )
+        self.assertEqual(logging_config['root'], {'handlers': ['console'], 'level': 'WARNING'})
+        self.assertEqual(
+            logging_config['loggers']['django.request'],
+            {'handlers': ['console'], 'level': 'ERROR', 'propagate': False},
         )
         self.assertEqual(
-            set(logging_config['loggers']), {'entries.eduvulcan', 'entries.classification'}
+            set(logging_config['loggers']),
+            {'entries.eduvulcan', 'entries.classification', 'django', 'django.request'},
         )
 
     def test_heartbeat_freshness_must_exceed_the_interval(self):
