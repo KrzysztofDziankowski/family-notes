@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 1
 status: draft
 created: 2026-09-22
-updated: 2026-10-01
+updated: 2026-10-03
 prd_version: 2
 main_goal: speed
 top_blocker: capacity
@@ -233,6 +233,12 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Parked
 
+- **Create multiple entries from one text instruction** - Allow a parent to request several entries at once. For example, "Add meeting with X today, tomorrow and next week on Monday at 18:00" should produce three meeting entries, one for each requested date, with the shared time of 18:00. Present all proposed entries for review and confirmation before saving. Why parked: owner-requested future feature, recorded 2026-10-03; extends the current single-entry classification flow and requires planning for multiple proposals and relative-date interpretation.
+- **Show background classification progress on mobile** - The current classification flow shows a loading page. When used as an application on a phone, show a visible progress or activity indicator that makes clear classification is still running in the background, then surface completion or failure. Why parked: owner-requested future feature, recorded 2026-10-03; pending definition of the mobile application experience and implementation planning.
+- **Submit form text with Enter** - Pressing Enter in the text input submits the form. Why parked: owner-requested future feature, recorded 2026-10-03; pending implementation planning.
+- **Show school event type in the entry form** - Display the specific school event type (kartkówka, sprawdzian, praca klasowa, zadanie domowe) when reviewing or editing an entry. Why parked: owner-requested future feature, recorded 2026-10-03; pending promotion into product requirements and a planned change.
+- **Classify school event type and require date, person, and subject** - Recognize kartkówka, sprawdzian, praca klasowa, and zadanie domowe as distinct school event types; each must have a date, an assigned family member, and an assigned school subject. Ask for any missing required value before confirmation. Why parked: owner-requested future feature, recorded 2026-10-03; extends the PRD's existing date/person requirement with a required subject and explicit school event type.
+- **Correct a classified proposal using free text** - After the first classification presents a proposal, allow the parent to change its date or any other entry field through free text (for example, "zmień datę na 15 października"). Update the existing proposal, preserve fields not mentioned in the correction, and show the revised proposal for confirmation. This also applies when the initial proposal is a complete general note. Why parked: owner-requested future feature, recorded 2026-10-03; extends correction beyond structured fields and follow-up for missing information.
 - **Custom audio recording or speech-to-text conversion** - Why parked: PRD Non-Goals; users may type or use phone keyboard dictation.
 - **External calendar, task, and source integrations (other than forwarded EduVulcan notifications)** - Why parked: PRD Non-Goals; post-MVP extension. EduVulcan intake moved into scope in PRD v2 (S-05).
 - **Read-only kiosk view** - Why parked: PRD Non-Goals; post-MVP extension. Owner-directed scope anchor MS-01 moves family-entry REST reads by a parent-owned token into S-06, but does not add a kiosk UI or anonymous access.
