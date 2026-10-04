@@ -123,6 +123,19 @@ def _family_entries(membership):
     )
 
 
+def _locked_family_entry(membership, entry_id):
+    """Lock one family entry row for update.
+
+    The lock query has no ``select_related``: PostgreSQL rejects ``FOR UPDATE``
+    on the nullable side of the outer join a nullable foreign key produces.
+    """
+    return (
+        scope_queryset_to_family(Entry.objects.all(), membership)
+        .select_for_update()
+        .get(pk=entry_id)
+    )
+
+
 def parent_family_entries(user):
     """Entries of the active parent's family only; non-parents are denied."""
     return _family_entries(require_parent_membership(user))
@@ -215,7 +228,7 @@ def update_family_entry(
     school_item_kind = SchoolItemKind(school_item) if school_item else None
 
     with transaction.atomic():
-        entry = _family_entries(membership).select_for_update().get(pk=entry_id)
+        entry = _locked_family_entry(membership, entry_id)
         _validate_managed(
             membership, entry_type, content, date, assigned_member, school_item_kind,
             kept_assignee_id=entry.assigned_member_id,
@@ -237,7 +250,7 @@ def delete_family_entry(user, entry_id):
     """
     membership = require_parent_membership(user)
     with transaction.atomic():
-        entry = _family_entries(membership).select_for_update().get(pk=entry_id)
+        entry = _locked_family_entry(membership, entry_id)
         entry.delete()
 
 
