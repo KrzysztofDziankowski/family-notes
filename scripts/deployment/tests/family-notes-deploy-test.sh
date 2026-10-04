@@ -118,4 +118,42 @@ if [ ! -e "$RELEASE_GATE_LIBRARY" ]; then
     assert_contains 'release gate library is unavailable' "$TMP_DIR/output" "library guard missing"
 fi
 
-printf 'PASS: deployment helper probe harness\n'
+# The reset invokes one fixed command in the current release only.
+(
+    CURRENT="$TMP_DIR/current"
+    RELEASES="$TMP_DIR/releases"
+    RESET_ID=20261004T120000Z-0123456789ab
+    mkdir -p "$RELEASES/$RESET_ID"
+    ln -s "$RELEASES/$RESET_ID" "$CURRENT"
+    validate_release() {
+        [ "$1" = "$RESET_ID" ] || fail_test 'reset selected another release'
+        release_dir="$RELEASES/$1"
+    }
+    load_environment() { :; }
+    run_manage() { printf '%s\n' "$@" >"$TMP_DIR/reset-args"; }
+    reset_admin_login 42 2001:db8::1
+    printf '%s\n' "$RELEASES/$RESET_ID" reset_admin_login_limits \
+        --user-id 42 --client-ip 2001:db8::1 >"$TMP_DIR/expected-reset-args"
+    cmp -s "$TMP_DIR/reset-args" "$TMP_DIR/expected-reset-args" \
+        || fail_test 'reset invocation is not fixed/current-only'
+    for bad_id in 0 01 -1 '1;id' '--help'; do
+        if (reset_admin_login "$bad_id" 192.0.2.1) >/dev/null 2>&1; then
+            fail_test 'reset accepted an invalid ID'
+        fi
+    done
+    for bad_ip in '--help' '127.0.0.1;id' '$(id)' ''; do
+        if (reset_admin_login 42 "$bad_ip") >/dev/null 2>&1; then
+            fail_test 'reset accepted an unsafe IP argument'
+        fi
+    done
+    if (reset_admin_login 42 192.0.2.1 extra) >/dev/null 2>&1; then
+        fail_test 'reset accepted extra arguments'
+    fi
+    rm "$CURRENT"
+    ln -s /tmp/untrusted-release "$CURRENT"
+    if (reset_admin_login 42 192.0.2.1) >/dev/null 2>&1; then
+        fail_test 'reset accepted an external current target'
+    fi
+)
+
+printf 'PASS: deployment helper probe and restricted reset harness\n'

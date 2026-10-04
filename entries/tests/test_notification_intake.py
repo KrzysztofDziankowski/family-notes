@@ -239,4 +239,5 @@ class InboundNotificationAdminTests(AutomationFixtureMixin, TestCase):
 
         response = self.client.get(url)
 
-        self.assertRedirects(response, f"{reverse('admin:login')}?next={url}")
+        self.assertRedirects(response, f"{reverse('admin:login')}?next={url}",
+                             fetch_redirect_response=False)

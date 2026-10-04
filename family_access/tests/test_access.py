@@ -129,6 +129,7 @@ class FamilyMemberAdminAccessTests(TestCase):
         self.assertRedirects(
             response,
             f"{reverse('admin:login')}?next={reverse('admin:index')}",
+            fetch_redirect_response=False,
         )
 
 

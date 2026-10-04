@@ -117,3 +117,11 @@ class AutomationToken(models.Model):
             raise ValidationError(
                 {'member': 'Token automatyzacji można wydać tylko rodzicowi.'}
             )
+
+
+class AuthCacheEntry(models.Model):
+    """Expiring authentication state only; never family content or credentials."""
+
+    cache_key = models.CharField(max_length=255, primary_key=True)
+    value = models.TextField()
+    expires = models.DateTimeField(null=True, db_index=True)

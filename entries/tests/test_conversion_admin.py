@@ -113,7 +113,8 @@ class ConversionAdminTests(AutomationFixtureMixin, TestCase):
         # The project admin site admits superusers only; the action is also
         # gated on superuser status in case that ever changes.
         self.assertRedirects(
-            self.client.get(CHANGELIST), f"{reverse('admin:login')}?next={CHANGELIST}"
+            self.client.get(CHANGELIST), f"{reverse('admin:login')}?next={CHANGELIST}",
+            fetch_redirect_response=False,
         )
         self.requeue(self.failed)
 
@@ -128,7 +129,8 @@ class ConversionAdminTests(AutomationFixtureMixin, TestCase):
             {'action': 'requeue_failed', 'index': 0, '_selected_action': [self.failed.pk]},
         )
 
-        self.assertRedirects(response, f"{reverse('admin:login')}?next={CHANGELIST}")
+        self.assertRedirects(response, f"{reverse('admin:login')}?next={CHANGELIST}",
+                             fetch_redirect_response=False)
         self.failed.refresh_from_db()
         self.assertEqual(self.failed.status, Status.FAILED)
 

@@ -206,6 +206,7 @@ class AutomationTokenAdminTests(AutomationFixtureMixin, TestCase):
         self.assertRedirects(
             response,
             f"{reverse('admin:login')}?next={self.changelist_url}",
+            fetch_redirect_response=False,
         )
 
 

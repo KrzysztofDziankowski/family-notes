@@ -174,6 +174,20 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = int(os.getenv('DJANGO_SECURE_HSTS_SECONDS', '3600' if not DEBUG else '0'))
 
+# Shared authentication state uses the existing application database.
+# Development may opt in for rehearsals; production always uses durable state.
+AUTH_DB_CACHE = not DEBUG or env_bool('DJANGO_AUTH_DB_CACHE', default=False)
+CACHES = {'default': {
+    'BACKEND': ('family_notes.auth_cache.DatabaseAuthCache' if AUTH_DB_CACHE else
+                'django.core.cache.backends.locmem.LocMemCache'),
+    'LOCATION': 'family-notes-auth',
+    'KEY_PREFIX': 'family_notes_auth',
+}}
+
+ACCOUNT_RATE_LIMITS = {'login': '30/m/ip', 'login_failed': '10/m/ip,5/300s/key'}
+# nginx overwrites this header; direct runserver development uses REMOTE_ADDR.
+ALLAUTH_TRUSTED_CLIENT_IP_HEADER = 'X-Real-IP' if not DEBUG else None
+
 
 # Application definition
 
@@ -199,6 +213,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'family_notes.auth_security.AuthCacheFailureMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

@@ -1,9 +1,9 @@
 ---
 change_id: testing-production-security-schema-safety
 title: Production security and schema safety testing
-status: preparing
+status: implementing
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-04
 archived_at: null
 ---
 

@@ -26,7 +26,8 @@ class RootRouteTests(TestCase):
     def test_admin_redirects_unauthenticated_users_to_admin_login(self):
         response = self.client.get(reverse('admin:index'))
 
-        self.assertRedirects(response, f"{reverse('admin:login')}?next=/admin/")
+        self.assertRedirects(response, f"{reverse('admin:login')}?next=/admin/",
+                             fetch_redirect_response=False)
 
     def test_active_staff_user_without_superuser_status_cannot_enter_admin(self):
         user = get_user_model().objects.create_user(
@@ -42,6 +43,7 @@ class RootRouteTests(TestCase):
         self.assertRedirects(
             response,
             f"{reverse('admin:login')}?next={reverse('admin:index')}",
+            fetch_redirect_response=False,
         )
 
     def test_active_superuser_can_reach_admin(self):

@@ -38,6 +38,19 @@ run_manage() {
     runuser -u familynotes -- sh -c 'cd "$1" && shift && exec .venv/bin/python manage.py "$@"' sh "$release_dir" "$@"
 }
 
+# A fixed recovery action: no arbitrary release, command, or option is accepted.
+reset_admin_login() {
+    [ "$#" -eq 2 ] || fail "usage: reset-admin-login USER_ID CLIENT_IP"
+    case "$1" in ''|*[!0-9]*|0|0*) fail "invalid operator ID" ;; esac
+    case "$2" in ''|*[!0-9a-fA-F.:]*) fail "invalid client IP" ;; esac
+    reset_release=$(readlink -f "$CURRENT") || fail "current release is unavailable"
+    case "$reset_release" in "$RELEASES"/*) ;; *) fail "current release is invalid" ;; esac
+    [ "$reset_release" = "$RELEASES/${reset_release##*/}" ] || fail "current release is invalid"
+    validate_release "${reset_release##*/}"
+    load_environment
+    run_manage "$release_dir" reset_admin_login_limits --user-id "$1" --client-ip "$2"
+}
+
 health_probe() {
     health_budget=$1
     case "$health_budget" in
@@ -123,6 +136,10 @@ fi
 
 command=${1:-}
 case "$command" in
+    reset-admin-login)
+        [ "$#" -eq 3 ] || fail "usage: $0 reset-admin-login USER_ID CLIENT_IP"
+        reset_admin_login "$2" "$3"
+        ;;
     check)
         [ "$#" -eq 2 ] || fail "usage: $0 check RELEASE_ID"
         validate_release "$2"
@@ -191,6 +208,6 @@ case "$command" in
         systemctl reboot
         ;;
     *)
-        fail "usage: $0 {check|backup|activate|rollback|status|logs|gate-version|health|conversion-health|reboot} [RELEASE_ID]"
+        fail "usage: $0 {check|backup|activate|rollback|status|logs|gate-version|health|conversion-health|reboot|reset-admin-login} [arguments]"
         ;;
 esac

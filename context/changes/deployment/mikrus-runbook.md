@@ -1185,6 +1185,81 @@ separate, human-approved incident procedure.
   is in place. Run the printed `status`, `logs`, and `health` commands, then choose
   a forward fix or the manual application rollback.
 
+## Admin login protection
+
+Status: local implementation only; production installation and smoke checks are
+pending. Apply the authentication-state migration before activating the
+admin-protection release. This change does not claim production acceptance.
+
+### Shared login state in the existing database
+
+No Redis service or cache URL is required. Production uses the existing default
+PostgreSQL connection and the `family_access_authcacheentry` table, created by
+`family_access 0003_authcacheentry`. Stop application requests before migrating
+and activate the new code only after the migration succeeds. Follow the release's
+maintenance procedure; do not reverse the schema automatically after failure.
+
+The cache stores JSON login histories and temporary locks, with a
+`family_notes_auth` prefix. Atomic insert-on-conflict provides locks across workers.
+Expired rows are removed on writes; active histories are never evicted to make
+space. PostgreSQL statement/lock timeouts are one second for these operations;
+connection establishment uses the normal database configuration.
+
+Cache errors deny new authentication with a sanitized Polish 503 response and a
+fixed diagnostic code. There is no process-local production fallback. Existing
+sessions retain their usual permission checks but still require the application
+database. Worker/release restarts retain committed histories. Never clear the
+table to resolve an operator lockout; use targeted recovery below.
+
+### Verify the client IP trust boundary
+
+The application trusts only nginx's overwritten `X-Real-IP`; arbitrary client
+`X-Forwarded-For` is not used. Confirm whether Mikrus forwards traffic through an
+upstream proxy. Before acceptance, verify that nginx's resolved `$remote_addr`
+corresponds to the actual requesting client from two distinct networks, and that
+client-supplied `X-Real-IP`/XFF values cannot replace it. If a provider proxy is
+present, configure nginx real-IP handling only for provider-confirmed proxy ranges
+and headers, then repeat the checks. Do not trust arbitrary ranges or leftmost XFF.
+Gunicorn remains reachable only through its Unix socket.
+
+### Login and targeted operator recovery
+
+Anonymous admin GET/POST requests redirect to allauth login. Admin remains
+superuser-only. The default limits are 30 login POSTs/minute/IP, 10 failed
+attempts/minute/IP, and five failed attempts/300 seconds/account key. They also
+protect the family password-login route; no MFA requirement is introduced.
+
+After verifying the current operator and its observed client address, invoke:
+
+```sh
+ssh familynotes-mikrus sudo -n /usr/local/sbin/family-notes-deploy reset-admin-login USER_ID CLIENT_IP
+```
+
+The helper accepts only the two validated arguments and resolves the current
+release. Django requires an active superuser and a valid IP. It derives account
+keys using the configured login identifier and canonical host (the first allowed
+host). Other accounts' key histories and other IP buckets remain intact. The
+selected IP bucket covers all accounts behind that IP, including IPv6's configured
+prefix bucket. A successful command prints only the user ID and a fixed outcome.
+Lock contention, resumed login traffic, or cache failure returns nonzero; wait or
+retry after investigating the source. A reset does not stop an ongoing attack.
+
+### Local and production evidence
+
+Run `sh scripts/testing/security-rehearsal.sh admin` with a working Docker daemon.
+It creates its own disposable loopback PostgreSQL database, exercises multiple independent Python
+processes, real atomic locking, histories across restarts, and a stopped-server
+login failure. Container and temporary configuration are cleaned on exit. It
+does not use a caller-supplied production cache or database. Missing Docker is a
+failure, not an accepted skip.
+
+Local operator check: sign in through `/admin/`, verify regular/staff accounts
+remain denied, trigger five synthetic failed logins, run the targeted reset, and
+confirm only the selected operator can retry. Production acceptance additionally
+requires two-worker shared-limit evidence, trusted-IP verification, HTTPS routing,
+and sanitized diagnostics. Record dates/results in the change's acceptance record;
+do not infer production success from local tests.
+
 ## References
 
 - [Mikrus Django and PostgreSQL guide](https://wiki.mikr.us/django_postgresql/)
