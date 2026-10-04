@@ -359,11 +359,11 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [ ] 1.1 Migration is present and model drift is clean: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.2 Service tests cover required subject on confirm, create and update for each of the four kinds, optional subject elsewhere, subject length limit, and the automated path accepting a blank subject: `uv run python manage.py test entries.tests.test_entry_service`
-- [ ] 1.3 Contract tests reflect the new `SCHOOL_SUBJECT` required field for exactly the four event kinds: `uv run python manage.py test entries.tests.test_classification_contract`
-- [ ] 1.4 Django checks pass: `uv run python manage.py check`
-- [ ] 1.6 Service tests cover the edit rule: updating a subject-less automated or legacy school event (reassign, move date, retitle) saves without a subject; clearing an existing subject fails; changing the school item to one of the four kinds without a subject fails: `uv run python manage.py test entries.tests.test_entry_service`
+- [x] 1.1 Migration is present and model drift is clean: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.2 Service tests cover required subject on confirm, create and update for each of the four kinds, optional subject elsewhere, subject length limit, and the automated path accepting a blank subject: `uv run python manage.py test entries.tests.test_entry_service`
+- [x] 1.3 Contract tests reflect the new `SCHOOL_SUBJECT` required field for exactly the four event kinds: `uv run python manage.py test entries.tests.test_classification_contract`
+- [x] 1.4 Django checks pass: `uv run python manage.py check`
+- [x] 1.6 Service tests cover the edit rule: updating a subject-less automated or legacy school event (reassign, move date, retitle) saves without a subject; clearing an existing subject fails; changing the school item to one of the four kinds without a subject fails: `uv run python manage.py test entries.tests.test_entry_service`
 
 #### Manual
 

@@ -27,10 +27,12 @@ class MissingField(str, Enum):
     DATE = 'date'
     AFFECTED_MEMBER = 'affected_member'
     AMBIGUOUS_MEMBER = 'ambiguous_member'
+    SCHOOL_SUBJECT = 'school_subject'
 
 
 _DATE = (MissingField.DATE,)
 _DATE_AND_MEMBER = (MissingField.DATE, MissingField.AFFECTED_MEMBER)
+_SCHOOL_EVENT = (MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT)
 
 
 class SchoolItemKind(str, Enum):
@@ -40,10 +42,10 @@ class SchoolItemKind(str, Enum):
     Polish label for display. Add a kind by adding one member here.
     """
 
-    HOMEWORK = ('homework', 'zadanie domowe', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
-    CLASS_TEST = ('class_test', 'praca klasowa', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
-    TEST = ('test', 'sprawdzian', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
-    QUIZ = ('quiz', 'kartkówka', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
+    HOMEWORK = ('homework', 'zadanie domowe', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
+    CLASS_TEST = ('class_test', 'praca klasowa', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
+    TEST = ('test', 'sprawdzian', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
+    QUIZ = ('quiz', 'kartkówka', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
     LUCKY_NUMBER = ('lucky_number', 'szczęśliwy numerek', EntryType.NOTE, ())
     GRADE = ('grade', 'ocena', EntryType.NOTE, ())
     SUBSTITUTION = ('substitution', 'zastępstwo', EntryType.NOTE, _DATE)

@@ -10,9 +10,10 @@ from django.db.models import RestrictedError
 from django.test import TestCase
 
 from entries.classification.types import EntryType, SchoolItemKind
-from entries.models import Entry
+from entries.models import SCHOOL_SUBJECT_MAX_LENGTH, Entry
 from entries import services
 from entries.services import (
+    create_automated_entry,
     create_family_entry,
     delete_family_entry,
     get_parent_family_entry,
@@ -25,6 +26,13 @@ from .test_classification_service import FamilyFixtureMixin
 
 SENTINEL_CONTENT = 'SENTINEL-sprawdzian-z-biologii'
 EVENT_DATE = datetime.date(2026, 9, 21)
+SCHOOL_EVENT_KINDS = (
+    SchoolItemKind.HOMEWORK,
+    SchoolItemKind.CLASS_TEST,
+    SchoolItemKind.TEST,
+    SchoolItemKind.QUIZ,
+)
+TOO_LONG_SUBJECT = 'x' * (SCHOOL_SUBJECT_MAX_LENGTH + 1)
 
 
 class EntryModelTests(FamilyFixtureMixin, TestCase):
@@ -106,6 +114,7 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
             'time': None,
             'assigned_member': self.child,
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'Biologia',
             'submission_key': uuid.uuid4(),
         }
         values.update(overrides)
@@ -120,7 +129,51 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(entry.source, Entry.Source.MANUAL)
         self.assertEqual(entry.assigned_member, self.child)
         self.assertEqual(entry.school_item, 'test')
+        self.assertEqual(entry.school_subject, 'Biologia')
         self.assertEqual(Entry.objects.count(), 1)
+
+    def test_school_event_kinds_require_a_subject(self):
+        for kind in SCHOOL_EVENT_KINDS:
+            for blank in ('', '   '):
+                with self.subTest(kind=kind.value, subject=blank):
+                    with self.assertRaisesMessage(
+                        ValidationError, 'Ten wpis szkolny wymaga przedmiotu.'
+                    ):
+                        self.save(school_item=kind.value, school_subject=blank)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_subject_is_stripped_and_stored_for_each_school_event_kind(self):
+        for kind in SCHOOL_EVENT_KINDS:
+            with self.subTest(kind=kind.value):
+                entry, _ = self.save(school_item=kind.value, school_subject='  Matematyka ')
+                entry.refresh_from_db()
+                self.assertEqual(entry.school_subject, 'Matematyka')
+
+    def test_subject_is_optional_for_other_entries(self):
+        cases = {
+            'grade note': {
+                'entry_type': EntryType.NOTE.value,
+                'school_item': SchoolItemKind.GRADE.value,
+            },
+            'substitution': {
+                'entry_type': EntryType.NOTE.value,
+                'school_item': SchoolItemKind.SUBSTITUTION.value,
+            },
+            'plain event': {'school_item': ''},
+            'todo': {'entry_type': EntryType.TODO.value, 'school_item': ''},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(name):
+                entry, created = self.save(school_subject='', **overrides)
+                self.assertTrue(created)
+                self.assertEqual(entry.school_subject, '')
+
+    def test_too_long_subject_is_rejected(self):
+        for school_item in (SchoolItemKind.TEST.value, ''):
+            with self.subTest(school_item=school_item):
+                with self.assertRaisesMessage(ValidationError, 'Przedmiot jest za długi.'):
+                    self.save(school_item=school_item, school_subject=TOO_LONG_SUBJECT)
+        self.assertFalse(Entry.objects.exists())
 
     def test_unauthorized_users_are_denied_and_nothing_is_written(self):
         unconfigured = get_user_model().objects.create_user(username='unconfigured')
@@ -287,7 +340,7 @@ class ManagementFixtureMixin(FamilyFixtureMixin):
         return sorted(
             Entry.objects.values_list(
                 'pk', 'family_id', 'entry_type', 'content', 'date', 'time',
-                'assigned_member_id', 'school_item', 'source', 'created_by_id',
+                'assigned_member_id', 'school_item', 'school_subject', 'source', 'created_by_id',
                 'submission_key', 'created_at', 'updated_at',
             )
         )
@@ -325,6 +378,7 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
             'time': None,
             'assigned_member': self.other_child,
             'school_item': '',
+            'school_subject': '',
             'submission_key': uuid.uuid4(),
         }
         values.update(overrides)
@@ -386,14 +440,54 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
                 'entry_type': EntryType.CALENDAR_EVENT.value,
                 'date': EVENT_DATE,
                 'school_item': SchoolItemKind.TEST.value,
+                'school_subject': 'Biologia',
                 'assigned_member': None,
             },
+            'too long subject': {'school_subject': TOO_LONG_SUBJECT},
         }
         for name, overrides in cases.items():
             with self.subTest(name):
                 with self.assertRaises(ValidationError):
                     self.create(**overrides)
         self.assertEqual(self.snapshot(), before)
+
+    def test_school_event_kinds_require_a_subject(self):
+        before = self.snapshot()
+        for kind in SCHOOL_EVENT_KINDS:
+            with self.subTest(kind=kind.value):
+                with self.assertRaisesMessage(
+                    ValidationError, 'Ten wpis szkolny wymaga przedmiotu.'
+                ):
+                    self.create(
+                        entry_type=EntryType.CALENDAR_EVENT.value,
+                        date=EVENT_DATE,
+                        school_item=kind.value,
+                        school_subject='  ',
+                    )
+        self.assertEqual(self.snapshot(), before)
+
+    def test_school_event_with_subject_is_created(self):
+        for kind in SCHOOL_EVENT_KINDS:
+            with self.subTest(kind=kind.value):
+                entry, created = self.create(
+                    entry_type=EntryType.CALENDAR_EVENT.value,
+                    date=EVENT_DATE,
+                    school_item=kind.value,
+                    school_subject=' Historia ',
+                )
+                self.assertTrue(created)
+                entry.refresh_from_db()
+                self.assertEqual(entry.school_subject, 'Historia')
+
+    def test_subject_is_optional_for_other_entries(self):
+        entry, created = self.create(
+            entry_type=EntryType.NOTE.value,
+            school_item=SchoolItemKind.GRADE.value,
+            school_subject='',
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(entry.school_subject, '')
 
     def test_key_owned_by_another_family_is_rejected(self):
         foreign_key = uuid.uuid4()
@@ -416,6 +510,7 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
             'time': datetime.time(10, 0),
             'assigned_member': self.other_child,
             'school_item': SchoolItemKind.QUIZ.value,
+            'school_subject': 'Chemia',
         }
         values.update(overrides)
         return update_family_entry(user or self.parent.user, entry.pk, **values)
@@ -442,6 +537,7 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
                 self.assertEqual(updated.time, datetime.time(10, 0))
                 self.assertEqual(updated.assigned_member, self.other_child)
                 self.assertEqual(updated.school_item, 'quiz')
+                self.assertEqual(updated.school_subject, 'Chemia')
                 self.assertGreaterEqual(updated.updated_at, previous_updated_at)
 
         self.eduvulcan.refresh_from_db()
@@ -480,6 +576,7 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
                         time=None,
                         assigned_member=None,
                         school_item='',
+                        school_subject='',
                     )
         self.assertEqual(self.snapshot(), before)
 
@@ -517,12 +614,148 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
             'undated event': {'date': None},
             'school item type mismatch': {'entry_type': EntryType.NOTE.value},
             'school item missing member': {'assigned_member': None},
+            'too long subject': {'school_subject': TOO_LONG_SUBJECT},
         }
         for name, overrides in cases.items():
             with self.subTest(name):
                 with self.assertRaises(ValidationError):
                     self.update(self.manual, **overrides)
         self.assertEqual(self.snapshot(), before)
+
+    def subjectless_school_event(self, kind=SchoolItemKind.TEST, source=Entry.Source.EDUVULCAN):
+        return Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Sprawdzian: Biologia',
+            date=EVENT_DATE,
+            assigned_member=self.child,
+            school_item=kind.value,
+            source=source,
+        )
+
+    def test_unrelated_edit_of_subjectless_school_event_saves_without_subject(self):
+        cases = {
+            'reassign': {'assigned_member': self.other_child},
+            'move date': {'date': EVENT_DATE + datetime.timedelta(days=7)},
+            'retitle': {'content': 'Sprawdzian z działu 3'},
+        }
+        for source in (Entry.Source.EDUVULCAN, Entry.Source.MANUAL):
+            for kind in SCHOOL_EVENT_KINDS:
+                for name, overrides in cases.items():
+                    with self.subTest(source=source, kind=kind.value, edit=name):
+                        entry = self.subjectless_school_event(kind, source)
+                        values = {
+                            'content': entry.content,
+                            'date': entry.date,
+                            'time': None,
+                            'assigned_member': self.child,
+                            'school_item': kind.value,
+                            'school_subject': '',
+                        }
+                        values.update(overrides)
+
+                        updated = self.update(entry, **values)
+
+                        updated.refresh_from_db()
+                        self.assertEqual(updated.school_item, kind.value)
+                        self.assertEqual(updated.school_subject, '')
+                        for field, value in overrides.items():
+                            self.assertEqual(getattr(updated, field), value)
+
+    def test_clearing_a_stored_subject_is_rejected(self):
+        self.manual.school_subject = 'Biologia'
+        self.manual.save(update_fields=('school_subject',))
+        before = self.snapshot()
+
+        for blank in ('', '   '):
+            with self.subTest(subject=blank):
+                with self.assertRaisesMessage(
+                    ValidationError, 'Ten wpis szkolny wymaga przedmiotu.'
+                ):
+                    self.update(
+                        self.manual, school_item=SchoolItemKind.TEST.value, school_subject=blank
+                    )
+        self.assertEqual(self.snapshot(), before)
+
+    def test_setting_or_changing_to_a_school_event_kind_requires_a_subject(self):
+        subjectless_test = self.subjectless_school_event(SchoolItemKind.TEST)
+        plain_event = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Wywiadówka',
+            date=EVENT_DATE,
+            assigned_member=self.child,
+        )
+        before = self.snapshot()
+        cases = (
+            (subjectless_test, SchoolItemKind.QUIZ),
+            (subjectless_test, SchoolItemKind.HOMEWORK),
+            (plain_event, SchoolItemKind.TEST),
+            (plain_event, SchoolItemKind.CLASS_TEST),
+            (self.eduvulcan, SchoolItemKind.QUIZ),
+        )
+        for entry, kind in cases:
+            with self.subTest(entry=entry.content, kind=kind.value):
+                with self.assertRaisesMessage(
+                    ValidationError, 'Ten wpis szkolny wymaga przedmiotu.'
+                ):
+                    self.update(
+                        entry,
+                        date=EVENT_DATE,
+                        assigned_member=self.child,
+                        school_item=kind.value,
+                        school_subject='',
+                    )
+        self.assertEqual(self.snapshot(), before)
+
+    def test_subject_can_be_added_to_a_subjectless_school_event(self):
+        entry = self.subjectless_school_event()
+
+        updated = self.update(
+            entry,
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            school_subject='  Biologia  ',
+        )
+
+        updated.refresh_from_db()
+        self.assertEqual(updated.school_subject, 'Biologia')
+
+
+class CreateAutomatedEntryTests(FamilyFixtureMixin, TestCase):
+    def create(self, **overrides):
+        values = {
+            'entry_type': EntryType.CALENDAR_EVENT.value,
+            'content': 'Sprawdzian: Biologia',
+            'date': EVENT_DATE,
+            'assigned_member_id': self.child.pk,
+            'school_item': SchoolItemKind.TEST.value,
+        }
+        values.update(overrides)
+        return create_automated_entry(self.family, **values)
+
+    def test_school_event_without_subject_is_saved_as_calendar_event(self):
+        for kind in SCHOOL_EVENT_KINDS:
+            for overrides in ({}, {'school_subject': ''}, {'school_subject': '  '}):
+                with self.subTest(kind=kind.value, **overrides):
+                    entry = self.create(school_item=kind.value, **overrides)
+
+                    entry.refresh_from_db()
+                    self.assertEqual(entry.entry_type, EntryType.CALENDAR_EVENT.value)
+                    self.assertEqual(entry.school_item, kind.value)
+                    self.assertEqual(entry.school_subject, '')
+                    self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
+
+    def test_subject_is_stored_stripped(self):
+        entry = self.create(school_subject=' Biologia ')
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.school_subject, 'Biologia')
+
+    def test_too_long_subject_is_rejected_without_write(self):
+        with self.assertRaisesMessage(ValidationError, 'Przedmiot jest za długi.'):
+            self.create(school_subject=TOO_LONG_SUBJECT)
+        self.assertFalse(Entry.objects.exists())
 
 
 class DeleteFamilyEntryTests(ManagementFixtureMixin, TestCase):

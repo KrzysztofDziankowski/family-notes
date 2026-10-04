@@ -12,6 +12,8 @@ ENTRY_TYPE_LABELS = {
     EntryType.NOTE: 'Notatka',
 }
 
+SCHOOL_SUBJECT_MAX_LENGTH = 100
+
 
 class Entry(models.Model):
     class Source(models.TextChoices):
@@ -44,6 +46,15 @@ class Entry(models.Model):
         max_length=20,
         choices=SCHOOL_ITEM_CHOICES,
         blank=True,
+    )
+    # Free-text school subject. The database default keeps inserts from a
+    # rolled-back release (which does not know this column) working.
+    school_subject = models.CharField(
+        'przedmiot',
+        max_length=SCHOOL_SUBJECT_MAX_LENGTH,
+        blank=True,
+        default='',
+        db_default='',
     )
     source = models.CharField(
         'źródło',

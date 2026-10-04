@@ -193,13 +193,15 @@ class ValidationTests(SimpleTestCase):
         )
 
     def test_school_kinds_define_labels_entry_types_and_required_fields(self):
-        date_and_member = (MissingField.DATE, MissingField.AFFECTED_MEMBER)
+        school_event = (
+            MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT,
+        )
         date_only = (MissingField.DATE,)
         expected = {
-            SchoolItemKind.HOMEWORK: ('zadanie domowe', EntryType.CALENDAR_EVENT, date_and_member),
-            SchoolItemKind.CLASS_TEST: ('praca klasowa', EntryType.CALENDAR_EVENT, date_and_member),
-            SchoolItemKind.TEST: ('sprawdzian', EntryType.CALENDAR_EVENT, date_and_member),
-            SchoolItemKind.QUIZ: ('kartkówka', EntryType.CALENDAR_EVENT, date_and_member),
+            SchoolItemKind.HOMEWORK: ('zadanie domowe', EntryType.CALENDAR_EVENT, school_event),
+            SchoolItemKind.CLASS_TEST: ('praca klasowa', EntryType.CALENDAR_EVENT, school_event),
+            SchoolItemKind.TEST: ('sprawdzian', EntryType.CALENDAR_EVENT, school_event),
+            SchoolItemKind.QUIZ: ('kartkówka', EntryType.CALENDAR_EVENT, school_event),
             SchoolItemKind.LUCKY_NUMBER: ('szczęśliwy numerek', EntryType.NOTE, ()),
             SchoolItemKind.GRADE: ('ocena', EntryType.NOTE, ()),
             SchoolItemKind.SUBSTITUTION: ('zastępstwo', EntryType.NOTE, date_only),
@@ -214,6 +216,22 @@ class ValidationTests(SimpleTestCase):
                 self.assertEqual(kind.entry_type, entry_type)
                 self.assertEqual(kind.required_fields, required_fields)
                 self.assertEqual(SchoolItemKind(kind.value), kind)
+
+    def test_only_the_four_school_event_kinds_require_a_subject(self):
+        requiring = {
+            kind for kind in SchoolItemKind if MissingField.SCHOOL_SUBJECT in kind.required_fields
+        }
+
+        self.assertEqual(
+            requiring,
+            {
+                SchoolItemKind.HOMEWORK,
+                SchoolItemKind.CLASS_TEST,
+                SchoolItemKind.TEST,
+                SchoolItemKind.QUIZ,
+            },
+        )
+        self.assertEqual(MissingField.SCHOOL_SUBJECT.value, 'school_subject')
 
     def test_event_kinds_require_date_and_member_as_calendar_events(self):
         event_kinds = [k for k in SchoolItemKind if k.entry_type == EntryType.CALENDAR_EVENT]
