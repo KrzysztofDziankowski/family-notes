@@ -422,9 +422,9 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Manual
 
-- [ ] 1.4 Tabbing through `/entries/mine/` shows a clearly visible ring on each row link and each mode link (360px and 1280px)
-- [ ] 1.5 Hovering a row visibly changes its border
-- [ ] 1.6 The parent list `/entries/` and capture form `/entries/new/` look unchanged apart from the stronger focus ring
+- [x] 1.4 Tabbing through `/entries/mine/` shows a clearly visible ring on each row link and each mode link (360px and 1280px)
+- [x] 1.5 Hovering a row visibly changes its border
+- [x] 1.6 The parent list `/entries/` and capture form `/entries/new/` look unchanged apart from the stronger focus ring
 
 ### Phase 2: Shared List Components
 
@@ -435,7 +435,7 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Manual
 
-- [ ] 2.3 Child list, parent list and both galleries show the same tab switch and the same empty state at 360px and 1280px
+- [x] 2.3 Child list, parent list and both galleries show the same tab switch and the same empty state at 360px and 1280px
 
 ### Phase 3: Child Day Headings
 
@@ -448,8 +448,8 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Manual
 
-- [ ] 3.5 On a seeded family (`scripts/dev/seed_test_family.py`), the child list reads as days at 360px: headings stand out over rows, and rows show only times
-- [ ] 3.6 Past mode reads newest day first under "Wczoraj"/weekday/date headings
+- [x] 3.5 On a seeded family (`scripts/dev/seed_test_family.py`), the child list reads as days at 360px: headings stand out over rows, and rows show only times
+- [x] 3.6 Past mode reads newest day first under "Wczoraj"/weekday/date headings
 
 ### Phase 4: Entry Points, Sign-in and Error Pages
 
@@ -463,9 +463,9 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Manual
 
-- [ ] 4.6 Signed out: `/` lands on a styled Polish sign-in page at 360px and 1280px, the Google button comes first, and the header shows only the brand
-- [ ] 4.7 Signing in as `test_kasia` lands on `/entries/mine/`, and as `test_rodzic` on `/entries/`
-- [ ] 4.8 As `test_rodzic`, typing `/entries/mine/` shows the Polish 403 page with a working way back
+- [x] 4.6 Signed out: `/` lands on a styled Polish sign-in page at 360px and 1280px, the Google button comes first, and the header shows only the brand
+- [x] 4.7 Signing in as `test_kasia` lands on `/entries/mine/`, and as `test_rodzic` on `/entries/`
+- [x] 4.8 As `test_rodzic`, typing `/entries/mine/` shows the Polish 403 page with a working way back
 
 ### Phase 5: States, Visual Gate and Guard
 
@@ -478,7 +478,7 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Manual
 
-- [ ] 5.5 Gallery screenshots at 360px and 1280px show all states legibly, with no horizontal scroll, Polish copy and token colours only
-- [ ] 5.6 Login and 403 screenshots match the app's look
-- [ ] 5.7 The `states.md` matrix has every cell shown or N/A with a reason
-- [ ] 5.8 The `AGENTS.md` UI block is readable and sits outside the 10x-cli block
+- [x] 5.5 Gallery screenshots at 360px and 1280px show all states legibly, with no horizontal scroll, Polish copy and token colours only
+- [x] 5.6 Login and 403 screenshots match the app's look
+- [x] 5.7 The `states.md` matrix has every cell shown or N/A with a reason
+- [x] 5.8 The `AGENTS.md` UI block is readable and sits outside the 10x-cli block
