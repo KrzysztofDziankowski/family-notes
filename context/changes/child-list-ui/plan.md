@@ -471,10 +471,10 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [x] 5.1 `uv run python manage.py test entries.tests.test_child_states_view` passes with the new state markers and zero `Entry` queries
-- [x] 5.2 Hardcoded-value scan over the allowlisted templates returns 0 hits
-- [x] 5.3 `echo '{"tool_name":"Edit","tool_input":{"file_path":"entries/templates/entries/_entry_row.html"}}' | python3 scripts/hooks/quality_gate.py edit` exits 2 when a literal `#ff0000` is temporarily added to that file and exits 0 after reverting it
-- [x] 5.4 `uv run python manage.py test`, `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass
+- [x] 5.1 `uv run python manage.py test entries.tests.test_child_states_view` passes with the new state markers and zero `Entry` queries — 809ce79
+- [x] 5.2 Hardcoded-value scan over the allowlisted templates returns 0 hits — 809ce79
+- [x] 5.3 `echo '{"tool_name":"Edit","tool_input":{"file_path":"entries/templates/entries/_entry_row.html"}}' | python3 scripts/hooks/quality_gate.py edit` exits 2 when a literal `#ff0000` is temporarily added to that file and exits 0 after reverting it — 809ce79
+- [x] 5.4 `uv run python manage.py test`, `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass — 809ce79
 
 #### Manual
 
