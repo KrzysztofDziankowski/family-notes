@@ -416,9 +416,9 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 1.1 `uv run python manage.py test` passes
-- [ ] 1.2 `grep -rn "fn-manage-tabs\|fn-manage-empty" entries/ family_notes/ family_access/` returns nothing
-- [ ] 1.3 Hardcoded-value scan on the 5 child-view templates still returns 0 hits
+- [x] 1.1 `uv run python manage.py test` passes
+- [x] 1.2 `grep -rn "fn-manage-tabs\|fn-manage-empty" entries/ family_notes/ family_access/` returns nothing
+- [x] 1.3 Hardcoded-value scan on the 5 child-view templates still returns 0 hits
 
 #### Manual
 

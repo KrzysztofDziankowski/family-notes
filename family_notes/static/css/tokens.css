@@ -4,7 +4,9 @@
    - Derived for first-school-event-capture, with no external source: surface and accent-inverse #ffffff,
      border #d9dde2, accent-hover #255a4c (darkened accent), accent-focus (accent at 25% alpha),
      danger #b3261e / #fdecea, success-bg #e6f2ee (accent tint), notice #fff6e0 / #d9a520,
-     spacing, radius and the accent rule width. */
+     spacing, radius and the accent rule width.
+   - focus = accent, chosen for ≥3:1 non-text contrast (child-list-ui): #2f6f5e gives 5.91:1 on surface
+     #ffffff and 5.56:1 on bg #f7f8fa. accent-focus stays as a soft tint (link underline) only. */
 
 /* Semantic project tokens: the single source of design values for product views. */
 :root {
@@ -18,6 +20,7 @@
   --fn-color-accent-hover: #255a4c;
   --fn-color-accent-focus: rgba(47, 111, 94, 0.25);
   --fn-color-accent-inverse: #ffffff;
+  --fn-color-focus: #2f6f5e;
   --fn-color-danger: #b3261e;
   --fn-color-danger-bg: #fdecea;
   --fn-color-success: #2f6f5e;
@@ -52,7 +55,7 @@
   --pico-primary-hover: var(--fn-color-accent-hover);
   --pico-primary-hover-background: var(--fn-color-accent-hover);
   --pico-primary-hover-border: var(--fn-color-accent-hover);
-  --pico-primary-focus: var(--fn-color-accent-focus);
+  --pico-primary-focus: var(--fn-color-focus);
   --pico-primary-inverse: var(--fn-color-accent-inverse);
   --pico-card-background-color: var(--fn-color-surface);
   --pico-form-element-invalid-border-color: var(--fn-color-danger);
@@ -155,10 +158,20 @@
   margin-bottom: var(--fn-space-2);
 }
 
+.fn-entry-row:hover {
+  border-color: var(--fn-color-accent);
+}
+
 .fn-entry-link {
   display: block;
   color: var(--fn-color-text);
   text-decoration: none;
+}
+
+.fn-entry-link:focus-visible {
+  outline: 2px solid var(--fn-color-focus);
+  outline-offset: var(--fn-space-1);
+  box-shadow: none;
 }
 
 .fn-entry-type {
@@ -186,10 +199,11 @@
   margin-bottom: var(--fn-space-4);
 }
 
+/* Tabs and empty states (shared by S-02/S-03) */
 /* :first-of-type/:last-of-type outrank Pico's negative nav list margins. */
-.fn-manage-tabs ul,
-.fn-manage-tabs ul:first-of-type,
-.fn-manage-tabs ul:last-of-type {
+.fn-tabs ul,
+.fn-tabs ul:first-of-type,
+.fn-tabs ul:last-of-type {
   display: flex;
   flex-wrap: wrap;
   gap: var(--fn-space-2);
@@ -198,13 +212,13 @@
   margin: 0 0 var(--fn-space-3);
 }
 
-.fn-manage-tabs li {
+.fn-tabs li {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.fn-manage-tabs a {
+.fn-tabs a {
   display: inline-block;
   padding: var(--fn-space-1) var(--fn-space-3);
   border: 1px solid var(--fn-color-border);
@@ -215,7 +229,17 @@
   margin: 0;
 }
 
-.fn-manage-tabs a[aria-current="page"] {
+.fn-tabs a:hover {
+  border-color: var(--fn-color-accent);
+}
+
+.fn-tabs a:focus-visible {
+  outline: 2px solid var(--fn-color-focus);
+  outline-offset: var(--fn-space-1);
+  box-shadow: none;
+}
+
+.fn-tabs a[aria-current="page"] {
   border-color: var(--fn-color-accent);
   background: var(--fn-color-accent);
   color: var(--fn-color-accent-inverse);
@@ -228,7 +252,7 @@
   margin: var(--fn-space-3) 0 var(--fn-space-2);
 }
 
-.fn-manage-empty {
+.fn-empty {
   background: var(--fn-color-surface);
   border: 1px dashed var(--fn-color-border);
   border-radius: var(--fn-radius);
