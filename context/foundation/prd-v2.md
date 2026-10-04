@@ -26,7 +26,7 @@ Manual capture classifies text as a todo, calendar event, or note and extracts d
 
 ## Problem Statement & Motivation
 
-Parents have recorded improvements to name recognition, school-event details, text submission and correction, assignment, list organization, and mobile classification feedback. They also want one instruction to produce multiple entries. These requests were captured on 2026-10-03 and 2026-10-04.
+Parents have recorded improvements to name recognition, school-event details, text submission and correction, assignment, list organization, and mobile classification feedback. They also want one instruction to produce multiple entries, and an entry title that keeps only the action once the person and date have been extracted from it. These requests were captured on 2026-10-03 and 2026-10-04.
 
 The remaining included parked items describe post-MVP opportunities previously excluded: additional external sources, kiosk viewing, parent token management, direct school-source reading, family administration, accessibility, faster responses, and stronger classification retention protection. Their presence in this draft records the requested future scope; it does not establish a single delivery commitment. Audio capture is excluded at the owner's request.
 
@@ -50,7 +50,7 @@ Children read entries assigned to them and do not create, edit, or delete entrie
 
 The baseline outcome remains: a parent can enter a natural-language instruction, review its classification, correct it if needed, and save an entry visible to the assigned family member.
 
-The recorded multi-entry example must produce three proposed meetings: today, tomorrow, and Monday of next week, all at 18:00, for review before saving. The recorded short-name example must resolve Hania to the corresponding family member Hanna.
+The recorded multi-entry example must produce three proposed meetings: today, tomorrow, and Monday of next week, all at 18:00, for review before saving. The recorded short-name example must resolve Hania to the corresponding family member Hanna. The recorded title example "kasia zrobić pranie w piątek" must produce the title "zrobić pranie", the date of the coming Friday, and the assigned member Kasia.
 
 # TODO: Confirm release-level success criteria for all 18 included items — see Open Questions.
 
@@ -152,13 +152,21 @@ Previous behavior / delta: The baseline date/person requirement gains required s
 
 Previous behavior / delta: Free-text correction extends beyond missing-information follow-up and structured fields.
 
+### US-11: Keep only the action in the entry title
+
+- **Given** a parent submits an instruction that names the person and the date
+- **When** the parent enters "kasia zrobić pranie w piątek"
+- **Then** the proposal's title is "zrobić pranie", its date is the coming Friday, and it is assigned to Kasia; the extracted person and date are not repeated in the title
+
+Previous behavior / delta: The entry title no longer repeats the person and date that classification already extracted into their own fields.
+
 ## Scope of Change
 
 All parked items except audio capture are included below in original order and wording. Inclusion is proposed future scope, not an assigned priority or an implementation approval. Original parking rationales are retained for traceability.
 
 - [modified] PK-01: **Recognize short names during classification** - Resolve short names and diminutives to the corresponding family member; for example, "Hania" should match a family member named "Hanna". If a name could match more than one member in the current family, ask for clarification before assigning the entry. Why parked: owner-requested future improvement, recorded 2026-10-04; pending implementation planning for family-scoped name matching.
 - [removed] PK-02: **Remove the sign-up option** - Remove the option for users to sign up. Why parked: owner-requested change, recorded 2026-10-04; pending implementation planning.
-- [modified] PK-03: **Assign new notes to parents as well as children** - Allow a parent to create a note assigned to any parent in the same family, including themselves, as well as to a child. Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
+- [modified] PK-03: **Assign new notes to parents as well as children** - Allow a parent to create a note assigned to any parent in the same family, including themselves, as well as to a child. A self-reference in the instruction ("dla mnie", "mi", "ja") assigns the entry to the requesting parent (owner decision 2026-10-04). Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
 - [modified] PK-04: **Group entries by child in the parent view** - Group the parent's family entry list by the child each entry is assigned to. Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
 - [modified] PK-05: **Create multiple entries from one text instruction** - Allow a parent to request several entries at once. For example, "Add meeting with X today, tomorrow and next week on Monday at 18:00" should produce three meeting entries, one for each requested date, with the shared time of 18:00. Present all proposed entries for review and confirmation before saving. Why parked: owner-requested future feature, recorded 2026-10-03; extends the current single-entry classification flow and requires planning for multiple proposals and relative-date interpretation.
 - [modified] PK-06: **Show background classification progress on mobile** - The current classification flow shows a loading page. When used as an application on a phone, show a visible progress or activity indicator that makes clear classification is still running in the background, then surface completion or failure. Why parked: owner-requested future feature, recorded 2026-10-03; pending definition of the mobile application experience and implementation planning.
@@ -166,6 +174,7 @@ All parked items except audio capture are included below in original order and w
 - [modified] PK-08: **Show school event type in the entry form** - Display the specific school event type (kartkówka, sprawdzian, praca klasowa, zadanie domowe) when reviewing or editing an entry. Why parked: owner-requested future feature, recorded 2026-10-03; pending promotion into product requirements and a planned change.
 - [modified] PK-09: **Classify school event type and require date, person, and subject** - Recognize kartkówka, sprawdzian, praca klasowa, and zadanie domowe as distinct school event types; each must have a date, an assigned family member, and an assigned school subject. Ask for any missing required value before confirmation. Why parked: owner-requested future feature, recorded 2026-10-03; extends the PRD's existing date/person requirement with a required subject and explicit school event type.
 - [modified] PK-10: **Correct a classified proposal using free text** - After the first classification presents a proposal, allow the parent to change its date or any other entry field through free text (for example, "zmień datę na 15 października"). Update the existing proposal, preserve fields not mentioned in the correction, and show the revised proposal for confirmation. This also applies when the initial proposal is a complete general note. Why parked: owner-requested future feature, recorded 2026-10-03; extends correction beyond structured fields and follow-up for missing information.
+- [modified] PK-20: **Keep only the action in the classified entry title** - When classification extracts the assigned family member and the date from an instruction, the proposed title keeps only the action in the parent's words, without the name and date phrases. For example, "kasia zrobić pranie w piątek" produces the title "zrobić pranie", the date of the coming Friday, and the assigned member Kasia. Why added: owner-requested improvement, recorded 2026-10-04.
 - [new] PK-12: **External calendar, task, and source integrations (other than forwarded EduVulcan notifications)** - Why parked: PRD Non-Goals; post-MVP extension. EduVulcan intake moved into scope in PRD v2 (S-05).
 - [new] PK-13: **Read-only kiosk view** - Why parked: PRD Non-Goals; post-MVP extension. Owner-directed scope anchor MS-01 moves family-entry REST reads by a parent-owned token into S-06, but does not add a kiosk UI or anonymous access.
 - [new] PK-14: **In-app token management page for parents** - Why parked: PRD v2 Non-Goals; tokens are issued and revoked by the administrator.
@@ -198,7 +207,7 @@ The existing school rule requires date and family member for homework, class tes
 
 Short names and diminutives resolve within the current family; Hania matches Hanna, and ambiguous matches require clarification before assignment. A note may be assigned to a parent in the same family, including its author, or to a child.
 
-A single instruction may produce multiple proposals. The supplied example produces three meetings at 18:00, one for each requested date, reviewed before saving. Free-text corrections update the existing proposal and preserve fields not mentioned, including when the initial proposal is a complete general note.
+A single instruction may produce multiple proposals. The supplied example produces three meetings at 18:00, one for each requested date, reviewed before saving. Free-text corrections update the existing proposal and preserve fields not mentioned, including when the initial proposal is a complete general note. When the person and date are extracted into their own fields, the title keeps only the action and does not repeat them.
 
 Rules for relative-date ambiguity, partial batch confirmation, general alias coverage, and newly introduced external-source behavior are unresolved.
 

@@ -233,6 +233,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Parked
 
+- **Recognize short names during classification** - Resolve short names and diminutives to the corresponding family member; for example, "Hania" should match a family member named "Hanna". If a name could match more than one member in the current family, ask for clarification before assigning the entry. Why parked: owner-requested future improvement, recorded 2026-10-04; pending implementation planning for family-scoped name matching.
 - **Remove the sign-up option** - Remove the option for users to sign up. Why parked: owner-requested change, recorded 2026-10-04; pending implementation planning.
 - **Assign new notes to parents as well as children** - Allow a parent to create a note assigned to any parent in the same family, including themselves, as well as to a child. Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
 - **Group entries by child in the parent view** - Group the parent's family entry list by the child each entry is assigned to. Why parked: owner-requested future feature, recorded 2026-10-04; pending implementation planning.
