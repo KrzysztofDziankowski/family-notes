@@ -416,9 +416,9 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 1.1 `uv run python manage.py test` passes
-- [ ] 1.2 `grep -rn "fn-manage-tabs\|fn-manage-empty" entries/ family_notes/ family_access/` returns nothing
-- [ ] 1.3 Hardcoded-value scan on the 5 child-view templates still returns 0 hits
+- [x] 1.1 `uv run python manage.py test` passes — aef2600
+- [x] 1.2 `grep -rn "fn-manage-tabs\|fn-manage-empty" entries/ family_notes/ family_access/` returns nothing — aef2600
+- [x] 1.3 Hardcoded-value scan on the 5 child-view templates still returns 0 hits — aef2600
 
 #### Manual
 
@@ -430,8 +430,8 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 2.1 `uv run python manage.py test entries` passes, including the updated child-view assertions: no `role="group"`, `aria-current="page"` on the current mode, and `fn-empty` on both empty states
-- [ ] 2.2 `grep -n 'role="group"\|role="button"' entries/templates/entries/_child_list_body.html` returns nothing
+- [x] 2.1 `uv run python manage.py test entries` passes, including the updated child-view assertions: no `role="group"`, `aria-current="page"` on the current mode, and `fn-empty` on both empty states — 1528c6f
+- [x] 2.2 `grep -n 'role="group"\|role="button"' entries/templates/entries/_child_list_body.html` returns nothing — 1528c6f
 
 #### Manual
 
@@ -441,10 +441,10 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 3.1 Unit tests in `entries/tests/test_entry_listing.py` for `day_heading` with a fixed `today`: deltas 0, 1, −1, 2, 6, −6, 7, −7, and a date in another year
-- [ ] 3.2 Unit test that `group_by_day` keeps input order and groups an undated grade by its `effective_date`
-- [ ] 3.3 Child-view tests: upcoming shows "Dziś"/"Jutro" headings with a fixed `today` (`timezone.localdate` patched), past shows "Wczoraj", the parent list still shows full dates on rows
-- [ ] 3.4 `uv run python manage.py test` passes
+- [x] 3.1 Unit tests in `entries/tests/test_entry_listing.py` for `day_heading` with a fixed `today`: deltas 0, 1, −1, 2, 6, −6, 7, −7, and a date in another year — 661f96c
+- [x] 3.2 Unit test that `group_by_day` keeps input order and groups an undated grade by its `effective_date` — 661f96c
+- [x] 3.3 Child-view tests: upcoming shows "Dziś"/"Jutro" headings with a fixed `today` (`timezone.localdate` patched), past shows "Wczoraj", the parent list still shows full dates on rows — 661f96c
+- [x] 3.4 `uv run python manage.py test` passes — 661f96c
 
 #### Manual
 
@@ -455,11 +455,11 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 4.1 Root redirect matrix test: anonymous → login, child → `/entries/mine/`, parent → `/entries/`, no membership → `/account/`
-- [ ] 4.2 Login test: `GET /accounts/login/` uses `account/login.html`, contains `css/tokens.css`, "Zaloguj się" and the Google provider URL, and does not contain "Wyloguj" or "Menu:"
-- [ ] 4.3 Error tests: parent `GET /entries/mine/` returns 403 with "Brak dostępu" and the base layout; a foreign-entry detail returns 404 with "Nie znaleziono", with identical bodies for foreign and missing IDs; `render_to_string('500.html')` succeeds with no context and contains `tokens.css`
-- [ ] 4.4 Existing access-matrix tests in `entries/tests/test_child_views.py` still pass unchanged
-- [ ] 4.5 `uv run python manage.py test` and `uv run python manage.py check` pass
+- [x] 4.1 Root redirect matrix test: anonymous → login, child → `/entries/mine/`, parent → `/entries/`, no membership → `/account/` — 303f6f2
+- [x] 4.2 Login test: `GET /accounts/login/` uses `account/login.html`, contains `css/tokens.css`, "Zaloguj się" and the Google provider URL, and does not contain "Wyloguj" or "Menu:" — 303f6f2
+- [x] 4.3 Error tests: parent `GET /entries/mine/` returns 403 with "Brak dostępu" and the base layout; a foreign-entry detail returns 404 with "Nie znaleziono", with identical bodies for foreign and missing IDs; `render_to_string('500.html')` succeeds with no context and contains `tokens.css` — 303f6f2
+- [x] 4.4 Existing access-matrix tests in `entries/tests/test_child_views.py` still pass unchanged — 303f6f2
+- [x] 4.5 `uv run python manage.py test` and `uv run python manage.py check` pass — 303f6f2
 
 #### Manual
 
@@ -471,10 +471,10 @@ No data migrations. Deleting `family_notes/home.html` and changing `LOGIN_REDIRE
 
 #### Automated
 
-- [ ] 5.1 `uv run python manage.py test entries.tests.test_child_states_view` passes with the new state markers and zero `Entry` queries
-- [ ] 5.2 Hardcoded-value scan over the allowlisted templates returns 0 hits
-- [ ] 5.3 `echo '{"tool_name":"Edit","tool_input":{"file_path":"entries/templates/entries/_entry_row.html"}}' | python3 scripts/hooks/quality_gate.py edit` exits 2 when a literal `#ff0000` is temporarily added to that file and exits 0 after reverting it
-- [ ] 5.4 `uv run python manage.py test`, `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass
+- [x] 5.1 `uv run python manage.py test entries.tests.test_child_states_view` passes with the new state markers and zero `Entry` queries — 809ce79
+- [x] 5.2 Hardcoded-value scan over the allowlisted templates returns 0 hits — 809ce79
+- [x] 5.3 `echo '{"tool_name":"Edit","tool_input":{"file_path":"entries/templates/entries/_entry_row.html"}}' | python3 scripts/hooks/quality_gate.py edit` exits 2 when a literal `#ff0000` is temporarily added to that file and exits 0 after reverting it — 809ce79
+- [x] 5.4 `uv run python manage.py test`, `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass — 809ce79
 
 #### Manual
 

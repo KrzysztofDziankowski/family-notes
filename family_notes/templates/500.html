@@ -1,0 +1,29 @@
+{% load static %}<!doctype html>
+{% comment %}
+Rendered by Django without a request context: no url lookups, no user, no context variables.
+{% endcomment %}
+<html lang="pl" data-theme="light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Błąd serwera | FamilyNotes</title>
+    <link rel="stylesheet" href="{% static 'vendor/pico/pico.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+</head>
+<body>
+    <header class="container">
+        <nav aria-label="Główna nawigacja">
+            <ul>
+                <li><a class="fn-brand" href="/">FamilyNotes</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main class="container">
+        <h1>Coś poszło nie tak</h1>
+        <div class="fn-panel fn-panel--danger" role="alert">
+            <p>Wystąpił błąd serwera. Spróbuj ponownie za chwilę.</p>
+            <p><a href="/">Wróć na stronę główną</a></p>
+        </div>
+    </main>
+</body>
+</html>

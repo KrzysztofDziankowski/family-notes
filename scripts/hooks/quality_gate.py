@@ -55,6 +55,47 @@ def syntax_errors(paths, base):
     return errors
 
 
+# Templates cleaned by the child-list-ui change; they must use tokens.css only.
+LITERAL_TEMPLATES = (
+    'family_notes/templates/base.html',
+    'family_notes/templates/403.html',
+    'family_notes/templates/404.html',
+    'family_notes/templates/500.html',
+    'family_notes/templates/_error.html',
+    'family_notes/templates/allauth/layouts/base.html',
+    'family_notes/templates/account/login.html',
+    *(f'entries/templates/entries/{name}.html' for name in (
+        'child_list', 'child_detail', 'child_states', '_child_list_body',
+        '_child_entry_detail', '_entry_row', '_list_modes',
+    )),
+)
+LITERAL_PATTERN = re.compile(r'#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\(|style=|<style')
+
+
+def literal_template(path):
+    text = path.as_posix()
+    return any(text == name or text.endswith('/' + name) for name in LITERAL_TEMPLATES)
+
+
+def literal_errors(paths, base):
+    errors = []
+    for name in dict.fromkeys(paths):
+        path = base / name
+        if not literal_template(path) or not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding='utf-8').splitlines()
+        except (UnicodeError, OSError) as error:
+            errors.append(f'{path}: {error}')
+            continue
+        for number, line in enumerate(lines, 1):
+            match = LITERAL_PATTERN.search(line)
+            if match:
+                errors.append(f'{path}:{number}: literal {match.group(0)!r}; '
+                              'use tokens.css classes and variables instead')
+    return errors
+
+
 def run(command, root, env, timeout):
     try:
         result = subprocess.run(command, cwd=root, env=env, stdout=subprocess.PIPE,
@@ -91,6 +132,7 @@ def stop_errors(data):
     # Importing a syntactically invalid module would only repeat the same error.
     if errors:
         return errors
+    errors = literal_errors(paths, root)
     deadline = time.monotonic() + 270
     commands = [
         ['uv', 'run', 'python', 'manage.py', 'test', '--noinput'],
@@ -114,7 +156,8 @@ def main():
     data = payload()
     mode = sys.argv[1] if len(sys.argv) > 1 else ''
     if mode == 'edit':
-        errors = syntax_errors(edited_paths(data), cwd(data))
+        paths, base = edited_paths(data), cwd(data)
+        errors = syntax_errors(paths, base) + literal_errors(paths, base)
     elif mode == 'stop':
         errors = stop_errors(data)
     else:

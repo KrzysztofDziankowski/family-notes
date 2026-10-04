@@ -5,10 +5,15 @@ in the app shows the same rows in the same order. The helper never filters by
 family, role or assignee: scoping is the caller's job.
 """
 
+from itertools import groupby
 from typing import NamedTuple
 
+from django.conf import settings
 from django.db.models import Case, DateField, F, QuerySet, When
 from django.db.models.functions import Coalesce, TruncDate
+from django.utils import translation
+from django.utils.formats import date_format
+from django.utils.text import capfirst
 
 from .classification.types import SchoolItemKind
 
@@ -102,4 +107,39 @@ def partition_entries(queryset, mode, today):
             SECTION_UNDATED,
             rows.filter(effective_date__isnull=True).order_by('-updated_at', '-pk'),
         ),
+    ]
+
+
+RELATIVE_DAY_HEADINGS = {0: 'Dziś', 1: 'Jutro', -1: 'Wczoraj'}
+WEEKDAY_HEADING_MAX_DAYS = 6
+
+
+def day_heading(day, today):
+    """Capitalised Polish heading for ``day`` relative to ``today``.
+
+    ``Dziś``/``Jutro``/``Wczoraj`` for the adjacent days, the weekday name within
+    six days either way, otherwise ``"Poniedziałek, 12 października"`` with the
+    year appended when it differs from ``today.year``. Names come from Django's
+    date formatting in ``LANGUAGE_CODE``, whatever locale the request activated.
+    """
+    delta = (day - today).days
+    if delta in RELATIVE_DAY_HEADINGS:
+        return RELATIVE_DAY_HEADINGS[delta]
+    if abs(delta) <= WEEKDAY_HEADING_MAX_DAYS:
+        pattern = 'l'
+    elif day.year == today.year:
+        pattern = 'l, j E'
+    else:
+        pattern = 'l, j E Y'
+    with translation.override(settings.LANGUAGE_CODE):
+        return capfirst(date_format(day, pattern))
+
+
+def group_by_day(entries, today):
+    """Split ordered ``entries`` into consecutive ``(heading, entries)`` groups by
+    ``effective_date``, keeping the input order. Every entry must carry an
+    ``effective_date`` (see ``with_effective_date``)."""
+    return [
+        (day_heading(day, today), list(rows))
+        for day, rows in groupby(entries, key=lambda entry: entry.effective_date)
     ]

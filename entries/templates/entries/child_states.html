@@ -10,7 +10,9 @@
     <hr>
     <p class="fn-muted"><small>Stan: {{ section.label }} ({{ section.name }})</small></p>
     {% if section.list %}
-        {% include "entries/_child_list_body.html" with mode=section.list.mode sections=section.list.sections detail_query=section.list.detail_query empty_message=section.list.empty_message only %}
+        {% include "entries/_child_list_body.html" with mode=section.list.mode modes=section.list.modes sections=section.list.sections detail_query=section.list.detail_query empty_message=section.list.empty_message only %}
+    {% elif section.error %}
+        {% include "_error.html" with heading=section.error.heading message=section.error.message only %}
     {% else %}
         {% include "entries/_child_entry_detail.html" with entry=section.entry back_mode=section.back_mode only %}
     {% endif %}

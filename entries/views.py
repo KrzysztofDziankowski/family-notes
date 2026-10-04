@@ -47,6 +47,7 @@ from .listing import (
     SECTION_UNDATED,
     UPCOMING,
     EntrySection,
+    group_by_day,
     normalize_list_mode,
     partition_entries,
     with_effective_date,
@@ -709,20 +710,29 @@ CHILD_EMPTY_MESSAGES = {
 }
 
 
-def _child_list_context(mode, sections):
-    """Template context for the child list body; ``sections`` are evaluated here."""
-    sections = [
-        {
-            'key': section.key,
-            'undated': section.key == SECTION_UNDATED,
-            'entries': list(section.entries),
-        }
-        for section in sections
-    ]
+def _child_list_context(mode, sections, today):
+    """Template context for the child list body; ``sections`` are evaluated here.
+
+    Dated sections become day groups headed relative to ``today``; the undated
+    section is one group under "Bez daty"."""
+    child_sections = []
+    for section in sections:
+        entries = list(section.entries)
+        if not entries:
+            continue
+        if section.key == SECTION_UNDATED:
+            groups = [{'heading': 'Bez daty', 'entries': entries}]
+        else:
+            groups = [
+                {'heading': heading, 'entries': rows}
+                for heading, rows in group_by_day(entries, today)
+            ]
+        child_sections.append({'key': section.key, 'groups': groups})
     return {
         'mode': mode,
+        'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
         'detail_query': 'view=past' if mode == PAST else '',
-        'sections': [section for section in sections if section['entries']],
+        'sections': child_sections,
         'empty_message': CHILD_EMPTY_MESSAGES[mode],
     }
 
@@ -733,8 +743,11 @@ def child_list(request):
     """The signed-in child's own entries, upcoming (default) or past."""
     entries = child_entries(request.user)
     mode = normalize_list_mode(request.GET.get('view'))
-    sections = partition_entries(entries, mode, timezone.localdate())
-    return render(request, 'entries/child_list.html', _child_list_context(mode, sections))
+    today = timezone.localdate()
+    sections = partition_entries(entries, mode, today)
+    return render(
+        request, 'entries/child_list.html', _child_list_context(mode, sections, today)
+    )
 
 
 @require_GET
@@ -802,16 +815,32 @@ def child_states(request):
     returned = _child_states_entry(
         9006, 'Oddać książkę do biblioteki', EntryType.TODO, date=STATES_DATE - 5 * day,
     )
+    reading = _child_states_entry(
+        9007, 'Przeczytać rozdział lektury', EntryType.TODO, date=STATES_DATE + 3 * day,
+    )
+    meeting = _child_states_entry(
+        9008, 'Zebranie z rodzicami', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE + 21 * day, time=datetime.time(17, 30),
+    )
+    homework = _child_states_entry(
+        9009, 'Zadanie domowe z angielskiego', EntryType.TODO, date=STATES_DATE - day,
+    )
+    start = _child_states_entry(
+        9010, 'Rozpoczęcie roku szkolnego', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE - 30 * day, time=datetime.time(9, 0),
+    )
 
     def list_state(name, label, mode, sections):
-        return {'name': name, 'label': label, 'list': _child_list_context(mode, sections)}
+        return {'name': name, 'label': label, 'list': _child_list_context(mode, sections, STATES_DATE)}
 
     sections = [
         list_state('upcoming', 'Nadchodzące', UPCOMING, [
-            EntrySection(SECTION_DATED, [test, grade, todo]),
+            EntrySection(SECTION_DATED, [test, grade, todo, reading, meeting]),
             EntrySection(SECTION_UNDATED, [undated]),
         ]),
-        list_state('past', 'Minione', PAST, [EntrySection(SECTION_PAST, [quiz, returned])]),
+        list_state('past', 'Minione', PAST, [
+            EntrySection(SECTION_PAST, [homework, quiz, returned, start]),
+        ]),
         list_state('upcoming_empty', 'Brak nadchodzących', UPCOMING, [
             EntrySection(SECTION_DATED, []),
             EntrySection(SECTION_UNDATED, []),
@@ -821,5 +850,8 @@ def child_states(request):
          'entry': undated, 'back_mode': UPCOMING},
         {'name': 'detail_eduvulcan', 'label': 'Szczegóły wpisu z EduVulcan',
          'entry': quiz, 'back_mode': PAST},
+        {'name': 'error_forbidden', 'label': 'Błąd: brak dostępu',
+         'error': {'heading': 'Brak dostępu',
+                   'message': 'Ta strona nie jest dostępna dla Twojego konta.'}},
     ]
     return render(request, 'entries/child_states.html', {'sections': sections})

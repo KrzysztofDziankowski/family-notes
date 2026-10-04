@@ -9,7 +9,8 @@ Both call `scripts/hooks/quality_gate.py`; no dependencies were added.
 |---|---|---|
 | Codex `PostToolUse`, `apply_patch` | Python syntax on each existing `.py` named by patch headers, including rename destinations | 30 s |
 | Claude `PostToolUse`, `Write` / `Edit` | Python syntax on the edited `.py`, using `tool_input.file_path` | 30 s |
-| Both `Stop` | Syntax on changed/untracked `.py`; full Django suite; system checks; migration drift | 300 s |
+| Both `PostToolUse` (same entries) | Design-token literals in an edited allowlisted template | 30 s |
+| Both `Stop` | Syntax on changed/untracked `.py`; literals in changed allowlisted templates; full Django suite; system checks; migration drift | 300 s |
 
 Commands at Stop:
 
@@ -32,6 +33,32 @@ Feedback uses **stderr and exit 2** for both harnesses. Successful Stop output
 is `{}`. `stop_hook_active: true` permits finishing after one corrective turn;
 remaining failures must be reported by the agent. The runner also guards
 `loop_count` if another harness imports the Claude configuration.
+
+## Template literal check
+
+`literal_errors(paths, base)` runs next to `syntax_errors`: on the edited
+paths per edit and on the changed paths at Stop. It reports `path:line` for
+`#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\(|style=|<style` only in the
+templates cleaned by `context/changes/child-list-ui/` (`LITERAL_TEMPLATES` in
+`quality_gate.py`): `family_notes/templates/{base,403,404,500,_error}.html`,
+`family_notes/templates/allauth/layouts/base.html`,
+`family_notes/templates/account/login.html` and
+`entries/templates/entries/{child_list,child_detail,child_states,_child_list_body,_child_entry_detail,_entry_row,_list_modes}.html`.
+Paths match relative or absolute. `tokens.css` and other templates are never
+scanned. Colours and inline styles belong in `family_notes/static/css/tokens.css`.
+At Stop, literal hits do not skip the Django checks; their failures are
+aggregated. Feedback stays stderr + exit 2.
+
+Proof (2026-10-04, `_entry_row.html` changed temporarily, then restored):
+
+```text
+Claude Edit, relative path, clean template: exit 0, no output
+Claude Edit, relative path, '#ff0000' appended: exit 2; stderr names _entry_row.html:25
+Claude Edit, absolute path, '#ff0000' appended: exit 2; stderr names _entry_row.html:25
+Claude Write from entries/ cwd, 'style=' appended: exit 2; stderr names _entry_row.html:25
+Claude Edit after restoring the file: exit 0, no output
+Claude Edit tokens.css / README.md: exit 0, no output
+```
 
 ## Audit and decisions
 

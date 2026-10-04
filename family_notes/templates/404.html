@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Nie znaleziono{% endblock %}
+
+{% comment %}
+No CSRF token on this page: a masked token changes per response, and 404 bodies
+must stay identical for missing and foreign entries. "Wyloguj" links to
+allauth's logout confirmation page instead of posting directly.
+{% endcomment %}
+{% block nav %}
+<li><a href="{% url 'account_status' %}">Konto</a></li>
+<li><a href="{% url 'account_logout' %}">Wyloguj</a></li>
+{% endblock %}
+
+{% block content %}
+{% include "_error.html" with heading="Nie znaleziono" message="Ta strona nie istnieje albo nie masz do niej dostępu." %}
+{% endblock %}

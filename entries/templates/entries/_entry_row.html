@@ -5,6 +5,8 @@ Parameters:
                       grade shows its effective_date annotation from entries.listing when present.
   detail_url_name  -- URL name reversed with entry.pk for the row link.
   hide_assignee    -- optional; true hides the "Dla kogo" line (e.g. the child's own list).
+  hide_date        -- optional; true shows only "HH:MM" (or nothing without a time), for rows
+                      already under a day heading (e.g. the child's own list).
   edit_url_name    -- optional; when set, adds an "Edytuj" link reversed with entry.pk.
   detail_query     -- optional; query string (without "?") appended to the detail link,
                       e.g. "view=past" so the detail page can link back to the same list mode.
@@ -15,7 +17,7 @@ Parameters:
         <span class="fn-entry-content">{{ entry.content|truncatechars:120 }}</span>
     </a>
     <p class="fn-entry-meta fn-muted">
-        {% if entry.date %}<span>{{ entry.date|date:"l, j E Y"|lower }}{% if entry.time %}, {{ entry.time|time:"H:i" }}{% endif %}</span>{% elif entry.effective_date %}<span>{{ entry.effective_date|date:"l, j E Y"|lower }}</span>{% else %}<span>Bez daty</span>{% endif %}
+        {% if hide_date %}{% if entry.time %}<span>{{ entry.time|time:"H:i" }}</span>{% endif %}{% elif entry.date %}<span>{{ entry.date|date:"l, j E Y"|lower }}{% if entry.time %}, {{ entry.time|time:"H:i" }}{% endif %}</span>{% elif entry.effective_date %}<span>{{ entry.effective_date|date:"l, j E Y"|lower }}</span>{% else %}<span>Bez daty</span>{% endif %}
         {% if not hide_assignee %}<span>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Cała rodzina{% endif %}</span>{% endif %}
         {% if edit_url_name %}<a href="{% url edit_url_name entry.pk %}">Edytuj</a>{% endif %}
     </p>

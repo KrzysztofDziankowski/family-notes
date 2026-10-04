@@ -2,6 +2,7 @@
 
 import datetime
 import re
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -15,6 +16,9 @@ from entries.services import save_confirmed_entry
 from .test_classification_service import FamilyFixtureMixin
 
 LIST_URL = reverse('entries:child_list')
+PARENT_LIST_URL = reverse('entries:index')
+FIXED_TODAY = datetime.date(2026, 9, 28)  # a Monday
+HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading">([^<]*)</h2>')
 FORBIDDEN_HREFS = ('/entries/new/', '/entries/confirm/', 'edit', 'delete')
 
 
@@ -87,6 +91,18 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         super().setUp()
         self.client.force_login(self.child.user)
 
+    def assertModeSwitch(self, response, current):
+        """The shared tab switch: both modes linked, only ``current`` marked as the page."""
+        body = response.content.decode()
+        self.assertNotIn('role="group"', body)
+        self.assertNotIn('role="button"', body)
+        self.assertIn('<nav class="fn-tabs" aria-label="Rodzaj listy"', body)
+        links = re.findall(r'<a href="(/entries/mine/[^"]*)"( aria-current="page")?>', body)
+        self.assertEqual(
+            [href for href, _ in links], ['/entries/mine/', '/entries/mine/?view=past']
+        )
+        self.assertEqual([href for href, marker in links if marker], [current])
+
     def test_default_list_shows_upcoming_then_undated(self):
         response = self.client.get(LIST_URL)
 
@@ -100,6 +116,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertNotContains(response, 'SENTINEL-OWN-PAST')
         self.assertContains(response, f'href="{detail_url(self.own_upcoming.pk)}"')
         self.assertRegex(body, r'href="/entries/mine/"\s+aria-current="page"')
+        self.assertModeSwitch(response, current='/entries/mine/')
         self.assertNoExcludedContent(response)
         self.assertReadOnly(response)
         # The child's own list hides the redundant assignee.
@@ -115,6 +132,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertRegex(
             response.content.decode(), r'href="/entries/mine/\?view=past"\s+aria-current="page"'
         )
+        self.assertModeSwitch(response, current='/entries/mine/?view=past')
         self.assertNoExcludedContent(response)
         self.assertReadOnly(response)
 
@@ -135,6 +153,12 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(upcoming, 'data-empty-state="upcoming"')
         self.assertContains(past, 'Nie masz żadnych minionych wpisów.')
         self.assertContains(past, 'data-empty-state="past"')
+        for response, mode in ((upcoming, 'upcoming'), (past, 'past')):
+            with self.subTest(mode=mode):
+                self.assertContains(
+                    response, f'<p class="fn-empty fn-muted" data-empty-state="{mode}">'
+                )
+                self.assertNotContains(response, 'class="fn-panel"')
 
     def test_parent_captured_entry_assigned_to_child_appears(self):
         save_confirmed_entry(
@@ -158,6 +182,76 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
                     getattr(self.client, method)(detail_url(self.own_upcoming.pk)).status_code,
                     405,
                 )
+
+
+class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
+    """Day groups under relative headings, with ``timezone.localdate`` fixed."""
+
+    def setUp(self):
+        super().setUp()
+        Entry.objects.filter(assigned_member=self.child).delete()
+        day = datetime.timedelta(days=1)
+        self.today_timed = self._entry(
+            'SENTINEL-TODAY', self.child, date=FIXED_TODAY, time=datetime.time(8, 15)
+        )
+        self.tomorrow_untimed = self._entry(
+            'SENTINEL-TOMORROW', self.child, date=FIXED_TODAY + day
+        )
+        self.undated = self._entry('SENTINEL-UNDATED', self.child)
+        self.yesterday = self._entry(
+            'SENTINEL-YESTERDAY', self.child, date=FIXED_TODAY - day, time=datetime.time(9, 0)
+        )
+        self.older = self._entry(
+            'SENTINEL-OLDER', self.child, date=FIXED_TODAY - 10 * day
+        )
+        patcher = mock.patch('entries.views.timezone.localdate', return_value=FIXED_TODAY)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def headings(self, response):
+        return HEADING_PATTERN.findall(response.content.decode())
+
+    def test_upcoming_groups_days_under_relative_headings_then_undated(self):
+        self.client.force_login(self.child.user)
+
+        response = self.client.get(LIST_URL)
+
+        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Bez daty'])
+        body = response.content.decode()
+        order = [
+            body.index(marker)
+            for marker in ('>Dziś<', 'SENTINEL-TODAY', '>Jutro<', 'SENTINEL-TOMORROW',
+                           '>Bez daty<', 'SENTINEL-UNDATED')
+        ]
+        self.assertEqual(order, sorted(order))
+        self.assertEqual(
+            re.findall(r'data-entry-section="(\w+)"', body), ['dated', 'dated', 'undated']
+        )
+        # Rows under a day heading show only the time, never the date.
+        self.assertContains(response, '<span>08:15</span>', html=True)
+        self.assertNotContains(response, 'września')
+
+    def test_past_reads_newest_day_first(self):
+        self.client.force_login(self.child.user)
+
+        response = self.client.get(LIST_URL, {'view': 'past'})
+
+        self.assertEqual(
+            self.headings(response), ['Wczoraj', 'Piątek, 18 września']
+        )
+        body = response.content.decode()
+        self.assertLess(body.index('SENTINEL-YESTERDAY'), body.index('SENTINEL-OLDER'))
+        self.assertContains(response, '<span>09:00</span>', html=True)
+        self.assertNotContains(response, 'Bez daty')
+
+    def test_parent_list_keeps_full_dates_on_rows(self):
+        self.client.force_login(self.parent.user)
+
+        response = self.client.get(PARENT_LIST_URL)
+
+        self.assertNotContains(response, 'fn-day-heading')
+        self.assertContains(response, 'poniedziałek, 28 września 2026, 08:15')
+        self.assertContains(response, 'wtorek, 29 września 2026')
 
 
 class ChildDetailTests(ChildViewFixtureMixin, TestCase):
