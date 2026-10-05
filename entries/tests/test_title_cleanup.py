@@ -95,3 +95,66 @@ class StripExtractedPhrasesTests(SimpleTestCase):
         for content in ('', '   '):
             with self.subTest(content=content):
                 self.assertCleaned(content, content, date_phrase='w piątek')
+
+
+EWA = ('Ewa',)
+
+
+class SelfReferenceTests(SimpleTestCase):
+    """S-07: a self-reference leaves the title only when the requester is the assignee."""
+
+    def clean(self, content, *, self_reference=True, date_phrase=None):
+        return strip_extracted_phrases(
+            content, assignee_refs=EWA, date_phrase=date_phrase, self_reference=self_reference
+        )
+
+    def test_self_reference_phrases_are_removed(self):
+        cases = [
+            ('dla mnie: kupić mleko', 'Kupić mleko'),
+            ('Dla mnie, kupić mleko', 'Kupić mleko'),
+            ('DLA MNIE kupić mleko', 'Kupić mleko'),
+            ('Kupić mleko dla mnie', 'Kupić mleko'),
+            ('Kupić mleko dla mnie.', 'Kupić mleko'),
+            ('mi kupić mleko', 'Kupić mleko'),
+            ('mnie: odebrać paczkę', 'Odebrać paczkę'),
+            ('ja muszę kupić mleko', 'Muszę kupić mleko'),
+            ('Ewa, dla mnie kupić mleko', 'Kupić mleko'),
+        ]
+        for content, expected in cases:
+            with self.subTest(content=content):
+                self.assertEqual(self.clean(content), expected)
+
+    def test_self_reference_and_date_are_both_removed(self):
+        self.assertEqual(
+            self.clean('Kupić mleko dla mnie jutro', date_phrase='jutro'), 'Kupić mleko'
+        )
+        self.assertEqual(
+            self.clean('Kupić mleko jutro dla mnie', date_phrase='jutro'), 'Kupić mleko'
+        )
+
+    def test_other_people_and_inner_words_stay(self):
+        cases = [
+            'Kupić prezent dla mamy',
+            'Michał kupić mleko',
+            'Mięso kupić na obiad',
+            'Jabłka kupić na targu',
+            'Kupić dla mnie i dla mamy bilety',
+        ]
+        for content in cases:
+            with self.subTest(content=content):
+                self.assertEqual(self.clean(content), content)
+
+    def test_without_self_reference_the_phrase_stays(self):
+        self.assertEqual(
+            self.clean('dla mnie: kupić mleko', self_reference=False), 'Dla mnie: kupić mleko'
+        )
+        self.assertEqual(
+            self.clean('Kupić mleko dla mnie', self_reference=False), 'Kupić mleko dla mnie'
+        )
+
+    def test_a_title_that_is_only_the_phrase_is_never_emptied(self):
+        for content in ('dla mnie', 'Mi', 'ja:'):
+            with self.subTest(content=content):
+                cleaned = self.clean(content)
+                self.assertTrue(cleaned.strip())
+                self.assertEqual(cleaned.casefold(), content.casefold())

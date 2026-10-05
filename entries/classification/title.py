@@ -8,7 +8,10 @@ only what was extracted elsewhere:
 
 * a leading assignee reference (one of ``assignee_refs``, optionally followed
   by a comma or colon), and
-* a trailing occurrence of the accepted date phrase (``date_phrase``).
+* a trailing occurrence of the accepted date phrase (``date_phrase``), and
+* only when ``self_reference`` is set (the assignee is the requesting parent,
+  S-07): a leading self-reference („dla mnie”, „mnie”, „mi”, „ja”) and a
+  trailing „dla mnie”.
 
 Matching ignores case, surrounding whitespace and typographic quotes, and
 always ends on a word boundary, so "Kasiaczek" is not "Kasia". Anything else
@@ -30,9 +33,14 @@ _QUOTES = '"\'„”“«»‚‘’'
 _QUOTE = f'[{re.escape(_QUOTES)}]*'
 # A name may be followed by a comma or colon ("Kasia, zrobić pranie").
 _ASSIGNEE_TAIL = r'(?:\s*[,:])?(?=\s|$)'
-# Punctuation that may separate the action from a trailing date phrase.
-_DATE_LEAD = r'(?:^|[\s,;:\-–—]+)'
-_DATE_TAIL = r'[\s.,;:!?]*$'
+# Punctuation that may separate the action from a trailing date phrase or
+# self-reference.
+_TRAILING_LEAD = r'(?:^|[\s,;:\-–—]+)'
+_TRAILING_TAIL = r'[\s.,;:!?]*$'
+# How a parent refers to themselves; matched as whole words, longest first.
+SELF_REFERENCE_PHRASES = ('dla mnie', 'mnie', 'mi', 'ja')
+# Only this self-reference is removed from the end ("Kupić mleko dla mnie").
+_TRAILING_SELF_REFERENCE = 'dla mnie'
 
 
 def strip_extracted_phrases(
@@ -40,19 +48,28 @@ def strip_extracted_phrases(
     *,
     assignee_refs: Sequence[str],
     date_phrase: Optional[str],
+    self_reference: bool = False,
 ) -> str:
     """``content`` without a leading assignee reference or trailing date phrase.
 
     ``assignee_refs`` are alternative references to the assigned person (full
     display name, given name, the parent's mention); the longest one that
     matches at the start is removed. ``date_phrase`` is removed only from the
-    end, and only when given (``None`` leaves dates in place).
+    end, and only when given (``None`` leaves dates in place). With
+    ``self_reference`` (the entry is assigned to the parent who wrote it), a
+    leading phrase from ``SELF_REFERENCE_PHRASES`` and a trailing „dla mnie”
+    are removed as well.
     """
     if not content or not content.strip():
         return content
 
     stripped = _strip_leading_assignee(content, assignee_refs)
-    stripped = _strip_trailing_date(stripped, date_phrase)
+    if self_reference:
+        stripped = _strip_leading_assignee(stripped, SELF_REFERENCE_PHRASES)
+        stripped = _strip_trailing_phrase(stripped, _TRAILING_SELF_REFERENCE)
+    stripped = _strip_trailing_phrase(stripped, date_phrase)
+    if self_reference:
+        stripped = _strip_trailing_phrase(stripped, _TRAILING_SELF_REFERENCE)
     if stripped is content:
         return _capitalize(content)
     cleaned = ' '.join(stripped.split())
@@ -78,11 +95,11 @@ def _strip_leading_assignee(content: str, assignee_refs: Sequence[str]) -> str:
     return content
 
 
-def _strip_trailing_date(content: str, date_phrase: Optional[str]) -> str:
-    pattern = _phrase_pattern(date_phrase or '')
+def _strip_trailing_phrase(content: str, phrase: Optional[str]) -> str:
+    pattern = _phrase_pattern(phrase or '')
     if pattern is None:
         return content
-    match = re.search(_DATE_LEAD + pattern + _DATE_TAIL, content, re.IGNORECASE)
+    match = re.search(_TRAILING_LEAD + pattern + _TRAILING_TAIL, content, re.IGNORECASE)
     if match:
         return content[: match.start()]
     return content

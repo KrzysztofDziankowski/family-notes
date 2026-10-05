@@ -48,7 +48,7 @@ from entries.classification.types import (
     UnavailableReason,
 )
 from entries.management.commands import classification_smoke
-from entries.tests.test_classification_service import FamilyFixtureMixin
+from entries.tests.test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 from entries.tests.test_openai_backend import (
     CONNECTION,
     FULL_SETTINGS,
@@ -218,6 +218,7 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                 'dzien_tygodnia': 'sobota',
                 'ustawienia_regionalne': 'pl-PL',
                 'dozwolone_osoby': ['Ewa', 'Michał', 'Ania'],
+                'autor_polecenia': 'Ewa',
                 'polecenie': PRD_INSTRUCTION,
             },
         )
@@ -767,6 +768,7 @@ class FreeTextCorrectionTests(AdapterPathMixin, TestCase):
                 'dzien_tygodnia': 'sobota',
                 'ustawienia_regionalne': 'pl-PL',
                 'dozwolone_osoby': ['Ewa', 'Michał', 'Ania'],
+                'autor_polecenia': 'Ewa',
                 'obecna_propozycja': {
                     'typ': 'calendar_event',
                     'tytul': 'Spotkanie z wychowawczynią',
@@ -1258,3 +1260,46 @@ class RepositoryHygieneTests(SimpleTestCase):
 
         self.assertIsNotNone(self.KEY_PATTERN.search(f'key = "{fake_key}"'))
         self.assertIsNone(self.KEY_PATTERN.search('flask-sqlalchemy-extension-package'))
+
+
+class SelfReferenceAcceptanceTests(TwoParentFixtureMixin, AdapterPathMixin, TestCase):
+    """S-07 through the real adapter: Ewa (requester), Paweł (other parent), Kasia."""
+
+    TEXT = 'dla mnie: kupić mleko'
+
+    def setUp(self):
+        super().setUp()
+        self.kasia = self._member('kasia', FamilyMember.Role.CHILD, 'Kasia')
+
+    def todo(self, content, member_name):
+        return model_output(entry_type='todo', content=content, member_name=member_name)
+
+    def test_echoed_self_reference_gives_the_requester_and_a_clean_title(self):
+        for content in ('dla mnie: kupić mleko', 'Kupić mleko dla mnie', 'Kupić mleko'):
+            with self.subTest(content=content):
+                outcome = self.run_service([self.todo(content, 'Ewa')], text=self.TEXT)
+
+                self.assertEqual(self.sent_input()['autor_polecenia'], 'Ewa')
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationProposal(
+                        entry_type=EntryType.TODO, content='Kupić mleko', member_name='Ewa'
+                    ),
+                )
+                self.assertEqual(outcome.member, self.parent)
+
+    def test_text_naming_the_other_parent_still_resolves_to_them(self):
+        outcome = self.run_service(
+            [self.todo('Paweł kupić mleko', 'Paweł')], text='Paweł kupić mleko'
+        )
+
+        self.assertEqual(outcome.result.content, 'Kupić mleko')
+        self.assertEqual(outcome.member, self.second_parent)
+
+    def test_self_reference_stays_in_the_title_when_someone_else_is_assigned(self):
+        outcome = self.run_service(
+            [self.todo('dla mnie: kupić mleko', 'Kasia')], text='Kasia, dla mnie: kupić mleko'
+        )
+
+        self.assertEqual(outcome.member, self.kasia)
+        self.assertEqual(outcome.result.content, 'Dla mnie: kupić mleko')

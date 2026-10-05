@@ -340,3 +340,15 @@ class TwoParentBatchTests(TwoParentFixtureMixin, BatchFixtureMixin, TestCase):
         self.assertTrue(batch.is_single)
         self.assertIsNone(batch.single.member)
         self.assertEqual(batch.single.result.entry_type, EntryType.NOTE)
+
+    def test_batch_request_names_the_requester_and_self_reference_resolves(self):
+        backend = RecordingMultiBackend(
+            [meeting(date, member_name='Paweł') for date in MEETING_DATES[:2]]
+        )
+
+        batch = self.classify_batch(
+            self.second_parent.user, backend, text='Spotkanie dla mnie dziś i jutro'
+        )
+
+        self.assertEqual(backend.requests[0].requester_name, 'Paweł')
+        self.assertEqual([item.member for item in batch.items], [self.second_parent] * 2)

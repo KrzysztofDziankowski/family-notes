@@ -173,3 +173,26 @@ class LiveWireClassificationTests(SimpleTestCase):
         self.assertIsInstance(result, ClassificationProposal)
         self.assertEqual(result.date, NEXT_FRIDAY)
         self.assertEqual(result.date, FRIDAY + datetime.timedelta(days=7))
+
+    def test_self_reference_is_assigned_to_the_requester(self):
+        """S-07: "dla mnie" with requester Ewa gives Ewa and the title "Kupić mleko"."""
+        request = BackendRequest(
+            submitted_text='dla mnie: kupić mleko',
+            allowed_member_names=('Ewa', 'Paweł', 'Kasia'),
+            reference_date=REFERENCE_DATE,
+            locale='pl-PL',
+            requester_name='Ewa',
+        )
+        backend = build_openai_backend(client=make_logging_client())
+        try:
+            output = backend.classify(request)
+        finally:
+            backend.close()
+        result = classify_output(request, output, require_school_subject=True)
+        logger.debug('=== Validated result\n%r (content=%r, member_name=%r)',
+                     result, getattr(result, 'content', None),
+                     getattr(result, 'member_name', None))
+
+        self.assertIsInstance(result, ClassificationProposal)
+        self.assertEqual(result.member_name, 'Ewa')
+        self.assertEqual(result.content.casefold(), 'kupić mleko')

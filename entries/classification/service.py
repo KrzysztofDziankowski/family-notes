@@ -9,7 +9,11 @@ invocation, validation, and local member resolution in one auditable place:
    called.
 2. Select candidates: load only active members of the parent's family.
 3. Invoke: send the backend only the instruction, the candidates' display
-   names, the reference date, and the locale. No database IDs are sent.
+   names, the reference date, and the locale. For the parent's own capture
+   and correction, the requesting parent's display name (already one of the
+   candidates) is sent too, so "dla mnie" can be mapped to them; follow-up
+   answers and automated classification never send it. No database IDs are
+   sent.
 4. Validate and resolve: validate the output against the same allow-list,
    then map a returned name to exactly one loaded membership locally.
    Duplicate names become an ``AMBIGUOUS_MEMBER`` follow-up; unknown,
@@ -144,6 +148,7 @@ def classify_for_parent(
         allowed_member_names=tuple(member.display_name for member in candidates),
         reference_date=reference_date,
         locale=locale,
+        requester_name=membership.display_name,
     )
 
     try:
@@ -217,6 +222,7 @@ def classify_entries_for_parent(
         allowed_member_names=tuple(member.display_name for member in candidates),
         reference_date=reference_date,
         locale=locale,
+        requester_name=membership.display_name,
     )
 
     try:
@@ -335,6 +341,7 @@ def correct_proposal_for_parent(
         locale=locale,
         current_proposal=current,
         correction_text=correction,
+        requester_name=membership.display_name,
     )
 
     try:

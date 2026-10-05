@@ -1473,3 +1473,156 @@ class ClassificationSettingsTests(SimpleTestCase):
         self.assertIn(name, str(caught.exception))
         self.assertNotIn(API_KEY_SENTINEL, str(caught.exception))
         self.assertTrue(caught.exception.__suppress_context__)
+
+
+class SelfReferenceAdapterTests(BackendHarness, SimpleTestCase):
+    """S-07: ``autor_polecenia`` is sent only with a requester and drives the title guard."""
+
+    def keys_sent(self):
+        (body,) = self.transport.bodies()
+        return list(json.loads(body['input']))
+
+    def test_capture_sends_the_requester_right_after_the_allowed_names(self):
+        request = make_request(requester_name=MEMBER_SENTINEL)
+        backend = self.make_backend([ok()])
+
+        backend.classify(request)
+
+        (body,) = self.transport.bodies()
+        self.assertEqual(
+            json.loads(body['input']),
+            {
+                'data_odniesienia': '2026-09-17',
+                'dzien_tygodnia': 'czwartek',
+                'ustawienia_regionalne': 'pl-PL',
+                'dozwolone_osoby': [MEMBER_SENTINEL, OTHER_MEMBER_SENTINEL],
+                'autor_polecenia': MEMBER_SENTINEL,
+                'polecenie': request.submitted_text,
+            },
+        )
+        self.assertEqual(
+            self.keys_sent(),
+            ['data_odniesienia', 'dzien_tygodnia', 'ustawienia_regionalne',
+             'dozwolone_osoby', 'autor_polecenia', 'polecenie'],
+        )
+
+    def test_list_call_sends_the_requester_too(self):
+        backend = self.make_backend([ok(list_body(structured()))])
+
+        backend.classify_many(make_request(requester_name=MEMBER_SENTINEL))
+
+        self.assertIn('autor_polecenia', self.keys_sent())
+
+    def test_correction_sends_the_requester_after_the_allowed_names(self):
+        request = dataclasses.replace(make_correction_request(), requester_name=MEMBER_SENTINEL)
+        body = response_body(json.dumps(structured_correction(), ensure_ascii=False))
+        backend = self.make_backend([ok(body)])
+
+        backend.classify(request)
+
+        self.assertEqual(
+            self.keys_sent(),
+            ['data_odniesienia', 'dzien_tygodnia', 'ustawienia_regionalne',
+             'dozwolone_osoby', 'autor_polecenia', 'obecna_propozycja', 'poprawka'],
+        )
+        (sent,) = self.transport.bodies()
+        self.assertEqual(json.loads(sent['input'])['autor_polecenia'], MEMBER_SENTINEL)
+
+    def test_requests_without_a_requester_never_send_the_key(self):
+        for name, request in (
+            ('capture', make_request()),
+            ('follow-up', make_follow_up_request()),
+            ('correction', make_correction_request()),
+        ):
+            with self.subTest(name):
+                if name == 'correction':
+                    body = response_body(json.dumps(structured_correction(), ensure_ascii=False))
+                    backend = self.make_backend([ok(body)])
+                else:
+                    backend = self.make_backend([ok()])
+                backend.classify(request)
+                self.assertNotIn('autor_polecenia', self.keys_sent())
+
+    def test_requester_is_excluded_from_request_repr(self):
+        request = make_request(requester_name=MEMBER_SENTINEL)
+
+        self.assertNotIn(MEMBER_SENTINEL, repr(request))
+
+    def test_instructions_map_a_self_reference_to_the_requester(self):
+        sentence = (
+            'Jeśli dane zawierają autor_polecenia, a polecenie odnosi się do autora '
+            '(np. „dla mnie”, „mi”, „ja”), ustaw member_name na wartość autor_polecenia, '
+            'member_mention na null i nie umieszczaj tego zwrotu w treści.'
+        )
+        self.assertIn(sentence, INSTRUCTIONS)
+        self.assertIn(sentence, MULTI_INSTRUCTIONS)
+        self.assertEqual(MULTI_INSTRUCTIONS.count(sentence), 1)
+        self.assertTrue(INSTRUCTIONS.endswith(DATE_RULES))
+
+    def test_correction_instructions_map_a_self_reference_to_the_requester(self):
+        self.assertIn('Jeśli dane zawierają autor_polecenia', CORRECTION_INSTRUCTIONS)
+        self.assertIn('„przypisz mnie”', CORRECTION_INSTRUCTIONS)
+        self.assertIn(
+            'ustaw member_name na wartość autor_polecenia i wpisz member_name do '
+            'changed_fields',
+            CORRECTION_INSTRUCTIONS,
+        )
+        self.assertTrue(CORRECTION_INSTRUCTIONS.endswith(DATE_RULES))
+
+    def test_content_description_names_the_self_reference(self):
+        description = StructuredClassification.model_fields['content'].description
+
+        self.assertIn('autor polecenia', description)
+        self.assertIn('„dla mnie”', description)
+
+    def classify_title(self, content, member_name, requester_name):
+        output = structured(
+            entry_type='todo',
+            content=content,
+            date=None,
+            date_source=None,
+            time=None,
+            school_item=None,
+            member_name=member_name,
+            school_subject=None,
+            member_mention=None,
+        )
+        backend = self.make_backend([ok(response_body(json.dumps(output, ensure_ascii=False)))])
+        request = make_request(text='dla mnie: kupić mleko', requester_name=requester_name)
+        return backend.classify(request).content
+
+    def test_title_guard_drops_the_self_reference_only_for_the_requester(self):
+        self.assertEqual(
+            self.classify_title('dla mnie: kupić mleko', MEMBER_SENTINEL, MEMBER_SENTINEL),
+            'Kupić mleko',
+        )
+        self.assertEqual(
+            self.classify_title('Kupić mleko dla mnie', MEMBER_SENTINEL, MEMBER_SENTINEL),
+            'Kupić mleko',
+        )
+        for member_name, requester_name in (
+            (OTHER_MEMBER_SENTINEL, MEMBER_SENTINEL),
+            (None, MEMBER_SENTINEL),
+            (MEMBER_SENTINEL, None),
+        ):
+            with self.subTest(member=member_name, requester=requester_name):
+                self.assertEqual(
+                    self.classify_title('dla mnie: kupić mleko', member_name, requester_name),
+                    'Dla mnie: kupić mleko',
+                )
+
+    def test_correction_title_guard_drops_the_self_reference_for_the_requester(self):
+        request = dataclasses.replace(
+            make_correction_request(correction='to dla mnie'), requester_name=MEMBER_SENTINEL
+        )
+        output = structured_correction(
+            content='dla mnie: sprawdzian',
+            date=MONDAY.isoformat(),
+            date_source=None,
+            changed_fields=['content', 'member_name'],
+        )
+        backend = self.make_backend(
+            [ok(response_body(json.dumps(output, ensure_ascii=False)))]
+        )
+
+        self.assertEqual(backend.classify(request).content, 'Sprawdzian')

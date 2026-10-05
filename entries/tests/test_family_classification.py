@@ -309,8 +309,11 @@ class FamilyScopeAndRequestTests(FamilyFixtureMixin, TestCase):
                 'follow_up_answer',
                 'current_proposal',
                 'correction_text',
+                'requester_name',
             },
         )
+        # S-07: automated classification acts for no user.
+        self.assertIsNone(request.requester_name)
         self.assertIsNone(request.follow_up_answer)
         self.assertIsNone(request.current_proposal)
         self.assertIsNone(request.correction_text)

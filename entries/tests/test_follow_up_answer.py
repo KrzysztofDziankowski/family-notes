@@ -472,6 +472,15 @@ class RequestAndAuthorizationTests(FollowUpAnswerTestMixin, TestCase):
         self.assertEqual(request.reference_date, REFERENCE_DATE)
         self.assertEqual(request.locale, 'pl-PL')
 
+    def test_follow_up_request_never_names_the_requester(self):
+        """S-07: only the parent's own capture and correction carry the requester."""
+        backend = RecordingBackend(answer_output())
+
+        self.answer(backend, answer='dla mnie w piątek')
+
+        (request,) = backend.requests
+        self.assertIsNone(request.requester_name)
+
     def test_unauthorized_users_are_denied_without_backend_call(self):
         outsider = get_user_model().objects.create_user(username='outsider')
         cases = {

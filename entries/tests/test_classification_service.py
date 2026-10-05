@@ -23,7 +23,9 @@ from entries.classification.backends import (
 from entries.classification.service import (
     MAX_SUBMITTED_TEXT_LENGTH,
     ParentClassification,
+    classify_entries_for_parent,
     classify_for_parent,
+    correct_proposal_for_parent,
 )
 from entries.classification.types import (
     ClassificationFollowUp,
@@ -31,6 +33,7 @@ from entries.classification.types import (
     ClassificationUnavailable,
     EntryType,
     MissingField,
+    ProposalValues,
     SchoolItemKind,
     UnavailableReason,
 )
@@ -349,8 +352,12 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
                 'follow_up_answer',
                 'current_proposal',
                 'correction_text',
+                'requester_name',
             },
         )
+        # S-07: the requester is a display name already on the allow-list.
+        self.assertEqual(request.requester_name, 'Ewa')
+        self.assertIn(request.requester_name, request.allowed_member_names)
         self.assertIsNone(request.follow_up_question)
         self.assertIsNone(request.follow_up_answer)
         self.assertIsNone(request.current_proposal)
@@ -709,3 +716,105 @@ class NoPersistenceTests(FamilyFixtureMixin, TestCase):
             model._meta.label: model._default_manager.count()
             for model in apps.get_models()
         }
+
+
+class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
+    """S-07: parent capture and correction name the requester; validation is unchanged."""
+
+    def note_output(self, member_name, **overrides):
+        values = dict(
+            entry_type=EntryType.TODO,
+            content='Kupić mleko',
+            grounded=True,
+            member_name=member_name,
+        )
+        values.update(overrides)
+        return BackendOutput(**values)
+
+    def test_capture_names_whichever_parent_is_asking(self):
+        for member in (self.parent, self.second_parent):
+            with self.subTest(member=member.display_name):
+                single, batch = RecordingBackend(), RecordingBackend()
+
+                self.classify(member.user, single, text='dla mnie: kupić mleko')
+                classify_entries_for_parent(
+                    member.user, 'dla mnie: kupić mleko',
+                    reference_date=REFERENCE_DATE, backend=batch,
+                )
+
+                for backend in (single, batch):
+                    self.assertEqual(backend.requests[0].requester_name, member.display_name)
+                    self.assertIn(member.display_name, backend.requests[0].allowed_member_names)
+
+    def test_self_reference_resolves_to_the_requesting_parent(self):
+        for member in (self.parent, self.second_parent):
+            with self.subTest(member=member.display_name):
+                backend = RecordingBackend(self.note_output(member.display_name))
+
+                outcome = self.classify(member.user, backend, text='dla mnie: kupić mleko')
+
+                self.assertEqual(outcome.member, member)
+
+    def test_self_reference_mention_matches_no_one_and_keeps_the_requester(self):
+        backend = RecordingBackend(self.note_output('Ewa', member_mention='ja'))
+
+        outcome = self.classify(self.parent.user, backend, text='ja muszę kupić mleko')
+
+        self.assertEqual(outcome.member, self.parent)
+
+    def test_correction_names_the_requester_and_assign_me_reassigns_to_them(self):
+        backend = RecordingBackend(
+            BackendOutput(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Sprawdzian z biologii',
+                grounded=True,
+                date=MONDAY,
+                school_item=SchoolItemKind.TEST,
+                member_name='Ewa',
+                school_subject='biologia',
+                changed_fields=frozenset({'member_name'}),
+            )
+        )
+
+        correction = correct_proposal_for_parent(
+            self.parent.user,
+            ProposalValues(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Sprawdzian z biologii',
+                date=MONDAY,
+                school_item=SchoolItemKind.TEST,
+                school_subject='biologia',
+                member_name='Michał',
+            ),
+            'przypisz mnie',
+            reference_date=REFERENCE_DATE,
+            current_member=self.child,
+            backend=backend,
+        )
+
+        self.assertEqual(backend.requests[0].requester_name, 'Ewa')
+        self.assertTrue(correction.applied)
+        self.assertEqual(correction.outcome.member, self.parent)
+
+    def test_requester_never_widens_the_allow_list(self):
+        for name in ('Tomek', 'Jolanta'):
+            with self.subTest(name=name):
+                backend = RecordingBackend(self.note_output(name))
+
+                outcome = self.classify(self.parent.user, backend, text='dla mnie: kupić mleko')
+
+                self.assertIsNone(outcome.member)
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationUnavailable(reason=UnavailableReason.UNKNOWN_MEMBER),
+                )
+
+    def test_requester_sharing_a_display_name_is_ambiguous(self):
+        self._member('second-ewa', FamilyMember.Role.CHILD, 'Ewa')
+        backend = RecordingBackend(self.note_output('Ewa'))
+
+        outcome = self.classify(self.parent.user, backend, text='dla mnie: kupić mleko')
+
+        self.assertIsNone(outcome.member)
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)

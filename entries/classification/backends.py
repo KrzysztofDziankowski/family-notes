@@ -38,6 +38,12 @@ class BackendRequest:
     correction of the proposal on screen. ``submitted_text`` then holds the
     correction too, because it is the text a returned date must be grounded
     in; the original instruction is never sent.
+
+    ``requester_name`` is the requesting parent's display name. It is set only
+    for a parent's own capture and that parent's free-text correction (never
+    for follow-up answers or automated classification), and it is always one
+    of ``allowed_member_names``; it lets a self-reference („dla mnie”) be
+    mapped to the parent. It is family data and stays out of ``repr``.
     """
 
     submitted_text: str = field(repr=False)
@@ -48,6 +54,7 @@ class BackendRequest:
     follow_up_answer: Optional[str] = field(default=None, repr=False)
     current_proposal: Optional[ProposalValues] = field(default=None, repr=False)
     correction_text: Optional[str] = field(default=None, repr=False)
+    requester_name: Optional[str] = field(default=None, repr=False)
 
     def __post_init__(self):
         # Normalize to an immutable tuple so callers cannot mutate it later.

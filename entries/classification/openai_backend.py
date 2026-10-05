@@ -6,12 +6,18 @@ Semantic rules stay in ``validation.py``. The adapter only grounds the date: a
 date whose ``date_source`` fragment does not occur in the parent's text is
 dropped, so validation asks for it instead of trusting an invented date. It
 then removes a leading assignee name and the accepted date phrase the model
-may have echoed into the entry text (``title.strip_extracted_phrases``).
+may have echoed into the entry text (``title.strip_extracted_phrases``), and,
+when the entry is assigned to the requesting parent, a self-reference such as
+„dla mnie”.
 
 Privacy: every request sets ``store=False`` and sends only the instruction,
 allowed member names, reference date, locale, the follow-up question and the
-parent's answer (only when answering a follow-up), and fixed classification
-instructions. A free-text correction instead sends the proposal on screen and
+parent's answer (only when answering a follow-up), the requesting parent's
+display name as ``autor_polecenia`` (only for the parent's own capture and
+correction; it is already one of the allowed names), and fixed classification
+instructions. Changes the data sent to OpenAI: ``autor_polecenia`` added by
+S-07 (owner-approved 2026-10-04). Follow-up answers and automated EduVulcan
+classification never send it. A free-text correction instead sends the proposal on screen and
 the correction, never the original instruction; it uses its own schema
 (``StructuredCorrection``) whose ``changed_fields`` name what the correction
 changes. A new date not grounded in the correction is dropped from
@@ -101,8 +107,9 @@ class StructuredClassification(BaseModel):
             'Zwięzła treść wpisu po polsku, oparta wyłącznie na poleceniu: sama '
             'czynność słowami rodzica, zaczynająca się wielką literą, bez imienia '
             'osoby przypisanej w member_name i bez słów podających datę lub godzinę '
-            'wpisaną w date i time. Inne osoby, szczegóły i przedmiot szkolny '
-            'zostają w treści.'
+            'wpisaną w date i time, a gdy osobą jest autor polecenia, także bez '
+            'zwrotu o nim samym (np. „dla mnie”, „mi”, „ja”). Inne osoby, '
+            'szczegóły i przedmiot szkolny zostają w treści.'
         )
     )
     grounded: bool = Field(
@@ -266,6 +273,14 @@ _TITLE_RULE = (
     '(np. „Kartkówka z matematyki”). '
 )
 
+# Self-reference rule (S-07): ``autor_polecenia`` is sent only for the
+# parent's own capture and correction.
+_SELF_REFERENCE_RULE = (
+    'Jeśli dane zawierają autor_polecenia, a polecenie odnosi się do autora '
+    '(np. „dla mnie”, „mi”, „ja”), ustaw member_name na wartość autor_polecenia, '
+    'member_mention na null i nie umieszczaj tego zwrotu w treści. '
+)
+
 INSTRUCTIONS = (
     'Klasyfikujesz polecenie rodzica dotyczące spraw rodzinnych i szkolnych. '
     'Dane wejściowe to JSON z datą odniesienia, dniem tygodnia, ustawieniami '
@@ -295,6 +310,7 @@ INSTRUCTIONS = (
     'date_source jako null i nigdy nie używaj daty odniesienia jako domyślnej; '
     'date_source musi zawierać dosłownie skopiowane słowa rodzica z wartości pola '
     'polecenie albo odpowiedz_rodzica (nie nazwę pola JSON). '
+    + _SELF_REFERENCE_RULE
     + _TITLE_RULE
     + DATE_RULES
 )
@@ -331,7 +347,10 @@ CORRECTION_INSTRUCTIONS = (
     'dozwolonych osób, zapisanym bez zmian, albo null. Jeśli poprawka wymienia '
     'osobę, wpisz ją do member_mention w mianowniku, tak jak nazwał ją rodzic '
     '(np. „dla Tymka” → „Tymek”), a przy zdrobnieniu w member_name podaj pasujące '
-    'imię z listy dozwolonych osób. Przedmiot szkolny podaj w mianowniku (np. '
+    'imię z listy dozwolonych osób. Jeśli dane zawierają autor_polecenia, a '
+    'poprawka odnosi się do autora (np. „przypisz mnie”, „dla mnie”, „to dla '
+    'mnie”), ustaw member_name na wartość autor_polecenia i wpisz member_name do '
+    'changed_fields. Przedmiot szkolny podaj w mianowniku (np. '
     '„z fizyki” → „fizyka”). Rodzaje spraw szkolnych: '
     f'{_school_item_guide()}. Jeśli poprawka zmienia tytuł, w content podaj samą '
     'czynność, bez imienia osoby i bez słów podających datę lub godzinę. '
@@ -351,11 +370,19 @@ def _proposal_payload(proposal) -> dict:
     }
 
 
+def _requester_payload(request: BackendRequest) -> dict:
+    if request.requester_name is None:
+        return {}
+    return {'autor_polecenia': request.requester_name}
+
+
 def build_input(request: BackendRequest) -> str:
     """Serialize exactly the minimum request data sent to OpenAI.
 
     The follow-up keys are added only when the request carries an answer, so
-    a first classification sends an unchanged payload. A correction sends the
+    a first classification sends an unchanged payload. ``autor_polecenia``
+    is added only when the request names its requester, so requests without
+    one (follow-up answers, EduVulcan) are byte-identical to before S-07. A correction sends the
     proposal on screen and the correction instead of the instruction.
     """
     if request.correction_text is not None:
@@ -364,6 +391,7 @@ def build_input(request: BackendRequest) -> str:
             'dzien_tygodnia': _POLISH_WEEKDAYS[request.reference_date.weekday()],
             'ustawienia_regionalne': request.locale,
             'dozwolone_osoby': list(request.allowed_member_names),
+            **_requester_payload(request),
             'obecna_propozycja': _proposal_payload(request.current_proposal),
             'poprawka': request.correction_text,
         }
@@ -373,6 +401,7 @@ def build_input(request: BackendRequest) -> str:
         'dzien_tygodnia': _POLISH_WEEKDAYS[request.reference_date.weekday()],
         'ustawienia_regionalne': request.locale,
         'dozwolone_osoby': list(request.allowed_member_names),
+        **_requester_payload(request),
         'polecenie': request.submitted_text,
     }
     if request.follow_up_answer is not None:
@@ -616,6 +645,7 @@ def _translate_entry(parsed: StructuredClassification, request: BackendRequest) 
         parsed.content,
         assignee_refs=_assignee_refs(parsed, request),
         date_phrase=parsed.date_source if date_accepted else None,
+        self_reference=_is_self_assigned(parsed, request),
     )
     return _backend_output(parsed, content=content, date_accepted=date_accepted)
 
@@ -633,6 +663,7 @@ def _translate_correction(parsed: StructuredCorrection, request: BackendRequest)
             parsed.content,
             assignee_refs=_assignee_refs(parsed, request),
             date_phrase=parsed.date_source if date_accepted else None,
+            self_reference=_is_self_assigned(parsed, request),
         )
     return _backend_output(
         parsed, content=content, date_accepted=date_accepted, changed_fields=frozenset(changed)
@@ -673,6 +704,11 @@ def _assignee_refs(parsed: StructuredClassification, request: BackendRequest) ->
     if mention and match_mention(mention, request.allowed_member_names, display_name=str):
         refs.append(mention)
     return tuple(refs)
+
+
+def _is_self_assigned(parsed, request: BackendRequest) -> bool:
+    """Whether the returned person is exactly the requesting parent."""
+    return request.requester_name is not None and parsed.member_name == request.requester_name
 
 
 # Typographic quotes the model may use around or inside a quoted fragment.
