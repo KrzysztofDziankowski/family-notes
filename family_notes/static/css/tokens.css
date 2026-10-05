@@ -81,6 +81,16 @@
   box-shadow: none;
 }
 
+/* Chromium makes the calendar/clock icon of a date or time field its own Tab stop. While the
+   icon has focus the field matches neither :focus nor :focus-visible, only :focus-within, and the
+   icon pseudo-element cannot be styled on focus, so the field draws the shared outline (SC 2.4.7). */
+:root input:is([type="date"], [type="time"]):focus-within {
+  outline: 2px solid var(--fn-color-focus);
+  outline-offset: var(--fn-space-1);
+  --pico-box-shadow: none;
+  box-shadow: none;
+}
+
 /* Hidden visually, still read by screen readers. */
 .fn-visually-hidden {
   position: absolute;
@@ -122,6 +132,13 @@ main[tabindex="-1"]:focus {
   font-weight: 700;
   color: var(--fn-color-text);
   text-decoration: none;
+}
+
+/* The header wraps instead of scrolling sideways: two-family users get "Rodzina: …" and
+   "Zmień rodzinę" before "Konto" and "Wyloguj" (SC 1.4.10 Reflow at 320 CSS px). */
+.fn-site-nav,
+.fn-site-nav ul {
+  flex-wrap: wrap;
 }
 
 .fn-nav-form,

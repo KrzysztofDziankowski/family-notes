@@ -427,8 +427,8 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 #### Manual
 
 - [x] 4.1 axe DevTools reports no serious or critical violations on each covered page (login, capture states including correction, batch review and progress states, follow-up, parent list/detail/create/edit, child list/detail, account status, 403, 404, `/offline/`)
-- [ ] 4.2 Keyboard only: every covered flow, including delete via the disclosure, skip on the follow-up question and Enter-to-submit in capture, follow-up and „Popraw opis”, completes without a mouse, with visible focus and no focus trap
+- [x] 4.2 Keyboard only: every covered flow, including delete via the disclosure, skip on the follow-up question and Enter-to-submit in capture, follow-up and „Popraw opis”, completes without a mouse, with visible focus and no focus trap
 - [ ] 4.3 NVDA + Firefox: page title, headings, field labels, errors, hints (including the Enter hint) and the saved/notice panels are announced in Polish, Enter in focus mode submits the opted-in boxes, the progress running and slow states are each announced once, and invalid re-renders are recognisable from the "Błąd:" title
 - [ ] 4.4 VoiceOver on iOS Safari and TalkBack on Android Chrome: capture → review → confirm and the child list/detail flows complete with correctly announced controls, the TalkBack send key submits, progress running/slow states are announced, and the `/offline/` page reads correctly
-- [ ] 4.5 At 200% zoom and at 320 CSS px width, all covered pages reflow without horizontal scrolling or clipped content, and targets meet 24×24 px or the spacing exception
+- [x] 4.5 At 200% zoom and at 320 CSS px width, all covered pages reflow without horizontal scrolling or clipped content, and targets meet 24×24 px or the spacing exception
 - [ ] 4.6 `a11y-verification.md` is filled in for every flow and matrix column

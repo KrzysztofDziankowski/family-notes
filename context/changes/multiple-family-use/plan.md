@@ -375,7 +375,7 @@ Context resolution adds one indexed membership query per request, which is negli
 
 #### Manual
 
-- [ ] 2.10 At 360px width a two-family user picks a family, sees its name in the header, switches, and sees only the other family's entries.
+- [x] 2.10 At 360px width a two-family user picks a family, sees its name in the header, switches, and sees only the other family's entries.
 - [x] 2.11 With two tabs on different families, saving a capture in the stale tab shows the Polish 409 page and creates no entry.
 - [x] 2.12 The operator adds a second membership in Django admin for an existing user, and that user sees the "Zmień rodzinę" link on the next request.
 - [x] 2.13 A keyboard-only pass on the chooser and the header switcher follows the `context/foundation/accessibility.md` checklist.

@@ -266,4 +266,4 @@ No schema change, no data backfill and no feature flag. Rollback is to remove th
 - [x] 2.9 At 360px width a parent promotes a seeded child, sees that child reach the parent index, then demotes them back.
 - [x] 2.10 The last-parent explanation and the self-demotion confirmation are clear and usable without JavaScript.
 - [x] 2.11 A keyboard-only pass on the role-change form follows the `context/foundation/accessibility.md` checklist.
-- [ ] 2.14 A reviewer follows the Operator Recovery Runbook on a seeded demoted parent and restores their parent role in Django admin.
+- [x] 2.14 A reviewer follows the Operator Recovery Runbook on a seeded demoted parent and restores their parent role in Django admin.

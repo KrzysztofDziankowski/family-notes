@@ -42,6 +42,19 @@ class FamilyContextAccessibilityTests(MultiFamilyFixtureMixin, TestCase):
                 self.assertContains(response, 'Zmień rodzinę')
                 assert_accessible(self, response)
 
+    def test_two_family_header_uses_the_wrapping_nav(self):
+        # SC 1.4.10: the wrap rule lives on .fn-site-nav (family_notes/test_tokens_rules.py).
+        self.sign_in(self.family_a)
+
+        for url in (reverse('entries:index'), CHOOSER_URL):
+            with self.subTest(url):
+                response = self.client.get(url)
+
+                self.assertContains(response, 'Zmień rodzinę')
+                self.assertContains(
+                    response, '<nav class="fn-site-nav" aria-label="Główna nawigacja">', count=1
+                )
+
     def test_stale_tab_409_page(self):
         self.sign_in(self.family_b)
 

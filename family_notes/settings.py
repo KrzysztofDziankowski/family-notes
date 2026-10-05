@@ -400,8 +400,8 @@ LOGGING = {
     'handlers': {
         'console': {'class': 'logging.StreamHandler', 'formatter': 'plain'},
     },
-    # Every other logger (family_access, family_notes, django.security, ...)
-    # reaches the console at WARNING. Django's defaults print only with DEBUG
+    # Every other logger (family_notes, django.security, ...) reaches the
+    # console at WARNING. Django's defaults print only with DEBUG
     # on, and handler-less loggers would fall back to a bare stderr line.
     'root': {'handlers': ['console'], 'level': 'WARNING'},
     'loggers': {
@@ -414,6 +414,13 @@ LOGGING = {
         # Printed through the root handler, so root-level capture (privacy
         # tests) still sees it and nothing is printed twice.
         'entries.classification': {
+            'level': 'INFO',
+            'propagate': True,
+        },
+        # Id-only audit lines (membership_event=..., family_context_mismatch)
+        # that the Operator Recovery Runbook searches for. Printed through the
+        # root handler, like entries.classification.
+        'family_access': {
             'level': 'INFO',
             'propagate': True,
         },

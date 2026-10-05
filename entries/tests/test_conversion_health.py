@@ -352,9 +352,17 @@ class WorkerSettingsTests(SimpleTestCase):
             logging_config['loggers']['django.request'],
             {'handlers': ['console'], 'level': 'ERROR', 'propagate': False},
         )
+        # Id-only membership audit lines for the Operator Recovery Runbook.
+        self.assertEqual(
+            logging_config['loggers']['family_access'],
+            {'level': 'INFO', 'propagate': True},
+        )
         self.assertEqual(
             set(logging_config['loggers']),
-            {'entries.eduvulcan', 'entries.classification', 'django', 'django.request'},
+            {
+                'entries.eduvulcan', 'entries.classification', 'family_access', 'django',
+                'django.request',
+            },
         )
 
     def test_heartbeat_freshness_must_exceed_the_interval(self):
