@@ -236,10 +236,10 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [x] 1.1 Adapter contract tests pass, including the new instruction and payload assertions: `uv run python manage.py test entries.tests.test_openai_backend`
-- [x] 1.2 Existing acceptance tests still pass unchanged: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [x] 1.3 Django checks pass: `uv run python manage.py check`
-- [x] 1.5 Contract tests assert that `DATE_RULES` states the same-weekday rule explicitly and that the schema field set is exactly the post-S-01/S-02 set (including `school_subject` and `member_mention`): `uv run python manage.py test entries.tests.test_openai_backend`
+- [x] 1.1 Adapter contract tests pass, including the new instruction and payload assertions: `uv run python manage.py test entries.tests.test_openai_backend` — 4a34b42
+- [x] 1.2 Existing acceptance tests still pass unchanged: `uv run python manage.py test entries.tests.test_classification_acceptance` — 4a34b42
+- [x] 1.3 Django checks pass: `uv run python manage.py check` — 4a34b42
+- [x] 1.5 Contract tests assert that `DATE_RULES` states the same-weekday rule explicitly and that the schema field set is exactly the post-S-01/S-02 set (including `school_subject` and `member_mention`): `uv run python manage.py test entries.tests.test_openai_backend` — 4a34b42
 
 #### Manual
 
@@ -249,12 +249,12 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [ ] 2.1 Guard unit tests pass: `uv run python manage.py test entries.tests.test_title_cleanup`
-- [ ] 2.2 Owner-example acceptance tests pass for clean and echoing model outputs: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [ ] 2.3 Classification service, follow-up and family classification tests still pass: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_follow_up_answer entries.tests.test_family_classification`
-- [ ] 2.4 EduVulcan conversion tests still pass: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_eduvulcan_acceptance`
-- [ ] 2.5 Full suite and checks pass: `uv run python manage.py test` and `uv run python manage.py check`
-- [ ] 2.7 Guard keeps what was not extracted: an unmatched leading name stays, and the school subject stays in "Kartkówka z matematyki": `uv run python manage.py test entries.tests.test_title_cleanup entries.tests.test_classification_acceptance`
+- [x] 2.1 Guard unit tests pass: `uv run python manage.py test entries.tests.test_title_cleanup`
+- [x] 2.2 Owner-example acceptance tests pass for clean and echoing model outputs: `uv run python manage.py test entries.tests.test_classification_acceptance`
+- [x] 2.3 Classification service, follow-up and family classification tests still pass: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_follow_up_answer entries.tests.test_family_classification`
+- [x] 2.4 EduVulcan conversion tests still pass: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_eduvulcan_acceptance`
+- [x] 2.5 Full suite and checks pass: `uv run python manage.py test` and `uv run python manage.py check`
+- [x] 2.7 Guard keeps what was not extracted: an unmatched leading name stays, and the school subject stays in "Kartkówka z matematyki": `uv run python manage.py test entries.tests.test_title_cleanup entries.tests.test_classification_acceptance`
 
 #### Manual
 

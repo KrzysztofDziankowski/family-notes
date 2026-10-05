@@ -4,7 +4,9 @@ The adapter turns a ``BackendRequest`` into one stateless structured-output
 call and translates the parsed result into provider-neutral ``BackendOutput``.
 Semantic rules stay in ``validation.py``. The adapter only grounds the date: a
 date whose ``date_source`` fragment does not occur in the parent's text is
-dropped, so validation asks for it instead of trusting an invented date.
+dropped, so validation asks for it instead of trusting an invented date. It
+then removes a leading assignee name and the accepted date phrase the model
+may have echoed into the entry text (``title.strip_extracted_phrases``).
 
 Privacy: every request sets ``store=False`` and sends only the instruction,
 allowed member names, reference date, locale, the follow-up question and the
@@ -32,7 +34,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Optional, Union
+from typing import Any, Callable, Literal, Optional, Tuple, Union
 
 import openai
 import pydantic
@@ -40,6 +42,8 @@ from django.conf import settings
 from pydantic import BaseModel, ConfigDict, Field
 
 from .backends import BackendOutput, BackendRequest, ClassificationBackendError
+from .names import match_mention
+from .title import strip_extracted_phrases
 from .types import EntryType, SchoolItemKind, UnavailableReason
 
 logger = logging.getLogger(__name__)
@@ -381,12 +385,17 @@ def _translate(response: Any, request: BackendRequest) -> _Attempt:
     parsed = response.output_parsed
     if not isinstance(parsed, StructuredClassification):
         return failure(UnavailableReason.MALFORMED_OUTPUT)
+    date_accepted = parsed.date is not None and _date_is_grounded(parsed.date_source, request)
     try:
         output = BackendOutput(
             entry_type=EntryType(parsed.entry_type) if parsed.entry_type is not None else None,
-            content=parsed.content,
+            content=strip_extracted_phrases(
+                parsed.content,
+                assignee_refs=_assignee_refs(parsed, request),
+                date_phrase=parsed.date_source if date_accepted else None,
+            ),
             grounded=parsed.grounded,
-            date=parsed.date if _date_is_grounded(parsed.date_source, request) else None,
+            date=parsed.date if date_accepted else None,
             time=parsed.time,
             school_item=(
                 SchoolItemKind(parsed.school_item) if parsed.school_item is not None else None
@@ -398,6 +407,25 @@ def _translate(response: Any, request: BackendRequest) -> _Attempt:
     except (TypeError, ValueError):
         return failure(UnavailableReason.MALFORMED_OUTPUT)
     return _Attempt(output=output, status=status, request_id=request_id)
+
+
+def _assignee_refs(parsed: StructuredClassification, request: BackendRequest) -> Tuple[str, ...]:
+    """References to the assigned person the title guard may remove.
+
+    Only names that resolve to an allowed family member qualify: the returned
+    ``member_name`` (full display name and given name) when it is on the
+    allow-list, and the parent's ``member_mention`` when it matches at least
+    one allowed name (a unique or an ambiguous match both end up in a member
+    field or the member question). An unmatched name is never removed.
+    """
+    refs = []
+    member_name = (parsed.member_name or '').strip()
+    if member_name and member_name in request.allowed_member_names:
+        refs.extend((member_name, member_name.split()[0]))
+    mention = (parsed.member_mention or '').strip()
+    if mention and match_mention(mention, request.allowed_member_names, display_name=str):
+        refs.append(mention)
+    return tuple(refs)
 
 
 # Typographic quotes the model may use around or inside a quoted fragment.

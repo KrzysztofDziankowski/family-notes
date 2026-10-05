@@ -542,6 +542,125 @@ class ShortNameTests(AdapterPathMixin, TestCase):
                 self.assertIsNone(outcome.member)
 
 
+class TitleKeepsActionOnlyTests(AdapterPathMixin, TestCase):
+    """PK-20 / US-11: "kasia zrobić pranie w piątek" on Sunday 2026-10-04."""
+
+    INSTRUCTION = 'kasia zrobić pranie w piątek'
+    SUNDAY = datetime.date(2026, 10, 4)
+    FRIDAY = datetime.date(2026, 10, 9)
+
+    def setUp(self):
+        super().setUp()
+        self.kasia = self._member('kasia', FamilyMember.Role.CHILD, 'Kasia')
+
+    def laundry(self, **fields):
+        values = dict(
+            entry_type='todo',
+            content='Zrobić pranie',
+            date=self.FRIDAY.isoformat(),
+            date_source='w piątek',
+            member_name='Kasia',
+            member_mention='Kasia',
+        )
+        values.update(fields)
+        return model_output(**values)
+
+    def classify(self, answer, text=INSTRUCTION):
+        return self.run_service([answer], text=text, reference_date=self.SUNDAY)
+
+    def test_owner_example_keeps_only_the_action_for_clean_and_echoing_output(self):
+        for content in (
+            'Zrobić pranie',
+            'zrobić pranie',
+            'Kasia zrobić pranie w piątek',
+            'kasia, zrobić pranie w piątek',
+        ):
+            with self.subTest(content=content):
+                outcome = self.classify(self.laundry(content=content))
+
+                self.assertEqual(self.sent_input()['dzien_tygodnia'], 'niedziela')
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationProposal(
+                        entry_type=EntryType.TODO,
+                        content='Zrobić pranie',
+                        date=self.FRIDAY,
+                        member_name='Kasia',
+                    ),
+                )
+                self.assertEqual(outcome.member, self.kasia)
+
+    def test_ungrounded_date_phrase_stays_in_the_title_and_todo_asks_no_date(self):
+        cases = (
+            # Evidence that is not in the parent's text.
+            (self.INSTRUCTION, 'w sobotę'),
+            # Evidence echoed in the title but absent from the parent's text.
+            ('kasia zrobić pranie', 'w piątek'),
+        )
+        for text, date_source in cases:
+            with self.subTest(text=text, date_source=date_source):
+                outcome = self.classify(
+                    self.laundry(
+                        content='Kasia zrobić pranie w piątek', date_source=date_source
+                    ),
+                    text=text,
+                )
+
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationProposal(
+                        entry_type=EntryType.TODO,
+                        content='Zrobić pranie w piątek',
+                        member_name='Kasia',
+                    ),
+                )
+                self.assertEqual(outcome.member, self.kasia)
+
+    def test_unmatched_leading_name_is_not_stripped(self):
+        text = 'Bartek odebrać paczkę'
+
+        outcome = self.classify(
+            self.laundry(
+                content=text,
+                date=None,
+                date_source=None,
+                member_name=None,
+                member_mention='Bartek',
+            ),
+            text=text,
+        )
+
+        self.assertEqual(
+            outcome.result,
+            ClassificationProposal(entry_type=EntryType.TODO, content=text),
+        )
+        self.assertIsNone(outcome.member)
+
+    def test_school_title_keeps_its_subject(self):
+        outcome = self.classify(
+            self.laundry(
+                entry_type='calendar_event',
+                content='Kartkówka z matematyki w piątek',
+                school_item='quiz',
+                school_subject='matematyka',
+            ),
+            text='Kartkówka z matematyki dla Kasi w piątek',
+        )
+
+        self.assertEqual(
+            outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Kartkówka z matematyki',
+                date=self.FRIDAY,
+                school_item=SchoolItemKind.QUIZ,
+                member_name='Kasia',
+                school_subject='matematyka',
+            ),
+        )
+        self.assertEqual(outcome.member, self.kasia)
+
+
 class ProviderFailureTests(AdapterPathMixin, TestCase):
     def test_provider_failures_become_safe_unavailable_results(self):
         cases = {
