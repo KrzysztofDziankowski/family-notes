@@ -162,7 +162,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
 
     def test_parent_captured_entry_assigned_to_child_appears(self):
         save_confirmed_entry(
-            self.parent.user,
+            self.parent,
             entry_type=EntryType.TODO.value,
             content='SENTINEL-FROM-PARENT',
             date=self.today,

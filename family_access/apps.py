@@ -6,4 +6,4 @@ class FamilyAccessConfig(AppConfig):
     name = 'family_access'
 
     def ready(self):
-        from . import notices  # noqa: F401  (connects the sign-in receiver)
+        from . import context, notices  # noqa: F401  (connect the sign-in receivers)

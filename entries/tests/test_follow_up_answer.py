@@ -8,8 +8,6 @@ import datetime
 import logging
 
 from django.apps import apps
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.test import SimpleTestCase, TestCase
@@ -142,9 +140,9 @@ class FollowUpQuestionTests(SimpleTestCase):
 
 
 class FollowUpAnswerTestMixin(FamilyFixtureMixin):
-    def answer(self, backend, draft=None, answer=ANSWER, user=None, member='default', text=SUBMITTED_TEXT):
+    def answer(self, backend, draft=None, answer=ANSWER, membership='parent', member='default', text=SUBMITTED_TEXT):
         return classify_follow_up_answer(
-            user if user is not None else self.parent.user,
+            self.parent if membership == 'parent' else membership,
             text,
             draft if draft is not None else make_draft(),
             answer,
@@ -482,26 +480,24 @@ class RequestAndAuthorizationTests(FollowUpAnswerTestMixin, TestCase):
         self.assertIsNone(request.requester_name)
 
     def test_unauthorized_users_are_denied_without_backend_call(self):
-        outsider = get_user_model().objects.create_user(username='outsider')
         cases = {
-            'anonymous': AnonymousUser(),
-            'outsider without membership': outsider,
-            'child': self.child.user,
-            'inactive member': self.inactive_child.user,
+            'no family context': None,
+            'child': self.child,
+            'inactive member': self.inactive_child,
         }
-        for name, user in cases.items():
+        for name, membership in cases.items():
             with self.subTest(name):
                 backend = RecordingBackend(answer_output())
 
                 with self.assertRaises(PermissionDenied):
-                    self.answer(backend, user=user)
+                    self.answer(backend, membership=membership)
 
                 self.assertEqual(backend.requests, [])
 
     def test_other_family_parent_never_sees_or_keeps_our_member(self):
         backend = RecordingBackend(answer_output())
 
-        outcome = self.answer(backend, user=self.other_family_parent.user)
+        outcome = self.answer(backend, membership=self.other_family_parent)
 
         (request,) = backend.requests
         self.assertEqual(request.allowed_member_names, ('Tomek', 'Kuba'))

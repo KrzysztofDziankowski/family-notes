@@ -1,7 +1,9 @@
 """Changed-membership notice (S-15): tell a parent who lost parent rights what happened.
 
 The user's own session remembers the membership id and role it last saw
-(``family_access.seen_membership``). When that entry says ``parent`` and the
+(``family_access.seen_membership``) in the current family context (S-16).
+The current membership comes from ``peek_family_context``, so a switch to
+another family is never mistaken for a lost parent role. When that entry says ``parent`` and the
 same membership is now a child, or is no longer active, the next request
 queues one Polish warning. Nothing is stored in the database and nothing
 naming a person is stored or logged. A new sign-in seeds the entry from the
@@ -13,7 +15,7 @@ from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 
-from .access import get_active_membership
+from .context import peek_family_context
 from .models import FamilyMember
 
 SESSION_KEY = 'family_access.seen_membership'
@@ -52,7 +54,10 @@ def _lost_parent_notice(seen, membership):
 
 
 class MembershipNoticeMiddleware:
-    """Queue the notice once on the next request; place after ``MessageMiddleware``."""
+    """Queue the notice once on the next request.
+
+    Place after ``MessageMiddleware`` and ``FamilyContextMiddleware``.
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -61,7 +66,7 @@ class MembershipNoticeMiddleware:
         # Requests without a session cookie (anonymous, automation API) are
         # skipped without touching the session, so they gain no Vary: Cookie.
         if settings.SESSION_COOKIE_NAME in request.COOKIES and request.user.is_authenticated:
-            membership = get_active_membership(request.user)
+            membership, _count = peek_family_context(request)
             notice = _lost_parent_notice(request.session.get(SESSION_KEY), membership)
             if notice:
                 messages.warning(request, notice)
@@ -73,4 +78,4 @@ class MembershipNoticeMiddleware:
 def seed_seen_membership(sender, request, user, **kwargs):
     """Start each sign-in from the current state, so it never shows a stale notice."""
     if request is not None and hasattr(request, 'session'):
-        remember_membership(request, get_active_membership(user))
+        remember_membership(request, peek_family_context(request, user)[0])

@@ -292,7 +292,7 @@ class AtomicPersistenceTests(ConversionTestCase):
         row = self.notification()
         result = convert_notification(row.pk, now=T0)
         entry = result.outputs[0].entry
-        delete_family_entry(self.parent.user, entry.pk)
+        delete_family_entry(self.parent, entry.pk)
         InboundNotification.objects.filter(pk=row.pk).update(status=Status.PENDING)
 
         again = convert_notification(row.pk, now=T0 + LEASE)

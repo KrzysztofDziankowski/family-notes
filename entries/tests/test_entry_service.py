@@ -2,8 +2,6 @@ import datetime
 import uuid
 from unittest import mock
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
@@ -100,14 +98,14 @@ class EntryModelTests(FamilyFixtureMixin, TestCase):
         with self.assertRaises(RestrictedError):
             self.child.delete()
         with self.assertRaises(RestrictedError):
-            self.child.user.delete()
+            self.child.delete()
 
         entry.refresh_from_db()
         self.assertEqual(entry.assigned_member, self.child)
 
 
 class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
-    def save(self, user=None, **overrides):
+    def save(self, membership='parent', **overrides):
         values = {
             'entry_type': EntryType.CALENDAR_EVENT.value,
             'content': 'Sprawdzian z biologii o skórze',
@@ -119,7 +117,9 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
             'submission_key': uuid.uuid4(),
         }
         values.update(overrides)
-        return save_confirmed_entry(user or self.parent.user, **values)
+        return save_confirmed_entry(
+            self.parent if membership == 'parent' else membership, **values
+        )
 
     def test_active_parent_creates_manual_entry_for_family(self):
         entry, created = self.save()
@@ -177,29 +177,26 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
         self.assertFalse(Entry.objects.exists())
 
     def test_unauthorized_users_are_denied_and_nothing_is_written(self):
-        unconfigured = get_user_model().objects.create_user(username='unconfigured')
-
         def inactive_parent():
             self.parent.is_active = False
             self.parent.save(update_fields=('is_active',))
-            return self.parent.user
+            return self.parent
 
         def inactive_family():
             self.family.is_active = False
             self.family.save(update_fields=('is_active',))
-            return self.parent.user
+            return self.parent
 
         cases = {
-            'anonymous': AnonymousUser,
-            'no membership': lambda: unconfigured,
-            'child': lambda: self.child.user,
+            'no family context': lambda: None,
+            'child': lambda: self.child,
             'inactive parent': inactive_parent,
             'inactive family': inactive_family,
         }
-        for name, get_user in cases.items():
+        for name, get_membership in cases.items():
             with self.subTest(name):
                 with self.assertRaises(PermissionDenied):
-                    self.save(user=get_user())
+                    self.save(membership=get_membership())
         self.assertFalse(Entry.objects.exists())
 
     def test_member_outside_family_or_inactive_is_rejected(self):
@@ -300,7 +297,7 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
     def test_saves_every_item_in_order(self):
         items = [self.item(date=EVENT_DATE + datetime.timedelta(days=day)) for day in range(3)]
 
-        entries = save_confirmed_entries(self.parent.user, items)
+        entries = save_confirmed_entries(self.parent, items)
 
         self.assertEqual([entry.date for entry in entries], [item['date'] for item in items])
         self.assertEqual(Entry.objects.count(), 3)
@@ -308,7 +305,7 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
 
     def test_school_event_keeps_its_subject(self):
         (entry,) = save_confirmed_entries(
-            self.parent.user,
+            self.parent,
             [self.item(
                 school_item=SchoolItemKind.TEST.value,
                 school_subject='biologia',
@@ -329,7 +326,7 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
         for name, bad in cases.items():
             with self.subTest(name):
                 with self.assertRaises(ValidationError):
-                    save_confirmed_entries(self.parent.user, [self.item(), bad()])
+                    save_confirmed_entries(self.parent, [self.item(), bad()])
 
                 self.assertFalse(Entry.objects.filter(family=self.family).exists())
 
@@ -343,9 +340,9 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
 
     def test_replay_returns_the_saved_entries_and_creates_none(self):
         items = [self.item(), self.item(date=EVENT_DATE + datetime.timedelta(days=1))]
-        first = save_confirmed_entries(self.parent.user, items)
+        first = save_confirmed_entries(self.parent, items)
 
-        second = save_confirmed_entries(self.parent.user, items)
+        second = save_confirmed_entries(self.parent, items)
 
         self.assertEqual(first, second)
         self.assertEqual(Entry.objects.count(), 2)
@@ -354,14 +351,14 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
         for count in (0, 11):
             with self.subTest(count=count):
                 with self.assertRaises(ValueError):
-                    save_confirmed_entries(self.parent.user, [self.item() for _ in range(count)])
+                    save_confirmed_entries(self.parent, [self.item() for _ in range(count)])
         self.assertFalse(Entry.objects.exists())
 
     def test_non_parents_are_refused(self):
-        for user in (AnonymousUser(), self.child.user):
-            with self.subTest(user=user):
+        for membership in (None, self.child):
+            with self.subTest(membership=membership):
                 with self.assertRaises(PermissionDenied):
-                    save_confirmed_entries(user, [self.item()])
+                    save_confirmed_entries(membership, [self.item()])
         self.assertFalse(Entry.objects.exists())
 
 
@@ -398,24 +395,22 @@ class ManagementFixtureMixin(FamilyFixtureMixin):
         )
 
     def unauthorized_users(self):
-        """Every caller who must be denied; state changes are applied lazily."""
-        unconfigured = get_user_model().objects.create_user(username='unconfigured')
+        """Every context membership that must be denied; state changes are applied lazily."""
 
         def inactive_parent():
             self.parent.is_active = False
             self.parent.save(update_fields=('is_active',))
-            return self.parent.user
+            return self.parent
 
         def inactive_family():
             self.family.is_active = False
             self.family.save(update_fields=('is_active',))
-            return self.parent.user
+            return self.parent
 
         return {
-            'anonymous': AnonymousUser,
-            'no membership': lambda: unconfigured,
-            'child': lambda: self.child.user,
-            'inactive member': lambda: self.inactive_child.user,
+            'no family context': lambda: None,
+            'child': lambda: self.child,
+            'inactive member': lambda: self.inactive_child,
             'inactive parent': inactive_parent,
             'inactive family': inactive_family,
         }
@@ -432,29 +427,29 @@ class ManagementFixtureMixin(FamilyFixtureMixin):
 
 class ParentFamilyEntriesTests(ManagementFixtureMixin, TestCase):
     def test_parent_sees_only_own_family_entries(self):
-        entries = parent_family_entries(self.parent.user)
+        entries = parent_family_entries(self.parent)
 
         self.assertCountEqual(entries, [self.manual, self.eduvulcan])
 
     def test_lookup_resolves_own_entry_and_hides_foreign_and_missing(self):
-        self.assertEqual(get_parent_family_entry(self.parent.user, self.manual.pk), self.manual)
+        self.assertEqual(get_parent_family_entry(self.parent, self.manual.pk), self.manual)
         for entry_id in (self.foreign.pk, 999999):
             with self.subTest(entry_id=entry_id):
                 with self.assertRaises(Entry.DoesNotExist):
-                    get_parent_family_entry(self.parent.user, entry_id)
+                    get_parent_family_entry(self.parent, entry_id)
 
     def test_unauthorized_users_are_denied(self):
-        for name, get_user in self.unauthorized_users().items():
+        for name, get_membership in self.unauthorized_users().items():
             with self.subTest(name):
-                user = get_user()
+                membership = get_membership()
                 with self.assertRaises(PermissionDenied):
-                    parent_family_entries(user)
+                    parent_family_entries(membership)
                 with self.assertRaises(PermissionDenied):
-                    get_parent_family_entry(user, self.manual.pk)
+                    get_parent_family_entry(membership, self.manual.pk)
 
 
 class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
-    def create(self, user=None, **overrides):
+    def create(self, membership='parent', **overrides):
         values = {
             'entry_type': EntryType.TODO.value,
             'content': 'Kupić zeszyt w kratkę',
@@ -466,7 +461,9 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
             'submission_key': uuid.uuid4(),
         }
         values.update(overrides)
-        return create_family_entry(user or self.parent.user, **values)
+        return create_family_entry(
+            self.parent if membership == 'parent' else membership, **values
+        )
 
     def test_creates_manual_entry_with_provenance_from_membership(self):
         key = uuid.uuid4()
@@ -499,10 +496,10 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
 
     def test_unauthorized_users_are_denied_and_nothing_is_written(self):
         before = self.snapshot()
-        for name, get_user in self.unauthorized_users().items():
+        for name, get_membership in self.unauthorized_users().items():
             with self.subTest(name):
                 with self.assertRaises(PermissionDenied):
-                    self.create(user=get_user())
+                    self.create(membership=get_membership())
         self.assertEqual(self.snapshot(), before)
 
     def test_foreign_or_inactive_assignee_is_rejected_without_write(self):
@@ -586,7 +583,7 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
 
 
 class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
-    def update(self, entry, user=None, **overrides):
+    def update(self, entry, membership='parent', **overrides):
         values = {
             'entry_type': EntryType.CALENDAR_EVENT.value,
             'content': 'Kartkówka z chemii',
@@ -597,7 +594,9 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
             'school_subject': 'Chemia',
         }
         values.update(overrides)
-        return update_family_entry(user or self.parent.user, entry.pk, **values)
+        return update_family_entry(
+            self.parent if membership == 'parent' else membership, entry.pk, **values
+        )
 
     def provenance(self, entry):
         entry.refresh_from_db()
@@ -652,7 +651,7 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
             with self.subTest(entry_id=entry_id):
                 with self.assertRaises(Entry.DoesNotExist):
                     update_family_entry(
-                        self.parent.user,
+                        self.parent,
                         entry_id,
                         entry_type=EntryType.NOTE.value,
                         content='Przejęta',
@@ -666,10 +665,10 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
 
     def test_unauthorized_users_are_denied_and_nothing_changes(self):
         before = self.snapshot()
-        for name, get_user in self.unauthorized_users().items():
+        for name, get_membership in self.unauthorized_users().items():
             with self.subTest(name):
                 with self.assertRaises(PermissionDenied):
-                    self.update(self.manual, user=get_user())
+                    self.update(self.manual, membership=get_membership())
         self.assertEqual(self.snapshot(), before)
 
     def test_foreign_or_inactive_assignee_is_rejected_without_mutation(self):
@@ -846,7 +845,7 @@ class DeleteFamilyEntryTests(ManagementFixtureMixin, TestCase):
     def test_deletes_only_the_target_row(self):
         for entry in (self.manual, self.eduvulcan):
             with self.subTest(source=entry.source):
-                delete_family_entry(self.parent.user, entry.pk)
+                delete_family_entry(self.parent, entry.pk)
                 self.assertFalse(Entry.objects.filter(pk=entry.pk).exists())
 
         self.assertEqual(list(Entry.objects.values_list('pk', flat=True)), [self.foreign.pk])
@@ -856,15 +855,15 @@ class DeleteFamilyEntryTests(ManagementFixtureMixin, TestCase):
         for entry_id in (self.foreign.pk, 999999):
             with self.subTest(entry_id=entry_id):
                 with self.assertRaises(Entry.DoesNotExist):
-                    delete_family_entry(self.parent.user, entry_id)
+                    delete_family_entry(self.parent, entry_id)
         self.assertEqual(self.snapshot(), before)
 
     def test_unauthorized_users_are_denied_and_nothing_is_deleted(self):
         before = self.snapshot()
-        for name, get_user in self.unauthorized_users().items():
+        for name, get_membership in self.unauthorized_users().items():
             with self.subTest(name):
                 with self.assertRaises(PermissionDenied):
-                    delete_family_entry(get_user(), self.manual.pk)
+                    delete_family_entry(get_membership(), self.manual.pk)
         self.assertEqual(self.snapshot(), before)
 
 
@@ -892,7 +891,7 @@ class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
                 for entry_type in (EntryType.NOTE, EntryType.TODO, EntryType.CALENDAR_EVENT):
                     with self.subTest(writer=name, member=member.display_name, type=entry_type):
                         entry, created = write(
-                            self.parent.user,
+                            self.parent,
                             submission_key=uuid.uuid4(),
                             **self.values(member, entry_type),
                         )
@@ -914,7 +913,7 @@ class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
             for entry_type in (EntryType.NOTE, EntryType.TODO):
                 with self.subTest(member=member.display_name, type=entry_type):
                     update_family_entry(
-                        self.parent.user, entry.pk, **self.values(member, entry_type)
+                        self.parent, entry.pk, **self.values(member, entry_type)
                     )
                     entry.refresh_from_db()
                     self.assertEqual(entry.assigned_member, member)
@@ -931,13 +930,13 @@ class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
         for member in (self.other_family_parent, self.inactive_parent):
             writes = {
                 'save_confirmed_entry': lambda: save_confirmed_entry(
-                    self.parent.user, submission_key=uuid.uuid4(), **self.values(member)
+                    self.parent, submission_key=uuid.uuid4(), **self.values(member)
                 ),
                 'create_family_entry': lambda: create_family_entry(
-                    self.parent.user, submission_key=uuid.uuid4(), **self.values(member)
+                    self.parent, submission_key=uuid.uuid4(), **self.values(member)
                 ),
                 'update_family_entry': lambda: update_family_entry(
-                    self.parent.user, entry.pk, **self.values(member)
+                    self.parent, entry.pk, **self.values(member)
                 ),
             }
             for name, write in writes.items():

@@ -9,7 +9,8 @@ from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.http import require_safe
 
-from family_access.access import get_active_membership, is_parent
+from family_access.access import is_parent
+from family_access.context import resolve_family_context
 from family_access.models import FamilyMember
 from family_notes.log_safety import exception_summary
 
@@ -17,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def home(request):
-    """Send each visitor to the home page of their role."""
+    """Send each visitor to the home page of their role in the current family."""
     if not request.user.is_authenticated:
         return redirect('account_login')
 
-    membership = get_active_membership(request.user)
+    membership = resolve_family_context(request)
     if membership is not None and membership.role == FamilyMember.Role.CHILD:
         return redirect('entries:child_list')
     if is_parent(membership):

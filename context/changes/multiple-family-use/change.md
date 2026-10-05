@@ -1,9 +1,9 @@
 ---
 change_id: multiple-family-use
 title: Authorized member can use the application across multiple families
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

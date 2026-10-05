@@ -7,7 +7,6 @@ from django.views.decorators.debug import sensitive_variables
 
 from family_access.access import (
     can_read_assigned_child,
-    get_active_membership,
     is_parent,
     scope_queryset_to_family,
 )
@@ -24,7 +23,7 @@ SCHOOL_EVENT_KINDS = frozenset(
 
 @sensitive_variables('content')
 def save_confirmed_entry(
-    user,
+    membership,
     *,
     entry_type,
     content,
@@ -37,11 +36,12 @@ def save_confirmed_entry(
 ):
     """Save one entry confirmed by an active parent; return ``(entry, created)``.
 
-    Authorization and family scope are re-checked here, independently of the
-    view. ``submission_key`` makes the call idempotent: the first save wins
-    and a repeat returns that entry unchanged.
+    ``membership`` is the request's family context. Authorization and family
+    scope are re-checked here, independently of the view. ``submission_key``
+    makes the call idempotent: the first save wins and a repeat returns that
+    entry unchanged.
     """
-    membership = require_parent_membership(user)
+    membership = require_parent_membership(membership)
 
     entry_type = EntryType(entry_type)
     school_item = SchoolItemKind(school_item) if school_item else None
@@ -81,7 +81,7 @@ def save_confirmed_entry(
 
 
 @sensitive_variables('items')
-def save_confirmed_entries(user, items):
+def save_confirmed_entries(membership, items):
     """Save several parent-confirmed entries all-or-nothing; return them in order.
 
     Each item holds ``save_confirmed_entry``'s keyword arguments. Every item
@@ -94,7 +94,7 @@ def save_confirmed_entries(user, items):
     if not items or len(items) > MAX_PROPOSALS_PER_INSTRUCTION:
         raise ValueError('A batch holds 1 to %d entries.' % MAX_PROPOSALS_PER_INSTRUCTION)
     with transaction.atomic():
-        return [save_confirmed_entry(user, **item)[0] for item in items]
+        return [save_confirmed_entry(membership, **item)[0] for item in items]
 
 
 def _existing_for_key(membership, submission_key):
@@ -159,8 +159,8 @@ MANAGED_FIELDS = (
 )
 
 
-def require_parent_membership(user):
-    membership = get_active_membership(user)
+def require_parent_membership(membership):
+    """The context ``membership`` when it is an active parent; ``PermissionDenied`` otherwise."""
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     return membership
@@ -185,18 +185,18 @@ def _locked_family_entry(membership, entry_id):
     )
 
 
-def parent_family_entries(user):
+def parent_family_entries(membership):
     """Entries of the active parent's family only; non-parents are denied."""
-    return _family_entries(require_parent_membership(user))
+    return _family_entries(require_parent_membership(membership))
 
 
-def get_parent_family_entry(user, entry_id):
+def get_parent_family_entry(membership, entry_id):
     """Resolve one entry within the parent's family.
 
     Missing and foreign-family IDs both raise ``Entry.DoesNotExist`` so the
     caller cannot tell them apart.
     """
-    return parent_family_entries(user).get(pk=entry_id)
+    return parent_family_entries(membership).get(pk=entry_id)
 
 
 def _validate_managed(
@@ -238,7 +238,7 @@ def subject_required_on_edit(stored_school_item, stored_subject, new_school_item
 
 @sensitive_variables('content')
 def create_family_entry(
-    user,
+    membership,
     *,
     entry_type,
     content,
@@ -253,7 +253,7 @@ def create_family_entry(
 
     Idempotent on ``submission_key``: a repeat returns the first saved entry.
     """
-    membership = require_parent_membership(user)
+    membership = require_parent_membership(membership)
     entry_type = EntryType(entry_type)
     school_item_kind = SchoolItemKind(school_item) if school_item else None
 
@@ -263,7 +263,7 @@ def create_family_entry(
             school_subject=_clean_subject(school_subject),
         )
     return save_confirmed_entry(
-        user,
+        membership,
         entry_type=entry_type.value,
         content=content,
         date=date,
@@ -277,7 +277,7 @@ def create_family_entry(
 
 @sensitive_variables('content')
 def update_family_entry(
-    user,
+    membership,
     entry_id,
     *,
     entry_type,
@@ -294,7 +294,7 @@ def update_family_entry(
     The school subject is required only per ``subject_required_on_edit``.
     Raises ``Entry.DoesNotExist`` for missing or foreign-family IDs.
     """
-    membership = require_parent_membership(user)
+    membership = require_parent_membership(membership)
     entry_type = EntryType(entry_type)
     school_item_kind = SchoolItemKind(school_item) if school_item else None
 
@@ -320,25 +320,24 @@ def update_family_entry(
     return entry
 
 
-def delete_family_entry(user, entry_id):
+def delete_family_entry(membership, entry_id):
     """Permanently delete one entry in the parent's family.
 
     Raises ``Entry.DoesNotExist`` for missing or foreign-family IDs.
     """
-    membership = require_parent_membership(user)
+    membership = require_parent_membership(membership)
     with transaction.atomic():
         entry = _locked_family_entry(membership, entry_id)
         entry.delete()
 
 
-def child_entries(user):
+def child_entries(membership):
     """Return the entries an active child may read: only those assigned to them.
 
-    Authorization is checked here, independently of the view. Unassigned
-    ("Cała rodzina") entries, other children's entries and other families'
-    entries are never included.
+    ``membership`` is the request's family context. Authorization is checked
+    here, independently of the view. Unassigned ("Cała rodzina") entries,
+    other children's entries and other families' entries are never included.
     """
-    membership = get_active_membership(user)
     if not can_read_assigned_child(membership, membership):
         raise PermissionDenied('An active child membership is required.')
     return Entry.objects.filter(

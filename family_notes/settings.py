@@ -219,6 +219,7 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
     'family_notes.auth_security.AuthCacheFailureMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'family_access.context.FamilyContextMiddleware',
     'family_access.notices.MembershipNoticeMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

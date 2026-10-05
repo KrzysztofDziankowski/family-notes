@@ -215,9 +215,10 @@ def deactivate_member(actor, member_id):
 def reactivate_member(actor, member_id):
     """Reactivate a child or a parent; revoked automation tokens stay revoked.
 
-    Refuses when the member's user already has an active membership elsewhere
-    (one active membership per user until S-16), or when an active member
-    already carries the same normalized name.
+    Refuses when an active member already carries the same normalized name,
+    or when the database's active-membership constraint rejects the row (the
+    member's user is already active elsewhere; one active membership per user
+    until S-16). The constraint, not a user lookup, is the authority.
     """
     _require_parent_actor(actor)
     with transaction.atomic():
@@ -225,13 +226,6 @@ def reactivate_member(actor, member_id):
         fresh_actor, target = _relock_members(family, actor.pk, member_id)
         if target.is_active:
             raise ValidationError(ALREADY_ACTIVE_ERROR)
-        active_elsewhere = (
-            FamilyMember.objects.filter(user_id=target.user_id, is_active=True)
-            .exclude(pk=target.pk)
-            .exists()
-        )
-        if active_elsewhere:
-            raise ValidationError(ACTIVE_ELSEWHERE_ERROR)
         _ensure_unique_name(family.pk, target.display_name, excluding_member_id=target.pk)
         target.is_active = True
         try:

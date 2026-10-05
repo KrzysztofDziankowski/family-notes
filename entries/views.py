@@ -16,7 +16,8 @@ from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from family_access.access import require_active_membership, scope_queryset_to_family
+from family_access.access import scope_queryset_to_family
+from family_access.context import require_family_context, resolve_family_context
 from family_access.models import FamilyMember
 from family_notes.log_safety import exception_summary
 
@@ -126,7 +127,8 @@ def _log_rejected_save(error):
 
 
 def _require_parent(request):
-    return require_parent_membership(request.user)
+    """The request's family context when it is an active parent membership."""
+    return require_parent_membership(resolve_family_context(request))
 
 
 # The page reports a stalled request this long after the provider deadline.
@@ -186,7 +188,7 @@ def capture(request):
 
     text = capture_form.cleaned_data['text']
     today = timezone.localdate()
-    batch = classify_entries_for_parent(request.user, text, reference_date=today)
+    batch = classify_entries_for_parent(membership, text, reference_date=today)
     if not batch.is_single:
         return _render(
             request,
@@ -256,7 +258,7 @@ def answer(request):
         )
 
     outcome = classify_follow_up_answer(
-        request.user,
+        membership,
         text,
         draft,
         form.cleaned_data['answer'],
@@ -312,7 +314,7 @@ def correct(request):
     today = timezone.localdate()
     current, member = proposal_values_from_form(form)
     correction = correct_proposal_for_parent(
-        request.user,
+        membership,
         current,
         form.cleaned_data['correction'],
         reference_date=today,
@@ -361,7 +363,7 @@ def confirm(request):
     data = review_form.cleaned_data
     try:
         entry, _ = save_confirmed_entry(
-            request.user,
+            membership,
             entry_type=data['entry_type'],
             content=data['content'],
             date=data['date'],
@@ -414,7 +416,7 @@ def confirm_batch(request):
         return _render_batch(request, form)
 
     try:
-        entries = save_confirmed_entries(request.user, form.save_items())
+        entries = save_confirmed_entries(membership, form.save_items())
     except ValidationError as error:
         _log_rejected_save(error)
         retry_form = BatchReviewForm(membership, _with_fresh_batch_keys(request.POST, form.count))
@@ -444,7 +446,7 @@ def _correct_batch_entry(request, membership, form):
     today = timezone.localdate()
     current, member = proposal_values_from_form(target)
     correction = correct_proposal_for_parent(
-        request.user,
+        membership,
         current,
         target.cleaned_data['correction'],
         reference_date=today,
@@ -905,10 +907,10 @@ def _list_mode_for(entry, today):
     return PAST if effective_date is not None and effective_date < today else UPCOMING
 
 
-def _managed_entry_or_404(user, pk):
+def _managed_entry_or_404(membership, pk):
     """Resolve an entry in the parent's family; missing and foreign IDs are both 404."""
     try:
-        return with_effective_date(parent_family_entries(user)).get(pk=pk)
+        return with_effective_date(parent_family_entries(membership)).get(pk=pk)
     except Entry.DoesNotExist:
         raise Http404 from None
 
@@ -963,14 +965,15 @@ def _form_context(form, *, entry=None):
 @login_required
 def index(request):
     mode = normalize_list_mode(request.GET.get('view', ''))
-    sections = partition_entries(parent_family_entries(request.user), mode, timezone.localdate())
+    membership = _require_parent(request)
+    sections = partition_entries(parent_family_entries(membership), mode, timezone.localdate())
     return render(request, 'entries/manage_index.html', _index_context(mode, sections))
 
 
 @require_http_methods(['GET'])
 @login_required
 def detail(request, pk):
-    entry = _managed_entry_or_404(request.user, pk)
+    entry = _managed_entry_or_404(_require_parent(request), pk)
     list_mode = _list_mode_for(entry, timezone.localdate())
     return render(request, 'entries/manage_detail.html', _detail_context(entry, list_mode))
 
@@ -989,7 +992,7 @@ def create(request):
         data = form.cleaned_data
         try:
             entry, _ = create_family_entry(
-                request.user,
+                membership,
                 entry_type=data['entry_type'],
                 content=data['content'],
                 date=data['date'],
@@ -1017,7 +1020,7 @@ def create(request):
 @login_required
 def edit(request, pk):
     membership = _require_parent(request)
-    entry = _managed_entry_or_404(request.user, pk)
+    entry = _managed_entry_or_404(membership, pk)
     if request.method == 'GET':
         form = EntryEditForm(membership, entry=entry)
         return render(request, 'entries/manage_form.html', _form_context(form, entry=entry))
@@ -1027,7 +1030,7 @@ def edit(request, pk):
         data = form.cleaned_data
         try:
             update_family_entry(
-                request.user,
+                membership,
                 entry.pk,
                 entry_type=data['entry_type'],
                 content=data['content'],
@@ -1052,7 +1055,7 @@ def edit(request, pk):
 @login_required
 def delete(request, pk):
     try:
-        delete_family_entry(request.user, pk)
+        delete_family_entry(_require_parent(request), pk)
     except Entry.DoesNotExist:
         raise Http404 from None
     messages.success(request, ENTRY_DELETED_MESSAGE)
@@ -1254,7 +1257,7 @@ def _child_list_context(mode, sections, today):
 @login_required
 def child_list(request):
     """The signed-in child's own entries, upcoming (default) or past."""
-    entries = child_entries(request.user)
+    entries = child_entries(resolve_family_context(request))
     mode = normalize_list_mode(request.GET.get('view'))
     today = timezone.localdate()
     sections = partition_entries(entries, mode, today)
@@ -1267,7 +1270,8 @@ def child_list(request):
 @login_required
 def child_detail(request, pk):
     """One entry assigned to the signed-in child; any other ID is a plain 404."""
-    entry = get_object_or_404(with_effective_date(child_entries(request.user)), pk=pk)
+    entries = child_entries(resolve_family_context(request))
+    entry = get_object_or_404(with_effective_date(entries), pk=pk)
     return render(
         request,
         'entries/child_detail.html',
@@ -1300,7 +1304,7 @@ def child_states(request):
         raise Http404
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
-    require_active_membership(request.user)
+    require_family_context(request)
 
     day = datetime.timedelta(days=1)
     test = _child_states_entry(

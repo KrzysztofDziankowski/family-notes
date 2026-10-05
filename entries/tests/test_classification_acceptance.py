@@ -161,7 +161,7 @@ class AdapterPathMixin(FamilyFixtureMixin):
             sleep=self.clock.sleep,
         )
         return classify_entries_for_parent(
-            self.parent.user,
+            self.parent,
             text,
             reference_date=reference_date,
             locale='pl-PL',
@@ -738,7 +738,7 @@ class FreeTextCorrectionTests(AdapterPathMixin, TestCase):
             sleep=self.clock.sleep,
         )
         return correct_proposal_for_parent(
-            self.parent.user,
+            self.parent,
             current,
             correction,
             reference_date=PRD_REFERENCE_DATE,
@@ -981,7 +981,7 @@ class WallClockDeadlineTests(FamilyFixtureMixin, TestCase):
                 wall_started = time.monotonic()
 
                 outcome = classify_for_parent(
-                    self.parent.user,
+                    self.parent,
                     PRD_INSTRUCTION,
                     reference_date=PRD_REFERENCE_DATE,
                     backend=backend,
@@ -1008,7 +1008,7 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
     def classify_live(self, text):
         started = time.monotonic()
         outcome = classify_for_parent(
-            self.parent.user, text, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
+            self.parent, text, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
         )
         elapsed = time.monotonic() - started
         self.assertNotEqual(
@@ -1024,7 +1024,7 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
             with self.subTest(text=text):
                 started = time.monotonic()
                 batch = classify_entries_for_parent(
-                    self.parent.user, text, reference_date=MULTI_REFERENCE_DATE, locale='pl-PL'
+                    self.parent, text, reference_date=MULTI_REFERENCE_DATE, locale='pl-PL'
                 )
                 self.assertLess(time.monotonic() - started, PRD_BUDGET_SECONDS)
 
@@ -1038,7 +1038,7 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
 
     def test_single_entry_instruction_stays_single(self):
         batch = classify_entries_for_parent(
-            self.parent.user, PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
+            self.parent, PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
         )
 
         self.assertTrue(batch.is_single)
@@ -1065,7 +1065,7 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
     def correct_live(self, correction, current=MEETING, current_member=None):
         started = time.monotonic()
         result = correct_proposal_for_parent(
-            self.parent.user,
+            self.parent,
             current,
             correction,
             reference_date=PRD_REFERENCE_DATE,

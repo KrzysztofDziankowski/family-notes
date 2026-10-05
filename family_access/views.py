@@ -9,7 +9,8 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from entries.forms import describe_fields
 
-from .access import get_active_membership, is_parent
+from .access import is_parent
+from .context import resolve_family_context
 from .forms import MemberRenameForm, MemberRoleForm
 from .membership import (
     ACTIVE_ELSEWHERE_ERROR,
@@ -46,7 +47,7 @@ def account_status(request):
     return render(
         request,
         'family_access/account_status.html',
-        {'membership': get_active_membership(request.user)},
+        {'membership': resolve_family_context(request)},
     )
 
 
@@ -54,7 +55,7 @@ def account_status(request):
 
 
 def _require_parent(request):
-    actor = get_active_membership(request.user)
+    actor = resolve_family_context(request)
     if not is_parent(actor):
         raise PermissionDenied('An active parent membership is required.')
     return actor

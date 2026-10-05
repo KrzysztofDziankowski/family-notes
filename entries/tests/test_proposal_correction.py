@@ -9,8 +9,6 @@ import datetime
 import logging
 
 from django.apps import apps
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.test import TestCase
@@ -82,9 +80,9 @@ def correction_output(changed, **overrides):
 
 
 class CorrectionTestMixin(FamilyFixtureMixin):
-    def correct(self, backend, current=None, correction=CORRECTION, user=None, member='default'):
+    def correct(self, backend, current=None, correction=CORRECTION, membership='parent', member='default'):
         return correct_proposal_for_parent(
-            user if user is not None else self.parent.user,
+            self.parent if membership == 'parent' else membership,
             current if current is not None else school_test(),
             correction,
             reference_date=REFERENCE_DATE,
@@ -406,26 +404,24 @@ class RequestAndAuthorizationTests(CorrectionTestMixin, TestCase):
         self.assertEqual(request.locale, 'pl-PL')
 
     def test_unauthorized_users_are_denied_without_backend_call(self):
-        outsider = get_user_model().objects.create_user(username='outsider')
         cases = {
-            'anonymous': AnonymousUser(),
-            'outsider without membership': outsider,
-            'child': self.child.user,
-            'inactive member': self.inactive_child.user,
+            'no family context': None,
+            'child': self.child,
+            'inactive member': self.inactive_child,
         }
-        for name, user in cases.items():
+        for name, membership in cases.items():
             with self.subTest(name):
                 backend = RecordingBackend(correction_output({'date'}, date=FRIDAY))
 
                 with self.assertRaises(PermissionDenied):
-                    self.correct(backend, user=user)
+                    self.correct(backend, membership=membership)
 
                 self.assertEqual(backend.requests, [])
 
     def test_other_family_parent_never_sees_or_keeps_our_member(self):
         backend = RecordingBackend(correction_output({'date'}, date=FRIDAY))
 
-        correction = self.correct(backend, user=self.other_family_parent.user)
+        correction = self.correct(backend, membership=self.other_family_parent)
 
         (request,) = backend.requests
         self.assertEqual(request.allowed_member_names, ('Tomek', 'Kuba'))

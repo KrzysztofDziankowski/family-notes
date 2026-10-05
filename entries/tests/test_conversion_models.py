@@ -217,7 +217,7 @@ class ConversionOutputTests(FamilyFixtureMixin, TestCase):
         entry = self.make_entry()
         output = self.link(0, entry)
 
-        delete_family_entry(self.parent.user, entry.pk)
+        delete_family_entry(self.parent, entry.pk)
 
         output.refresh_from_db()
         self.assertIsNone(output.entry)

@@ -347,11 +347,11 @@ Context resolution adds one indexed membership query per request, which is negli
 
 #### Automated
 
-- [ ] 1.1 Context unit tests cover one membership (auto-select), no membership, an inactive membership, an inactive family, an inactive `User`, a session id pointing to a foreign or inactive family (discarded), and an anonymous user.
-- [ ] 1.2 No user-based family lookup remains: `grep -rnE "get_active_membership|require_active_membership|family_memberships|FamilyMember\.objects\.filter\(user" --include=*.py entries family_access family_notes | grep -vE "/tests/|/migrations/|family_access/(context|models)\.py"` returns nothing.
-- [ ] 1.3 Existing suites pass unchanged in behavior, with the `test_access.py` helper tests rewritten as context tests: `uv run python manage.py test entries family_access family_notes`.
-- [ ] 1.4 Django checks pass: `uv run python manage.py check`.
-- [ ] 1.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 1.1 Context unit tests cover one membership (auto-select), no membership, an inactive membership, an inactive family, an inactive `User`, a session id pointing to a foreign or inactive family (discarded), and an anonymous user.
+- [x] 1.2 No user-based family lookup remains: `grep -rnE "get_active_membership|require_active_membership|family_memberships|FamilyMember\.objects\.filter\(user" --include=*.py entries family_access family_notes | grep -vE "/tests/|/migrations/|family_access/(context|models)\.py"` returns nothing.
+- [x] 1.3 Existing suites pass unchanged in behavior, with the `test_access.py` helper tests rewritten as context tests: `uv run python manage.py test entries family_access family_notes`.
+- [x] 1.4 Django checks pass: `uv run python manage.py check`.
+- [x] 1.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
 
 #### Manual
 

@@ -9,7 +9,6 @@ from unittest import mock
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.test import TestCase, override_settings
@@ -106,9 +105,9 @@ class FamilyFixtureMixin:
             is_active=is_active,
         )
 
-    def classify(self, user, backend, text=SUBMITTED_TEXT):
+    def classify(self, membership, backend, text=SUBMITTED_TEXT):
         return classify_for_parent(
-            user, text, reference_date=REFERENCE_DATE, locale='pl-PL', backend=backend
+            membership, text, reference_date=REFERENCE_DATE, locale='pl-PL', backend=backend
         )
 
 
@@ -133,7 +132,7 @@ class TwoParentResolutionTests(TwoParentFixtureMixin, TestCase):
     def test_both_parents_are_sent_as_allowed_names(self):
         backend = RecordingBackend()
 
-        self.classify(self.parent.user, backend)
+        self.classify(self.parent, backend)
 
         self.assertEqual(
             backend.requests[0].allowed_member_names,
@@ -152,7 +151,7 @@ class TwoParentResolutionTests(TwoParentFixtureMixin, TestCase):
                     )
                 )
 
-                outcome = self.classify(self.parent.user, backend, text='Paczka')
+                outcome = self.classify(self.parent, backend, text='Paczka')
 
                 self.assertIsInstance(outcome.result, ClassificationProposal)
                 self.assertEqual(outcome.member, member)
@@ -169,7 +168,7 @@ class TwoParentResolutionTests(TwoParentFixtureMixin, TestCase):
                     )
                 )
 
-                outcome = self.classify(self.parent.user, backend, text='Paczka')
+                outcome = self.classify(self.parent, backend, text='Paczka')
 
                 self.assertIsNone(outcome.member)
                 self.assertEqual(
@@ -184,7 +183,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
     def test_active_parent_invokes_backend_once(self):
         backend = RecordingBackend()
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertEqual(len(backend.requests), 1)
         self.assertIsInstance(outcome, ParentClassification)
@@ -192,23 +191,21 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(outcome.member, self.child)
 
     def test_unauthorized_users_are_denied_without_backend_call(self):
-        unconfigured = get_user_model().objects.create_user(username='unconfigured')
         cases = {
-            'anonymous': lambda: AnonymousUser(),
-            'unconfigured user': lambda: unconfigured,
-            'assigned child': lambda: self.child.user,
-            'other child': lambda: self.other_child.user,
-            'inactive membership': lambda: self.inactive_child.user,
+            'no family context': lambda: None,
+            'assigned child': lambda: self.child,
+            'other child': lambda: self.other_child,
+            'inactive membership': lambda: self.inactive_child,
             'inactive parent membership': self._deactivate_parent,
             'parent of inactive family': self._deactivate_family,
         }
-        for name, get_user in cases.items():
+        for name, get_membership in cases.items():
             with self.subTest(name):
-                user = get_user()
+                membership = get_membership()
                 backend = RecordingBackend()
 
                 with self.assertRaises(PermissionDenied):
-                    self.classify(user, backend)
+                    self.classify(membership, backend)
 
                 self.assertEqual(backend.requests, [])
 
@@ -218,7 +215,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         ) as build:
             with self.assertRaises(PermissionDenied):
                 classify_for_parent(
-                    self.child.user, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
+                    self.child, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
                 )
 
         build.assert_not_called()
@@ -226,7 +223,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
     @override_settings(CLASSIFICATION_ENABLED=False)
     def test_default_backend_is_built_after_authorization_and_fails_closed(self):
         outcome = classify_for_parent(
-            self.parent.user, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
+            self.parent, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
         )
 
         self.assertEqual(
@@ -247,7 +244,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
                     return_value=built,
                 ):
                     classify_for_parent(
-                        self.parent.user, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
+                        self.parent, SUBMITTED_TEXT, reference_date=REFERENCE_DATE
                     )
 
                 built.close.assert_called_once_with()
@@ -257,7 +254,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         backend.classify.return_value = school_test_output()
 
         classify_for_parent(
-            self.parent.user, SUBMITTED_TEXT, reference_date=REFERENCE_DATE, backend=backend
+            self.parent, SUBMITTED_TEXT, reference_date=REFERENCE_DATE, backend=backend
         )
 
         backend.close.assert_not_called()
@@ -266,7 +263,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         backend = RecordingBackend()
 
         outcome = classify_for_parent(
-            self.parent.user,
+            self.parent,
             'x' * (MAX_SUBMITTED_TEXT_LENGTH + 1),
             reference_date=REFERENCE_DATE,
             backend=backend,
@@ -282,7 +279,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         backend = RecordingBackend()
 
         classify_for_parent(
-            self.parent.user,
+            self.parent,
             'x' * MAX_SUBMITTED_TEXT_LENGTH,
             reference_date=REFERENCE_DATE,
             backend=backend,
@@ -294,7 +291,7 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         backend = RecordingBackend()
 
         classify_for_parent(
-            self.parent.user,
+            self.parent,
             SUBMITTED_TEXT,
             reference_date=datetime.datetime(2026, 9, 17, 21, 30),
             backend=backend,
@@ -306,12 +303,12 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
     def _deactivate_parent(self):
         self.parent.is_active = False
         self.parent.save(update_fields=('is_active',))
-        return self.parent.user
+        return self.parent
 
     def _deactivate_family(self):
         self.family.is_active = False
         self.family.save(update_fields=('is_active',))
-        return self.parent.user
+        return self.parent
 
 
 class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
@@ -320,7 +317,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
     def test_outbound_request_contains_only_active_same_family_names(self):
         backend = RecordingBackend()
 
-        self.classify(self.parent.user, backend)
+        self.classify(self.parent, backend)
 
         request = backend.requests[0]
         self.assertEqual(request.allowed_member_names, ('Ewa', 'Michał', 'Ania'))
@@ -334,7 +331,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
     def test_outbound_request_carries_no_database_ids(self):
         backend = RecordingBackend()
 
-        self.classify(self.parent.user, backend)
+        self.classify(self.parent, backend)
 
         request = backend.requests[0]
         ids = {
@@ -366,7 +363,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
             self.assertNotIn(name, ids)
 
     def test_unique_name_resolves_to_that_membership(self):
-        outcome = self.classify(self.parent.user, RecordingBackend())
+        outcome = self.classify(self.parent, RecordingBackend())
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertEqual(outcome.result.member_name, 'Michał')
@@ -377,13 +374,13 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
         self.child.save(update_fields=('display_name',))
         backend = RecordingBackend(school_test_output(member_name=' Michał '))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertEqual(outcome.member, self.child)
 
     def test_case_mismatch_does_not_resolve(self):
         outcome = self.classify(
-            self.parent.user, RecordingBackend(school_test_output(member_name='michał'))
+            self.parent, RecordingBackend(school_test_output(member_name='michał'))
         )
 
         self.assertEqual(
@@ -396,7 +393,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
         self._member('second-michal', FamilyMember.Role.CHILD, 'Michał ')
         backend = RecordingBackend()
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationFollowUp)
         self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)
@@ -413,7 +410,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
         for name, returned in cases.items():
             with self.subTest(name):
                 outcome = self.classify(
-                    self.parent.user,
+                    self.parent,
                     RecordingBackend(school_test_output(member_name=returned)),
                 )
 
@@ -429,7 +426,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
             'foreign-michal', FamilyMember.Role.CHILD, 'Michał', family=self.other_family
         )
 
-        outcome = self.classify(self.parent.user, RecordingBackend())
+        outcome = self.classify(self.parent, RecordingBackend())
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertEqual(outcome.member, self.child)
@@ -444,7 +441,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
             )
         )
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertIsNone(outcome.member)
@@ -459,7 +456,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
             with self.subTest(kind=kind.value):
                 backend = RecordingBackend(school_test_output(school_item=kind, school_subject=None))
 
-                outcome = self.classify(self.parent.user, backend)
+                outcome = self.classify(self.parent, backend)
 
                 self.assertIsInstance(outcome.result, ClassificationFollowUp)
                 self.assertEqual(outcome.result.missing_fields, (MissingField.SCHOOL_SUBJECT,))
@@ -468,7 +465,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
     def test_returned_subject_is_trimmed_onto_the_proposal(self):
         backend = RecordingBackend(school_test_output(school_subject='  biologia '))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertEqual(outcome.result.school_subject, 'biologia')
@@ -476,7 +473,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
     def test_backend_error_becomes_unavailable_result(self):
         backend = RecordingBackend(error=ClassificationBackendError(UnavailableReason.TIMEOUT))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertEqual(
             outcome.result, ClassificationUnavailable(reason=UnavailableReason.TIMEOUT)
@@ -484,7 +481,7 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
         self.assertIsNone(outcome.member)
 
     def test_repr_does_not_expose_member_or_content(self):
-        outcome = self.classify(self.parent.user, RecordingBackend())
+        outcome = self.classify(self.parent, RecordingBackend())
 
         text = repr(outcome)
         for sensitive in ('Michał', 'Sprawdzian', SUBMITTED_TEXT):
@@ -513,7 +510,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         hanna = self.add_hanna()
         backend = RecordingBackend(school_test_output(member_name=None, member_mention='Hania'))
 
-        outcome = self.classify(self.parent.user, backend, text='Hania ma sprawdzian')
+        outcome = self.classify(self.parent, backend, text='Hania ma sprawdzian')
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertEqual(outcome.result.member_name, 'Hanna')
@@ -524,7 +521,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         hanna = self.add_hanna()
         backend = RecordingBackend(school_test_output(member_name='Michał', member_mention='Hania'))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertEqual(outcome.member, hanna)
 
@@ -533,7 +530,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         self.add_anna()
         backend = RecordingBackend(school_test_output(member_name='Hanna', member_mention='Hania'))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationFollowUp)
         self.assertEqual(
@@ -552,7 +549,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         self.other_child.save(update_fields=('display_name',))
         backend = RecordingBackend(school_test_output(member_name='Hanna', member_mention='Hania'))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationFollowUp)
         self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)
@@ -571,7 +568,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
             )
         )
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationFollowUp)
         self.assertEqual(outcome.result.missing_fields, (MissingField.AMBIGUOUS_MEMBER,))
@@ -583,7 +580,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         self._member('foreign-anna', FamilyMember.Role.CHILD, 'Anna', family=self.other_family)
         backend = RecordingBackend(school_test_output(member_name=None, member_mention='Hania'))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertEqual(outcome.member, hanna)
@@ -602,7 +599,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
                     school_test_output(member_name=returned, member_mention=mention)
                 )
 
-                outcome = self.classify(self.parent.user, backend)
+                outcome = self.classify(self.parent, backend)
 
                 self.assertEqual(
                     outcome.result,
@@ -613,7 +610,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
     def test_unmatched_mention_leaves_the_model_name_to_the_allow_list(self):
         backend = RecordingBackend(school_test_output(member_name='Michał', member_mention='Bożydar'))
 
-        outcome = self.classify(self.parent.user, backend)
+        outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertEqual(outcome.member, self.child)
@@ -622,7 +619,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         self.add_hanna()
         backend = RecordingBackend(school_test_output(member_name=None, member_mention='Hania'))
 
-        self.classify(self.parent.user, backend)
+        self.classify(self.parent, backend)
 
         (request,) = backend.requests
         self.assertEqual(request.allowed_member_names, ('Ewa', 'Michał', 'Ola', 'Hanna'))
@@ -635,8 +632,8 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         ambiguous = school_test_output(member_name=None, member_mention='Hania')
 
         outcomes = [
-            self.classify(self.parent.user, RecordingBackend(output)),
-            self.classify(self.parent.user, RecordingBackend(ambiguous)),
+            self.classify(self.parent, RecordingBackend(output)),
+            self.classify(self.parent, RecordingBackend(ambiguous)),
         ]
 
         text = repr(output) + repr(ambiguous) + repr(outcomes)
@@ -670,7 +667,7 @@ class NoPersistenceTests(FamilyFixtureMixin, TestCase):
                 counts_before = self._row_counts()
 
                 with CaptureQueriesContext(connection) as queries:
-                    outcome = self.classify(self.parent.user, backend)
+                    outcome = self.classify(self.parent, backend)
 
                 self.assertIsInstance(outcome.result, expected_type)
                 writes = [
@@ -686,7 +683,7 @@ class NoPersistenceTests(FamilyFixtureMixin, TestCase):
 
         with CaptureQueriesContext(connection) as queries:
             with self.assertRaises(PermissionDenied):
-                self.classify(self.child.user, RecordingBackend())
+                self.classify(self.child, RecordingBackend())
 
         self.assertFalse(
             any(
@@ -736,9 +733,9 @@ class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
             with self.subTest(member=member.display_name):
                 single, batch = RecordingBackend(), RecordingBackend()
 
-                self.classify(member.user, single, text='dla mnie: kupić mleko')
+                self.classify(member, single, text='dla mnie: kupić mleko')
                 classify_entries_for_parent(
-                    member.user, 'dla mnie: kupić mleko',
+                    member, 'dla mnie: kupić mleko',
                     reference_date=REFERENCE_DATE, backend=batch,
                 )
 
@@ -751,14 +748,14 @@ class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
             with self.subTest(member=member.display_name):
                 backend = RecordingBackend(self.note_output(member.display_name))
 
-                outcome = self.classify(member.user, backend, text='dla mnie: kupić mleko')
+                outcome = self.classify(member, backend, text='dla mnie: kupić mleko')
 
                 self.assertEqual(outcome.member, member)
 
     def test_self_reference_mention_matches_no_one_and_keeps_the_requester(self):
         backend = RecordingBackend(self.note_output('Ewa', member_mention='ja'))
 
-        outcome = self.classify(self.parent.user, backend, text='ja muszę kupić mleko')
+        outcome = self.classify(self.parent, backend, text='ja muszę kupić mleko')
 
         self.assertEqual(outcome.member, self.parent)
 
@@ -777,7 +774,7 @@ class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
         )
 
         correction = correct_proposal_for_parent(
-            self.parent.user,
+            self.parent,
             ProposalValues(
                 entry_type=EntryType.CALENDAR_EVENT,
                 content='Sprawdzian z biologii',
@@ -801,7 +798,7 @@ class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
             with self.subTest(name=name):
                 backend = RecordingBackend(self.note_output(name))
 
-                outcome = self.classify(self.parent.user, backend, text='dla mnie: kupić mleko')
+                outcome = self.classify(self.parent, backend, text='dla mnie: kupić mleko')
 
                 self.assertIsNone(outcome.member)
                 self.assertEqual(
@@ -813,7 +810,7 @@ class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
         self._member('second-ewa', FamilyMember.Role.CHILD, 'Ewa')
         backend = RecordingBackend(self.note_output('Ewa'))
 
-        outcome = self.classify(self.parent.user, backend, text='dla mnie: kupić mleko')
+        outcome = self.classify(self.parent, backend, text='dla mnie: kupić mleko')
 
         self.assertIsNone(outcome.member)
         self.assertIsInstance(outcome.result, ClassificationFollowUp)

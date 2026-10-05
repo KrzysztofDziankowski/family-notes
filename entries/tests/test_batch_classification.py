@@ -6,7 +6,6 @@ A recording fake multi-entry backend captures every request; a fake without
 
 import datetime
 
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.test import TestCase
@@ -85,9 +84,9 @@ class RecordingMultiBackend:
 
 
 class BatchFixtureMixin(FamilyFixtureMixin):
-    def classify_batch(self, user, backend, text=MEETINGS_TEXT):
+    def classify_batch(self, membership, backend, text=MEETINGS_TEXT):
         return classify_entries_for_parent(
-            user, text, reference_date=REFERENCE_DATE, locale='pl-PL', backend=backend
+            membership, text, reference_date=REFERENCE_DATE, locale='pl-PL', backend=backend
         )
 
 
@@ -99,7 +98,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
     def test_three_outputs_give_three_proposals_with_their_dates_and_shared_time(self):
         backend = RecordingMultiBackend([meeting(date) for date in MEETING_DATES])
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertIsInstance(batch, ParentBatchClassification)
         self.assertFalse(batch.is_single)
@@ -127,9 +126,9 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
         }
         for name, output in cases.items():
             with self.subTest(name):
-                single = self.classify(self.parent.user, RecordingBackend(output))
+                single = self.classify(self.parent, RecordingBackend(output))
                 batch = self.classify_batch(
-                    self.parent.user, RecordingBackend(output), text='Michał ma sprawdzian z biologii w poniedziałek'
+                    self.parent, RecordingBackend(output), text='Michał ma sprawdzian z biologii w poniedziałek'
                 )
 
                 self.assertTrue(batch.is_single)
@@ -138,15 +137,15 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
     def test_one_output_from_a_multi_backend_equals_the_single_path(self):
         output = school_test_output()
 
-        batch = self.classify_batch(self.parent.user, RecordingMultiBackend([output]))
-        single = self.classify(self.parent.user, RecordingBackend(output), text=MEETINGS_TEXT)
+        batch = self.classify_batch(self.parent, RecordingMultiBackend([output]))
+        single = self.classify(self.parent, RecordingBackend(output), text=MEETINGS_TEXT)
 
         self.assertEqual(batch.single, single)
 
     def test_missing_date_gives_a_follow_up_item_inside_the_batch(self):
         backend = RecordingMultiBackend([meeting(MEETING_DATES[0]), meeting(None)])
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertIsInstance(batch.items[0].result, ClassificationProposal)
         follow_up = batch.items[1].result
@@ -158,7 +157,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
             [meeting(MEETING_DATES[0]), meeting(MEETING_DATES[1], member_name='Nieznany')]
         )
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertTrue(batch.is_single)
         self.assertEqual(
@@ -175,7 +174,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
         for name, bad in cases.items():
             with self.subTest(name):
                 batch = self.classify_batch(
-                    self.parent.user, RecordingMultiBackend([meeting(MEETING_DATES[0]), bad])
+                    self.parent, RecordingMultiBackend([meeting(MEETING_DATES[0]), bad])
                 )
 
                 self.assertTrue(batch.is_single)
@@ -191,7 +190,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
             ]
         )
 
-        batch = self.classify_batch(self.parent.user, backend, text='Dentysta z Hanką dziś i jutro')
+        batch = self.classify_batch(self.parent, backend, text='Dentysta z Hanką dziś i jutro')
 
         self.assertEqual(len(batch.items), 2)
         for item in batch.items:
@@ -207,7 +206,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
             ]
         )
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         follow_up = batch.items[1].result
         self.assertIsInstance(follow_up, ClassificationFollowUp)
@@ -218,11 +217,11 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
     def test_more_than_the_cap_gives_too_many_entries(self):
         dates = [REFERENCE_DATE + datetime.timedelta(days=day) for day in range(11)]
         at_cap = self.classify_batch(
-            self.parent.user,
+            self.parent,
             RecordingMultiBackend([meeting(date) for date in dates[:MAX_PROPOSALS_PER_INSTRUCTION]]),
         )
         over_cap = self.classify_batch(
-            self.parent.user, RecordingMultiBackend([meeting(date) for date in dates])
+            self.parent, RecordingMultiBackend([meeting(date) for date in dates])
         )
 
         self.assertEqual(len(at_cap.items), MAX_PROPOSALS_PER_INSTRUCTION)
@@ -232,7 +231,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
         )
 
     def test_empty_output_list_gives_the_general_note(self):
-        batch = self.classify_batch(self.parent.user, RecordingMultiBackend([]))
+        batch = self.classify_batch(self.parent, RecordingMultiBackend([]))
 
         self.assertEqual(
             batch.single.result,
@@ -244,7 +243,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
             error=ClassificationBackendError(UnavailableReason.TIMEOUT)
         )
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertEqual(
             batch.single.result, ClassificationUnavailable(reason=UnavailableReason.TIMEOUT)
@@ -254,17 +253,17 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
 class BatchAuthorizationAndPrivacyTests(BatchFixtureMixin, TestCase):
     def test_non_parents_are_denied_without_backend_call(self):
         cases = {
-            'anonymous': AnonymousUser(),
-            'child': self.child.user,
-            'other family child': self.other_family_child.user,
-            'inactive member': self.inactive_child.user,
+            'no family context': None,
+            'child': self.child,
+            'other family child': self.other_family_child,
+            'inactive member': self.inactive_child,
         }
-        for name, user in cases.items():
+        for name, membership in cases.items():
             with self.subTest(name):
                 backend = RecordingMultiBackend([meeting(MEETING_DATES[0])])
 
                 with self.assertRaises(PermissionDenied):
-                    self.classify_batch(user, backend)
+                    self.classify_batch(membership, backend)
 
                 self.assertEqual(backend.requests, [])
 
@@ -273,7 +272,7 @@ class BatchAuthorizationAndPrivacyTests(BatchFixtureMixin, TestCase):
             [meeting(date, member_name='Michał') for date in MEETING_DATES[:2]]
         )
 
-        batch = self.classify_batch(self.other_family_parent.user, backend)
+        batch = self.classify_batch(self.other_family_parent, backend)
 
         # Michał is not in the other family: the whole batch is a note.
         self.assertEqual(backend.requests[0].allowed_member_names, ('Tomek', 'Kuba'))
@@ -283,7 +282,7 @@ class BatchAuthorizationAndPrivacyTests(BatchFixtureMixin, TestCase):
         backend = RecordingMultiBackend([meeting(MEETING_DATES[0])])
 
         batch = self.classify_batch(
-            self.parent.user, backend, text='x' * (MAX_SUBMITTED_TEXT_LENGTH + 1)
+            self.parent, backend, text='x' * (MAX_SUBMITTED_TEXT_LENGTH + 1)
         )
 
         self.assertEqual(backend.requests, [])
@@ -295,7 +294,7 @@ class BatchAuthorizationAndPrivacyTests(BatchFixtureMixin, TestCase):
         backend = RecordingMultiBackend([meeting(date) for date in MEETING_DATES])
 
         with CaptureQueriesContext(connection) as queries:
-            self.classify_batch(self.parent.user, backend)
+            self.classify_batch(self.parent, backend)
 
         writes = [
             query['sql'] for query in queries.captured_queries
@@ -306,7 +305,7 @@ class BatchAuthorizationAndPrivacyTests(BatchFixtureMixin, TestCase):
     def test_text_stays_out_of_the_result_repr(self):
         backend = RecordingMultiBackend([meeting(date) for date in MEETING_DATES])
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertNotIn('wychowawczynią', repr(batch))
 
@@ -323,7 +322,7 @@ class TwoParentBatchTests(TwoParentFixtureMixin, BatchFixtureMixin, TestCase):
             ]
         )
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertEqual(
             [item.member for item in batch.items], [self.parent, self.second_parent, None]
@@ -335,7 +334,7 @@ class TwoParentBatchTests(TwoParentFixtureMixin, BatchFixtureMixin, TestCase):
             [meeting(MEETING_DATES[0], member_name='Tomek'), meeting(MEETING_DATES[1])]
         )
 
-        batch = self.classify_batch(self.parent.user, backend)
+        batch = self.classify_batch(self.parent, backend)
 
         self.assertTrue(batch.is_single)
         self.assertIsNone(batch.single.member)
@@ -347,7 +346,7 @@ class TwoParentBatchTests(TwoParentFixtureMixin, BatchFixtureMixin, TestCase):
         )
 
         batch = self.classify_batch(
-            self.second_parent.user, backend, text='Spotkanie dla mnie dziś i jutro'
+            self.second_parent, backend, text='Spotkanie dla mnie dziś i jutro'
         )
 
         self.assertEqual(backend.requests[0].requester_name, 'Paweł')

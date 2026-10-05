@@ -59,7 +59,7 @@ from typing import FrozenSet, Optional, Sequence, Tuple
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.debug import sensitive_variables
 
-from family_access.access import get_active_membership, is_parent, scope_queryset_to_family
+from family_access.access import is_parent, scope_queryset_to_family
 from family_access.models import FamilyMember
 
 from ..eduvulcan.children import match_child
@@ -116,23 +116,22 @@ class ParentClassification:
 
 @sensitive_variables('submitted_text')
 def classify_for_parent(
-    user,
+    membership,
     submitted_text: str,
     *,
     reference_date: datetime.date,
     locale: str = DEFAULT_LOCALE,
     backend: Optional[ClassificationBackend] = None,
 ) -> ParentClassification:
-    """Classify ``submitted_text`` on behalf of an authenticated active parent.
+    """Classify ``submitted_text`` for ``membership``, the request's family context.
 
-    Raises ``PermissionDenied`` for anonymous users, users without an active
-    membership in an active family, and non-parent members; the backend is
+    Raises ``PermissionDenied`` when there is no context membership, when it
+    or its family is inactive, and for non-parent members; the backend is
     never built or called in those cases. When ``backend`` is omitted the
     configured OpenAI backend is built after authorization, and a disabled
     configuration yields an unavailable result. ``reference_date`` may be a
     ``datetime``; only its date part is used.
     """
-    membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
@@ -190,7 +189,7 @@ _NO_ENTRY_TYPE = BackendOutput(entry_type=None, content='', grounded=False)
 
 @sensitive_variables('submitted_text')
 def classify_entries_for_parent(
-    user,
+    membership,
     submitted_text: str,
     *,
     reference_date: datetime.date,
@@ -208,7 +207,6 @@ def classify_entries_for_parent(
     holding the full text, so no proposal built from rejected output reaches
     the parent. No rows are written.
     """
-    membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
@@ -299,7 +297,7 @@ def _not_applied(
 
 @sensitive_variables('correction', 'current')
 def correct_proposal_for_parent(
-    user,
+    membership,
     current: ProposalValues,
     correction: str,
     *,
@@ -320,7 +318,6 @@ def correct_proposal_for_parent(
     proposal unchanged (``applied=False``). ``current_member`` is trusted only
     when it is an active member of the parent's family. No rows are written.
     """
-    membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     if (
@@ -407,7 +404,7 @@ def _merge_correction(
 
 @sensitive_variables('submitted_text', 'answer')
 def classify_follow_up_answer(
-    user,
+    membership,
     submitted_text: str,
     draft: ClassificationFollowUp,
     answer: str,
@@ -432,7 +429,6 @@ def classify_follow_up_answer(
     resolved member; it is dropped unless it is an active member of the
     parent's family. Raises ``ValueError`` if ``draft`` has no missing fields.
     """
-    membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     if (
