@@ -670,13 +670,24 @@ def _translate_correction(parsed: StructuredCorrection, request: BackendRequest)
     )
 
 
+def _wall_clock(value: Optional[datetime.time]) -> Optional[datetime.time]:
+    """The parent's local clock time, without any offset.
+
+    The strict schema's ``format: time`` makes the model emit RFC 3339 times
+    such as ``18:00:00Z``. The offset carries no meaning (entry times are
+    wall-clock times in the family's zone) and an aware time cannot be
+    stored in a ``TimeField``, so it is dropped.
+    """
+    return value.replace(tzinfo=None) if value is not None else None
+
+
 def _backend_output(parsed, *, content: str, date_accepted: bool, changed_fields=None) -> BackendOutput:
     return BackendOutput(
         entry_type=EntryType(parsed.entry_type) if parsed.entry_type is not None else None,
         content=content,
         grounded=parsed.grounded,
         date=parsed.date if date_accepted else None,
-        time=parsed.time,
+        time=_wall_clock(parsed.time),
         school_item=(
             SchoolItemKind(parsed.school_item) if parsed.school_item is not None else None
         ),

@@ -435,6 +435,15 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         self.assertIs(type(output.entry_type), EntryType)
         self.assertIs(type(output.school_item), SchoolItemKind)
 
+    def test_rfc3339_time_offset_is_dropped_keeping_the_wall_clock(self):
+        # Live models answer ``format: time`` with an offset ("18:00:00Z").
+        for raw in ('18:00:00Z', '18:00:00+02:00'):
+            with self.subTest(raw=raw):
+                body = response_body(json.dumps(structured(time=raw)))
+                output = self.make_backend([ok(body)]).classify(make_request())
+                self.assertEqual(output.time, datetime.time(18, 0))
+                self.assertIsNone(output.time.tzinfo)
+
     def test_null_entry_type_and_optional_fields_are_preserved(self):
         text = json.dumps(
             structured(
