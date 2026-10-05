@@ -310,10 +310,10 @@ None. No schema or data change. Existing entries keep their assignees. The OpenA
 
 #### Automated
 
-- [x] 3.1 Adapter tests prove that `autor_polecenia` is sent only with a requester, that requester-less and follow-up payloads are unchanged, and that the instructions carry the self-reference rule: `uv run python manage.py test entries.tests.test_openai_backend`
-- [x] 3.2 Guard tests prove that self-reference phrases are stripped only when the resolved member is the requester: `uv run python manage.py test entries.tests.test_title_cleanup`
-- [x] 3.3 Service and acceptance tests prove that "dla mnie: kupić mleko" yields the requester and the title "Kupić mleko", that corrections carry the requester while follow-up and EduVulcan requests do not, and that member validation is unchanged: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_classification_acceptance entries.tests.test_follow_up_answer entries.tests.test_family_classification entries.tests.test_batch_classification`
-- [x] 3.4 Full suite and checks pass, with live tests skipped by default: `uv run python manage.py test`, `uv run python manage.py check`
+- [x] 3.1 Adapter tests prove that `autor_polecenia` is sent only with a requester, that requester-less and follow-up payloads are unchanged, and that the instructions carry the self-reference rule: `uv run python manage.py test entries.tests.test_openai_backend` — e3484e4
+- [x] 3.2 Guard tests prove that self-reference phrases are stripped only when the resolved member is the requester: `uv run python manage.py test entries.tests.test_title_cleanup` — e3484e4
+- [x] 3.3 Service and acceptance tests prove that "dla mnie: kupić mleko" yields the requester and the title "Kupić mleko", that corrections carry the requester while follow-up and EduVulcan requests do not, and that member validation is unchanged: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_classification_acceptance entries.tests.test_follow_up_answer entries.tests.test_family_classification entries.tests.test_batch_classification` — e3484e4
+- [x] 3.4 Full suite and checks pass, with live tests skipped by default: `uv run python manage.py test`, `uv run python manage.py check` — e3484e4
 
 #### Manual
 
