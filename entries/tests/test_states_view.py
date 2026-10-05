@@ -18,6 +18,7 @@ STATE_NAMES = (
     'unavailable',
     'question',
     'question_combined',
+    'question_ambiguous_member',
     'question_subject',
     'answer_unavailable',
     'skipped',
@@ -58,6 +59,7 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
             'Kiedy odbędzie się „Sprawdzian z angielskiego” i której osoby dotyczy?',
         )
         self.assertContains(response, 'Z jakiego przedmiotu jest „Sprawdzian”?')
+        self.assertContains(response, 'Której osoby dotyczy „Dentysta”?')
         self.assertContains(response, 'Podaj przedmiot.')
         self.assertContains(response, 'value="historia"')
         self.assertContains(response, '<label for="id_school_item">Element szkolny</label>', html=True)

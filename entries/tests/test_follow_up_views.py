@@ -264,6 +264,72 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertEqual(response.context['review_form'].initial['entry_type'], 'todo')
 
 
+class ShortNameAnswerFlowTests(FollowUpViewMixin, TestCase):
+    """PK-01: a short name that fits two members is asked about, then answered."""
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; keep her out of the way.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+        self.anna = self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+    def ask_ambiguous(self):
+        response, data = self.ask(
+            first=output(date=NEXT_FRIDAY, member_name='Hanna', member_mention='Hania'),
+            text='Hania ma kartkówkę z matematyki w piątek',
+        )
+        self.assertContains(response, f'Której osoby dotyczy „{CONTENT}”?')
+        self.assertEqual(data['assigned_member'], '')
+        self.assertEqual(data['missing'], ['ambiguous_member', 'affected_member'])
+        return data
+
+    def test_unambiguous_short_name_answer_reaches_review_and_saves_that_member(self):
+        data = self.ask_ambiguous()
+
+        response = self.answer(
+            data, output(date=None, member_name=None, member_mention=None), answer='Hanusia'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        form = response.context['review_form']
+        self.assertEqual(form.initial['assigned_member'], self.hanna.pk)
+        self.assertEqual(form.initial['date'], NEXT_FRIDAY)
+
+        self.confirm_from(response)
+
+        entry = Entry.objects.get()
+        self.assertEqual(entry.assigned_member, self.hanna)
+
+    def test_full_name_answer_is_not_asked_again_despite_the_stale_mention(self):
+        data = self.ask_ambiguous()
+
+        response = self.answer(
+            data, output(date=None, member_name='Hanna', member_mention='Hania'), answer='Anna'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertEqual(response.context['review_form'].initial['assigned_member'], self.anna.pk)
+
+        self.confirm_from(response)
+
+        self.assertEqual(Entry.objects.get().assigned_member, self.anna)
+
+    def test_ambiguous_short_name_answer_asks_again(self):
+        data = self.ask_ambiguous()
+
+        response = self.answer(
+            data, output(date=None, member_name='Hanna', member_mention='Hania'), answer='Hania'
+        )
+
+        self.assertEqual(response.context['state'], 'follow_up')
+        form = response.context['review_form']
+        self.assertIsNone(form.initial['assigned_member'])
+        self.assertContains(response, 'Wybierz osobę.')
+        self.assertFalse(Entry.objects.exists())
+
+
 class SkipTests(FollowUpViewMixin, TestCase):
     def test_skip_with_empty_answer_offers_a_note_keeping_known_values(self):
         _, data = self.ask()

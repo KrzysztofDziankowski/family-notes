@@ -19,6 +19,7 @@ from entries.classification.types import (
     UnavailableReason,
 )
 from entries.models import Entry
+from family_access.models import FamilyMember
 
 from .test_classification_acceptance import (
     PRD_CONTENT,
@@ -186,6 +187,75 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
         self.assertContains(saved, 'poniedziałek, 21 września 2026')
         self.assertContains(saved, 'Michał')
         self.assertContains(saved, 'Co trzeba zapisać?')
+
+
+class ShortNameCaptureTests(CaptureViewMixin, TestCase):
+    """PK-01 through the real view, service and adapter, scripted transport."""
+
+    INSTRUCTION = 'Hania ma jutro dentystę'
+    TOMORROW = PRD_REFERENCE_DATE + datetime.timedelta(days=1)
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; keep her out of the way.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+
+    def capture(self, member_name=None):
+        clock = FakeClock()
+        transport = ScriptedTransport(
+            clock,
+            [
+                model_output(
+                    entry_type='calendar_event',
+                    content='Dentysta',
+                    date=self.TOMORROW.isoformat(),
+                    date_source='jutro',
+                    member_name=member_name,
+                    member_mention='Hania',
+                )
+            ],
+        )
+        backend = OpenAIClassificationBackend(
+            client=make_client(transport), model=MODEL, clock=clock, sleep=clock.sleep
+        )
+        with mock.patch(
+            'entries.views.timezone.localdate', return_value=PRD_REFERENCE_DATE
+        ), mock.patch(
+            'entries.classification.openai_backend.build_openai_backend', return_value=backend
+        ):
+            return self.client.post(CAPTURE_URL, {'text': self.INSTRUCTION})
+
+    def test_unique_short_name_preselects_the_member_and_confirm_saves_her(self):
+        review = self.capture()
+
+        self.assertEqual(review.context['state'], 'proposal')
+        form = review.context['review_form']
+        self.assertEqual(form.initial['assigned_member'], self.hanna.pk)
+        self.assertContains(
+            review, f'<option value="{self.hanna.pk}" selected>Hanna</option>', html=True
+        )
+
+        data = {name: '' if value is None else str(value) for name, value in form.initial.items()}
+        self.client.post(CONFIRM_URL, data)
+
+        entry = Entry.objects.get()
+        self.assertEqual(entry.assigned_member, self.hanna)
+        self.assertEqual(entry.date, self.TOMORROW)
+
+    def test_ambiguous_short_name_asks_which_person_with_no_assignee(self):
+        self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+        response = self.capture(member_name='Hanna')
+
+        self.assertEqual(response.context['state'], 'question')
+        self.assertNotIn('review_form', response.context)
+        self.assertContains(response, 'Której osoby dotyczy „Dentysta”?')
+        form = response.context['follow_up_form']
+        self.assertIsNone(form.initial['assigned_member'])
+        self.assertEqual(form.initial['missing'], ['ambiguous_member'])
+        self.assertFalse(Entry.objects.exists())
 
 
 class CorrectionAndValidationTests(CaptureViewMixin, TestCase):

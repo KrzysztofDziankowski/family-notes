@@ -316,6 +316,13 @@ def states(request):
         school_item=SchoolItemKind.TEST,
         school_subject='angielski',
     )
+    # A short name ("Hania") that fits several family members (Hanna, Anna).
+    ambiguous_member_draft = ClassificationFollowUp(
+        missing_fields=(MissingField.AMBIGUOUS_MEMBER,),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Dentysta',
+        date=STATES_DATE + datetime.timedelta(days=1),
+    )
     subject_draft = ClassificationFollowUp(
         missing_fields=(MissingField.SCHOOL_SUBJECT,),
         entry_type=EntryType.CALENDAR_EVENT,
@@ -390,6 +397,13 @@ def states(request):
             'label': 'Pytanie: brakująca data i osoba',
             'follow_up_form': synthetic_question(
                 combined_draft, 'Sprawdzian z angielskiego, trzeba się przygotować'
+            ),
+        },
+        {
+            'name': 'question_ambiguous_member',
+            'label': 'Pytanie: zdrobnienie pasuje do kilku osób',
+            'follow_up_form': synthetic_question(
+                ambiguous_member_draft, 'Hania ma jutro dentystę'
             ),
         },
         {
