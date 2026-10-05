@@ -22,7 +22,12 @@ from entries.forms import EntryReviewForm, ProposalCorrectionForm
 from entries.models import Entry
 
 from .test_capture_views import RecordingHandler
-from .test_classification_service import REFERENCE_DATE, WRITE_PREFIXES, FamilyFixtureMixin
+from .test_classification_service import (
+    REFERENCE_DATE,
+    WRITE_PREFIXES,
+    FamilyFixtureMixin,
+    TwoParentFixtureMixin,
+)
 from .classification_progress_markup import (
     assert_progress_regions,
     classification_submitters,
@@ -519,3 +524,40 @@ class ProgressIndicatorReviewTests(CorrectionViewMixin, TestCase):
                 self.assertIn('data-classification-submit', buttons['Popraw'])
                 self.assertEqual(buttons['Popraw'].get('formaction'), CORRECT_URL)
                 self.assertEqual(classification_submitters(form), ['Popraw'])
+
+
+class TwoParentCorrectionViewTests(TwoParentFixtureMixin, CorrectionViewMixin, TestCase):
+    """S-07: through the real views, a correction keeps a parent and confirm saves them."""
+
+    def test_correction_keeps_a_manually_chosen_parent_and_confirm_saves_them(self):
+        for member in (self.second_parent, self.parent):
+            with self.subTest(member=member.display_name):
+                Entry.objects.all().delete()
+                data = self.review_data()
+                data['assigned_member'] = str(member.pk)
+
+                corrected = self.correct(
+                    {**data, 'correction': CORRECTION},
+                    correction_output({'date'}, date=FRIDAY),
+                )
+
+                self.assertEqual(corrected.context['state'], 'proposal')
+                form = corrected.context['review_form']
+                self.assertEqual(form.initial['assigned_member'], member.pk)
+                self.client.post(CONFIRM_URL, as_post_data(form))
+                entry = Entry.objects.get()
+                self.assertEqual(entry.assigned_member, member)
+                self.assertEqual(entry.date, FRIDAY)
+
+    def test_correction_naming_the_other_parent_preselects_them(self):
+        data = self.review_data()
+
+        corrected = self.correct(
+            {**data, 'correction': 'to dla Pawła'},
+            correction_output({'member_name'}, member_name='Paweł'),
+        )
+
+        form = corrected.context['review_form']
+        self.assertEqual(form.initial['assigned_member'], self.second_parent.pk)
+        self.client.post(CONFIRM_URL, as_post_data(form))
+        self.assertEqual(Entry.objects.get().assigned_member, self.second_parent)

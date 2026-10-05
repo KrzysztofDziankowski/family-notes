@@ -39,7 +39,7 @@ from .classification_progress_markup import (
 )
 from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_capture_views import RecordingHandler
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 from .test_follow_up_views import ScriptedBackend
 
 CAPTURE_URL = reverse('entries:capture')
@@ -696,3 +696,65 @@ class BatchEnterSubmitTests(BatchCorrectionMixin, TestCase):
 
         self.assertEqual(response.context['state'], 'batch')
         self.assertEqual(assert_enter_never_saves(self, response.content.decode()), 3)
+
+
+class TwoParentBatchSaveTests(TwoParentFixtureMixin, BatchViewMixin, TestCase):
+    """S-07: the batch review offers both parents and saves a parent per proposal."""
+
+    def test_every_proposal_offers_both_parents(self):
+        _, form = self.meetings_form()
+
+        for entry_form in form.forms:
+            with self.subTest(prefix=entry_form.prefix):
+                self.assertQuerySetEqual(
+                    entry_form.fields['assigned_member'].queryset,
+                    [self.parent, self.child, self.other_child, self.second_parent],
+                )
+
+    def test_resolved_parents_are_preselected_and_saved_per_proposal(self):
+        batch = ParentBatchClassification(
+            items=(
+                ParentClassification(
+                    result=meeting(WEDNESDAY, member_name='Ewa'), member=self.parent
+                ),
+                ParentClassification(
+                    result=meeting(THURSDAY, member_name='Paweł'), member=self.second_parent
+                ),
+            )
+        )
+        response = self.capture(batch)
+        form = response.context['batch_form']
+        self.assertEqual(
+            [entry_form.initial['assigned_member'] for entry_form in form.forms],
+            [self.parent.pk, self.second_parent.pk],
+        )
+
+        self.client.post(BATCH_URL, posted_from(form))
+
+        self.assertEqual(
+            list(Entry.objects.order_by('date').values_list('assigned_member_id', flat=True)),
+            [self.parent.pk, self.second_parent.pk],
+        )
+
+    def test_manually_chosen_parents_are_saved(self):
+        data = self.batch_data(
+            {'assigned_member': str(self.second_parent.pk)},
+            {'assigned_member': str(self.parent.pk), 'date': THURSDAY.isoformat()},
+        )
+
+        self.client.post(BATCH_URL, data)
+
+        self.assertEqual(
+            list(Entry.objects.order_by('date').values_list('assigned_member_id', flat=True)),
+            [self.second_parent.pk, self.parent.pk],
+        )
+
+    def test_foreign_or_inactive_parent_saves_nothing(self):
+        for member in (self.other_family_parent, self.inactive_parent):
+            with self.subTest(member=member.display_name):
+                data = self.batch_data({}, {'assigned_member': str(member.pk)})
+
+                response = self.client.post(BATCH_URL, data)
+
+                self.assertIn('assigned_member', response.context['batch_form'].forms[1].errors)
+        self.assertFalse(Entry.objects.exists())

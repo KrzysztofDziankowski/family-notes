@@ -38,6 +38,7 @@ from entries.tests.test_classification_service import (
     WRITE_PREFIXES,
     FamilyFixtureMixin,
     RecordingBackend,
+    TwoParentFixtureMixin,
     school_test_output,
 )
 from family_access.models import FamilyMember
@@ -308,3 +309,34 @@ class BatchAuthorizationAndPrivacyTests(BatchFixtureMixin, TestCase):
         batch = self.classify_batch(self.parent.user, backend)
 
         self.assertNotIn('wychowawczynią', repr(batch))
+
+
+class TwoParentBatchTests(TwoParentFixtureMixin, BatchFixtureMixin, TestCase):
+    """S-07: each batch proposal resolves a parent name to that parent."""
+
+    def test_each_proposal_resolves_its_own_parent(self):
+        backend = RecordingMultiBackend(
+            [
+                meeting(MEETING_DATES[0], member_name='Ewa'),
+                meeting(MEETING_DATES[1], member_name='Paweł'),
+                meeting(MEETING_DATES[2]),
+            ]
+        )
+
+        batch = self.classify_batch(self.parent.user, backend)
+
+        self.assertEqual(
+            [item.member for item in batch.items], [self.parent, self.second_parent, None]
+        )
+        self.assertIn('Paweł', backend.requests[0].allowed_member_names)
+
+    def test_foreign_parent_in_a_batch_turns_it_into_the_note(self):
+        backend = RecordingMultiBackend(
+            [meeting(MEETING_DATES[0], member_name='Tomek'), meeting(MEETING_DATES[1])]
+        )
+
+        batch = self.classify_batch(self.parent.user, backend)
+
+        self.assertTrue(batch.is_single)
+        self.assertIsNone(batch.single.member)
+        self.assertEqual(batch.single.result.entry_type, EntryType.NOTE)

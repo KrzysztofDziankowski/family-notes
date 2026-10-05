@@ -9,7 +9,7 @@ from entries.classification.types import EntryType
 from entries.models import Entry
 from entries.services import child_entries
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 
 class ChildEntriesTests(FamilyFixtureMixin, TestCase):
@@ -63,3 +63,21 @@ class ChildEntriesTests(FamilyFixtureMixin, TestCase):
             with self.subTest(name):
                 with self.assertRaises(PermissionDenied):
                     child_entries(get_user())
+
+
+class TwoParentChildEntriesTests(TwoParentFixtureMixin, TestCase):
+    """S-07: the child read service never returns a parent-assigned entry."""
+
+    def test_parent_assigned_entries_are_never_returned_to_a_child(self):
+        own = Entry.objects.create(
+            family=self.family, entry_type=EntryType.NOTE.value, content='own',
+            assigned_member=self.child,
+        )
+        for parent in (self.parent, self.second_parent):
+            Entry.objects.create(
+                family=self.family, entry_type=EntryType.NOTE.value,
+                content=f'for {parent.display_name}', assigned_member=parent,
+            )
+
+        self.assertEqual(list(child_entries(self.child.user)), [own])
+        self.assertEqual(list(child_entries(self.other_child.user)), [])

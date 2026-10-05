@@ -38,6 +38,7 @@ from entries.tests.test_classification_service import (
     WRITE_PREFIXES,
     FamilyFixtureMixin,
     RecordingBackend,
+    TwoParentFixtureMixin,
 )
 from family_access.models import FamilyMember
 
@@ -490,3 +491,57 @@ class RequestAndAuthorizationTests(CorrectionTestMixin, TestCase):
             model._meta.label: model._default_manager.count()
             for model in apps.get_models()
         }
+
+
+class TwoParentCorrectionTests(TwoParentFixtureMixin, CorrectionTestMixin, TestCase):
+    """S-07: a correction keeps or sets a parent assignee like any other member."""
+
+    def parent_note(self, member_name):
+        return school_test(
+            entry_type=EntryType.TODO,
+            content='Odebrać paczkę',
+            date=None,
+            time=None,
+            school_item=None,
+            school_subject=None,
+            member_name=member_name,
+        )
+
+    def test_correction_not_mentioning_the_person_keeps_a_parent(self):
+        for member in (self.second_parent, self.parent):
+            with self.subTest(member=member.display_name):
+                backend = RecordingBackend(
+                    correction_output(
+                        {'date'},
+                        entry_type=EntryType.TODO,
+                        content='Odebrać paczkę',
+                        date=FRIDAY,
+                        time=None,
+                        school_item=None,
+                        school_subject=None,
+                        member_name=None,
+                    )
+                )
+
+                correction = self.correct(
+                    backend, current=self.parent_note(member.display_name), member=member
+                )
+
+                self.assertTrue(correction.applied)
+                self.assertEqual(correction.outcome.member, member)
+                self.assertEqual(correction.outcome.result.date, FRIDAY)
+
+    def test_correction_naming_the_other_parent_reassigns_to_them(self):
+        backend = RecordingBackend(correction_output({'member_name'}, member_name='Paweł'))
+
+        correction = self.correct(backend)
+
+        self.assertTrue(correction.applied)
+        self.assertEqual(correction.outcome.member, self.second_parent)
+
+    def test_correction_naming_a_foreign_or_inactive_parent_is_not_applied(self):
+        for name in ('Tomek', 'Jolanta'):
+            with self.subTest(name=name):
+                backend = RecordingBackend(correction_output({'member_name'}, member_name=name))
+
+                self.assert_not_applied(self.correct(backend))

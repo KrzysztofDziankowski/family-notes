@@ -13,7 +13,7 @@ from entries.classification.types import EntryType, SchoolItemKind
 from entries.models import Entry
 from entries.services import save_confirmed_entry
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 LIST_URL = reverse('entries:child_list')
 PARENT_LIST_URL = reverse('entries:index')
@@ -397,3 +397,43 @@ class AccountEntryPointTests(FamilyFixtureMixin, TestCase):
         self.assertContains(response, 'Dodaj wpis')
         self.assertNotContains(response, 'Moje wpisy')
         self.assertNotContains(response, f'href="{LIST_URL}"')
+
+
+class TwoParentChildIsolationTests(TwoParentFixtureMixin, ChildViewFixtureMixin, TestCase):
+    """S-07: an entry assigned to either parent never reaches any child."""
+
+    def setUp(self):
+        super().setUp()
+        tomorrow = self.today + datetime.timedelta(days=1)
+        self.for_author = self._entry('SENTINEL-PARENT-AUTHOR', self.parent, date=tomorrow)
+        self.for_other_parent = self._entry('SENTINEL-PARENT-OTHER', self.second_parent)
+        self.parent_entries = (self.for_author, self.for_other_parent)
+
+    def test_no_child_lists_a_parent_assigned_entry(self):
+        for child in (self.child, self.other_child):
+            for params in ({}, {'view': 'past'}):
+                with self.subTest(child=child.display_name, params=params):
+                    self.client.force_login(child.user)
+                    response = self.client.get(LIST_URL, params)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertNotContains(response, 'SENTINEL-PARENT')
+
+    def test_parent_assigned_detail_is_the_missing_id_404_for_every_child(self):
+        missing_pk = Entry.objects.order_by('-pk').first().pk + 100
+        for child in (self.child, self.other_child):
+            with self.subTest(child=child.display_name):
+                self.client.force_login(child.user)
+                bodies = set()
+                for pk in (*(entry.pk for entry in self.parent_entries), missing_pk):
+                    response = self.client.get(detail_url(pk))
+                    self.assertEqual(response.status_code, 404)
+                    self.assertNotContains(response, 'SENTINEL-PARENT', status_code=404)
+                    bodies.add(response.content)
+                self.assertEqual(len(bodies), 1)
+
+    def test_anonymous_is_redirected_from_a_parent_assigned_detail(self):
+        for entry in self.parent_entries:
+            with self.subTest(entry=entry.content):
+                response = self.client.get(detail_url(entry.pk))
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(reverse('account_login'), response['Location'])

@@ -109,6 +109,72 @@ class FamilyFixtureMixin:
         )
 
 
+class TwoParentFixtureMixin(FamilyFixtureMixin):
+    """The shared family plus a second active parent and an inactive parent (S-07).
+
+    ``self.parent`` (Ewa) is the author; ``self.second_parent`` (Paweł) is the
+    other parent; ``self.other_family_parent`` (Tomek) is never assignable.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.second_parent = self._member('second-parent', FamilyMember.Role.PARENT, 'Paweł')
+        self.inactive_parent = self._member(
+            'inactive-parent', FamilyMember.Role.PARENT, 'Jolanta', is_active=False
+        )
+
+
+class TwoParentResolutionTests(TwoParentFixtureMixin, TestCase):
+    """S-07: a returned parent name resolves to that parent's membership."""
+
+    def test_both_parents_are_sent_as_allowed_names(self):
+        backend = RecordingBackend()
+
+        self.classify(self.parent.user, backend)
+
+        self.assertEqual(
+            backend.requests[0].allowed_member_names,
+            ('Ewa', 'Michał', 'Ania', 'Paweł'),
+        )
+
+    def test_parent_name_resolves_to_that_parent(self):
+        for member in (self.parent, self.second_parent):
+            with self.subTest(member=member.display_name):
+                backend = RecordingBackend(
+                    BackendOutput(
+                        entry_type=EntryType.NOTE,
+                        content='Odebrać paczkę',
+                        grounded=True,
+                        member_name=member.display_name,
+                    )
+                )
+
+                outcome = self.classify(self.parent.user, backend, text='Paczka')
+
+                self.assertIsInstance(outcome.result, ClassificationProposal)
+                self.assertEqual(outcome.member, member)
+
+    def test_foreign_and_inactive_parent_names_are_unknown(self):
+        for name in ('Tomek', 'Jolanta'):
+            with self.subTest(name=name):
+                backend = RecordingBackend(
+                    BackendOutput(
+                        entry_type=EntryType.NOTE,
+                        content='Odebrać paczkę',
+                        grounded=True,
+                        member_name=name,
+                    )
+                )
+
+                outcome = self.classify(self.parent.user, backend, text='Paczka')
+
+                self.assertIsNone(outcome.member)
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationUnavailable(reason=UnavailableReason.UNKNOWN_MEMBER),
+                )
+
+
 class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
     """3.1: only an active parent reaches the backend."""
 

@@ -285,12 +285,12 @@ None. No schema or data change. Existing entries keep their assignees. The OpenA
 
 #### Automated
 
-- [ ] 1.1 Form and service tests prove that self and other-parent assignment are accepted and that foreign-family and inactive parents are rejected without writes.
-- [ ] 1.2 Classification tests prove that a parent's display name resolves to that parent and pre-fills the review form, and that confirming saves the assignee.
-- [ ] 1.3 Read-path tests prove that the parent index, parent detail, and API show the parent assignee and that child list and detail never expose a parent-assigned entry.
-- [ ] 1.4 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service entries.tests.test_classification_service entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entries_api entries.tests.test_child_views entries.tests.test_child_entries` (plus the S-03/S-04 modules named in item 3 once merged)
-- [ ] 1.5 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.6 Follow-up, correction and batch tests prove that a follow-up answer or skip, an S-03 correction, and an S-04 batch save keep or save a parent assignee: `uv run python manage.py test entries.tests.test_follow_up_views entries.tests.test_proposal_correction entries.tests.test_correction_views entries.tests.test_batch_classification entries.tests.test_batch_capture_views`
+- [x] 1.1 Form and service tests prove that self and other-parent assignment are accepted and that foreign-family and inactive parents are rejected without writes.
+- [x] 1.2 Classification tests prove that a parent's display name resolves to that parent and pre-fills the review form, and that confirming saves the assignee.
+- [x] 1.3 Read-path tests prove that the parent index, parent detail, and API show the parent assignee and that child list and detail never expose a parent-assigned entry.
+- [x] 1.4 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service entries.tests.test_classification_service entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entries_api entries.tests.test_child_views entries.tests.test_child_entries` (plus the S-03/S-04 modules named in item 3 once merged)
+- [x] 1.5 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.6 Follow-up, correction and batch tests prove that a follow-up answer or skip, an S-03 correction, and an S-04 batch save keep or save a parent assignee: `uv run python manage.py test entries.tests.test_follow_up_views entries.tests.test_proposal_correction entries.tests.test_correction_views entries.tests.test_batch_classification entries.tests.test_batch_capture_views`
 
 ### Phase 2: Gallery Coverage and Manual Verification
 

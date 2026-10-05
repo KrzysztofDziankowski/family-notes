@@ -19,7 +19,7 @@ from entries.classification.types import EntryType, SchoolItemKind
 from entries.models import Entry
 from family_access.models import FamilyMember
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 INDEX_URL = reverse('entries:index')
 CREATE_URL = reverse('entries:create')
@@ -605,3 +605,63 @@ class MessagesPartialTests(TestCase):
                 self.assertIn(panel_class, html)
                 self.assertIn(role, html)
                 self.assertIn('Komunikat', html)
+
+
+class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
+    """S-07: parent-assigned entries are created, listed and shown with their parent."""
+
+    def test_index_and_detail_show_the_parent_assignee(self):
+        mine = self.entry('Odebrać paczkę', date=self.days(1), assigned_member=self.parent)
+        theirs = self.entry('Umówić mechanika', date=self.days(2), assigned_member=self.second_parent)
+
+        index = self.client.get(INDEX_URL)
+
+        self.assertEqual(self.rendered_rows(index), [mine.pk, theirs.pk])
+        self.assertContains(index, 'Ewa')
+        self.assertContains(index, 'Paweł')
+        for entry, name in ((mine, 'Ewa'), (theirs, 'Paweł')):
+            with self.subTest(name=name):
+                detail = self.client.get(detail_url(entry.pk))
+                self.assertEqual(detail.status_code, 200)
+                self.assertContains(detail, name)
+                self.assertNotContains(detail, 'Cała rodzina')
+
+    def test_create_and_edit_through_the_views_save_a_parent(self):
+        for member in (self.parent, self.second_parent):
+            with self.subTest(member=member.display_name):
+                Entry.objects.all().delete()
+                self.client.post(
+                    CREATE_URL,
+                    self.form_data(
+                        entry_type=EntryType.NOTE.value,
+                        date='',
+                        time='',
+                        assigned_member=str(member.pk),
+                        submission_key=str(uuid.uuid4()),
+                    ),
+                )
+                entry = Entry.objects.get()
+                self.assertEqual(entry.assigned_member, member)
+
+                other = self.second_parent if member == self.parent else self.parent
+                self.client.post(
+                    edit_url(entry.pk),
+                    self.form_data(
+                        entry_type=EntryType.NOTE.value,
+                        date='',
+                        time='',
+                        assigned_member=str(other.pk),
+                    ),
+                )
+                entry.refresh_from_db()
+                self.assertEqual(entry.assigned_member, other)
+
+    def test_anonymous_cannot_read_a_parent_assigned_entry(self):
+        entry = self.entry('Odebrać paczkę', assigned_member=self.second_parent)
+        self.client.logout()
+
+        for url in (INDEX_URL, detail_url(entry.pk)):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(reverse('account_login'), response['Location'])

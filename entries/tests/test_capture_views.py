@@ -37,7 +37,7 @@ from .test_classification_acceptance import (
     PRD_REFERENCE_DATE,
     model_entry_output,
 )
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 from .test_openai_backend import MODEL, FakeClock, ScriptedTransport, make_client
 
 CAPTURE_URL = reverse('entries:capture')
@@ -733,3 +733,71 @@ class ProgressIndicatorCaptureTests(CaptureViewMixin, TestCase):
                 self.assertNotContains(response, 'data-classification-progress')
                 self.assertNotContains(response, 'data-progress-state')
                 self.assertNotContains(response, PROGRESS_SCRIPT_URL)
+
+
+class TwoParentCaptureTests(TwoParentFixtureMixin, CaptureViewMixin, TestCase):
+    """S-07: capture naming a parent preselects them; confirm saves the parent."""
+
+    def capture(self, member_name, text='Paweł ma odebrać paczkę'):
+        clock = FakeClock()
+        transport = ScriptedTransport(
+            clock,
+            [
+                model_entry_output(
+                    entry_type='note',
+                    content='Odebrać paczkę',
+                    member_name=member_name,
+                )
+            ],
+        )
+        backend = OpenAIClassificationBackend(
+            client=make_client(transport), model=MODEL, clock=clock, sleep=clock.sleep
+        )
+        with mock.patch(
+            'entries.views.timezone.localdate', return_value=PRD_REFERENCE_DATE
+        ), mock.patch(
+            'entries.classification.openai_backend.build_openai_backend', return_value=backend
+        ):
+            return self.client.post(CAPTURE_URL, {'text': text})
+
+    def test_parent_named_by_classifier_is_preselected_and_saved(self):
+        for member in (self.second_parent, self.parent):
+            with self.subTest(member=member.display_name):
+                Entry.objects.all().delete()
+                review = self.capture(member.display_name)
+
+                self.assertEqual(review.context['state'], 'proposal')
+                form = review.context['review_form']
+                self.assertEqual(form.initial['assigned_member'], member.pk)
+                self.assertContains(
+                    review,
+                    f'<option value="{member.pk}" selected>{member.display_name}</option>',
+                    html=True,
+                )
+
+                data = {
+                    name: '' if value is None else str(value)
+                    for name, value in form.initial.items()
+                }
+                self.client.post(CONFIRM_URL, data)
+
+                entry = Entry.objects.get()
+                self.assertEqual(entry.assigned_member, member)
+                self.assertEqual(entry.created_by, self.parent)
+
+    def test_confirm_rejects_foreign_and_inactive_parent(self):
+        for member in (self.other_family_parent, self.inactive_parent):
+            with self.subTest(member=member.display_name):
+                response = self.client.post(
+                    CONFIRM_URL,
+                    self.confirm_data(
+                        entry_type=EntryType.NOTE.value,
+                        date='',
+                        school_item='',
+                        school_subject='',
+                        assigned_member=str(member.pk),
+                    ),
+                )
+                self.assertEqual(response.context['state'], 'invalid')
+                self.assertIn('assigned_member', response.context['review_form'].errors)
+        self.assertFalse(Entry.objects.exists())

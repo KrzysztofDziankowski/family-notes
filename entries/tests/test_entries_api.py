@@ -652,3 +652,29 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
         self.token.refresh_from_db()
         # 405 is answered before authentication, so the token is never touched.
         self.assertIsNone(self.token.last_used_at)
+
+
+class TwoParentApiTests(EntriesApiDataMixin, TestCase):
+    """S-07: the automation API names a parent assignee like any other member."""
+
+    def setUp(self):
+        super().setUp()
+        self.second_parent = self.create_member('second-parent', FamilyMember.Role.PARENT)
+        _, self.secret = AutomationToken.issue(self.parent, 'Telefon')
+        self.mine = self.entry('Odebrać paczkę', assigned_member=self.parent)
+        self.theirs = self.entry('Umówić mechanika', assigned_member=self.second_parent)
+        self.entry(FOREIGN_SENTINEL, family=self.other_family, assigned_member=self.other_parent)
+
+    def test_parent_assignees_are_serialized_by_display_name(self):
+        response = self.client.get(
+            reverse('automation:entries_list'), HTTP_AUTHORIZATION=f'Bearer {self.secret}'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        records = {record['id']: record for record in response.json()['results']}
+        self.assertEqual(set(records), {self.mine.pk, self.theirs.pk})
+        self.assertEqual(records[self.mine.pk]['assigned_member'], {'display_name': 'Parent'})
+        self.assertEqual(
+            records[self.theirs.pk]['assigned_member'], {'display_name': 'Second Parent'}
+        )
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())

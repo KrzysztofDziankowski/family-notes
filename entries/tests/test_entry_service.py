@@ -23,7 +23,7 @@ from entries.services import (
     update_family_entry,
 )
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 SENTINEL_CONTENT = 'SENTINEL-sprawdzian-z-biologii'
 EVENT_DATE = datetime.date(2026, 9, 21)
@@ -866,3 +866,87 @@ class DeleteFamilyEntryTests(ManagementFixtureMixin, TestCase):
                 with self.assertRaises(PermissionDenied):
                     delete_family_entry(get_user(), self.manual.pk)
         self.assertEqual(self.snapshot(), before)
+
+
+class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
+    """S-07: every parent write path persists a parent assignee; foreign ones never."""
+
+    def values(self, member, entry_type=EntryType.NOTE):
+        return {
+            'entry_type': entry_type.value,
+            'content': 'Odebrać paczkę z poczty',
+            'date': EVENT_DATE if entry_type == EntryType.CALENDAR_EVENT else None,
+            'time': None,
+            'assigned_member': member,
+            'school_item': '',
+            'school_subject': '',
+        }
+
+    def test_confirm_and_create_persist_self_and_other_parent(self):
+        writers = {
+            'save_confirmed_entry': save_confirmed_entry,
+            'create_family_entry': create_family_entry,
+        }
+        for name, write in writers.items():
+            for member in (self.parent, self.second_parent):
+                for entry_type in (EntryType.NOTE, EntryType.TODO, EntryType.CALENDAR_EVENT):
+                    with self.subTest(writer=name, member=member.display_name, type=entry_type):
+                        entry, created = write(
+                            self.parent.user,
+                            submission_key=uuid.uuid4(),
+                            **self.values(member, entry_type),
+                        )
+                        self.assertTrue(created)
+                        entry.refresh_from_db()
+                        self.assertEqual(entry.assigned_member, member)
+                        self.assertEqual(entry.created_by, self.parent)
+                        self.assertEqual(entry.entry_type, entry_type.value)
+
+    def test_update_persists_self_and_other_parent(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.NOTE.value,
+            content='Stary wpis',
+            assigned_member=self.child,
+            created_by=self.parent,
+        )
+        for member in (self.second_parent, self.parent):
+            for entry_type in (EntryType.NOTE, EntryType.TODO):
+                with self.subTest(member=member.display_name, type=entry_type):
+                    update_family_entry(
+                        self.parent.user, entry.pk, **self.values(member, entry_type)
+                    )
+                    entry.refresh_from_db()
+                    self.assertEqual(entry.assigned_member, member)
+
+    def test_foreign_and_inactive_parents_are_rejected_without_writes(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.NOTE.value,
+            content='Stary wpis',
+            assigned_member=self.second_parent,
+            created_by=self.parent,
+        )
+        before = sorted(Entry.objects.values_list('pk', 'assigned_member_id', 'content'))
+        for member in (self.other_family_parent, self.inactive_parent):
+            writes = {
+                'save_confirmed_entry': lambda: save_confirmed_entry(
+                    self.parent.user, submission_key=uuid.uuid4(), **self.values(member)
+                ),
+                'create_family_entry': lambda: create_family_entry(
+                    self.parent.user, submission_key=uuid.uuid4(), **self.values(member)
+                ),
+                'update_family_entry': lambda: update_family_entry(
+                    self.parent.user, entry.pk, **self.values(member)
+                ),
+            }
+            for name, write in writes.items():
+                with self.subTest(member=member.display_name, writer=name):
+                    with self.assertRaisesMessage(
+                        ValidationError, 'Wybrana osoba nie należy do rodziny.'
+                    ):
+                        write()
+                    self.assertEqual(
+                        sorted(Entry.objects.values_list('pk', 'assigned_member_id', 'content')),
+                        before,
+                    )

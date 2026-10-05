@@ -26,7 +26,7 @@ from entries.forms import (
 )
 from entries.models import Entry
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 MONDAY = datetime.date(2026, 9, 21)
 SCHOOL_EVENT_KINDS = (
@@ -539,3 +539,80 @@ class EnterSubmitOptInTests(FamilyFixtureMixin, TestCase):
                 html = str(form_class(self.parent)['content'])
                 self.assertNotIn('data-enter-submit', html)
                 self.assertNotIn('enterkeyhint', html)
+
+
+class TwoParentAssigneeFormTests(TwoParentFixtureMixin, TestCase):
+    """S-07: review, create and edit offer self and the other parent only."""
+
+    def data(self, member, **overrides):
+        values = {
+            'entry_type': EntryType.NOTE.value,
+            'content': 'Odebrać paczkę z poczty',
+            'date': '',
+            'time': '',
+            'assigned_member': str(member.pk) if member is not None else '',
+            'school_item': '',
+            'school_subject': '',
+            'submission_key': str(uuid.uuid4()),
+        }
+        values.update(overrides)
+        return values
+
+    def forms_for(self, member, **overrides):
+        entry = Entry.objects.create(
+            family=self.family, entry_type=EntryType.NOTE.value, content='Stary wpis'
+        )
+        yield EntryReviewForm(self.parent, self.data(member, **overrides))
+        yield EntryCreateForm(self.parent, self.data(member, **overrides))
+        yield EntryEditForm(self.parent, self.data(member, **overrides), entry=entry)
+
+    def test_choices_include_both_parents_and_exclude_foreign_and_inactive(self):
+        for form_class in (EntryReviewForm, EntryCreateForm, EntryEditForm):
+            with self.subTest(form=form_class.__name__):
+                queryset = form_class(self.parent).fields['assigned_member'].queryset
+                self.assertQuerySetEqual(
+                    queryset,
+                    [self.parent, self.child, self.other_child, self.second_parent],
+                )
+
+    def test_self_and_other_parent_are_accepted_for_every_type(self):
+        types = {
+            EntryType.NOTE.value: {},
+            EntryType.TODO.value: {},
+            EntryType.CALENDAR_EVENT.value: {'date': MONDAY.isoformat()},
+        }
+        for member in (self.parent, self.second_parent):
+            for entry_type, extra in types.items():
+                for form in self.forms_for(member, entry_type=entry_type, **extra):
+                    with self.subTest(
+                        member=member.display_name, type=entry_type, form=type(form).__name__
+                    ):
+                        self.assertTrue(form.is_valid(), form.errors)
+                        self.assertEqual(form.cleaned_data['assigned_member'], member)
+
+    def test_foreign_and_inactive_parents_are_rejected_in_polish(self):
+        for member in (self.other_family_parent, self.inactive_parent):
+            for form in self.forms_for(member):
+                with self.subTest(member=member.display_name, form=type(form).__name__):
+                    self.assertFalse(form.is_valid())
+                    self.assertIn(
+                        'Wybierz poprawną wartość', form.errors['assigned_member'][0]
+                    )
+
+    def test_classified_parent_prefills_review_form(self):
+        outcome = ParentClassification(
+            result=ClassificationProposal(
+                entry_type=EntryType.NOTE,
+                content='Odebrać paczkę',
+                member_name=self.second_parent.display_name,
+            ),
+            member=self.second_parent,
+        )
+
+        form, missing = review_form_from_classification(self.parent, outcome, 'tekst')
+
+        self.assertEqual(missing, [])
+        self.assertEqual(form.initial['assigned_member'], self.second_parent.pk)
+        self.assertIn(
+            f'<option value="{self.second_parent.pk}" selected>', str(form['assigned_member'])
+        )
