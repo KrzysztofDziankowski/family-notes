@@ -45,6 +45,12 @@ class BackendOutput:
     ``entry_type`` is ``None`` when the backend recognized no entry type.
     ``grounded`` is the backend's assertion that every returned detail is
     supported by the submitted instruction; ``False`` is never trusted.
+
+    ``member_mention`` is the person as the parent named them (nominative,
+    possibly a diminutive). It is transient family text used only to pick
+    among the allow-listed candidates locally; it is never logged or stored.
+    ``member_ambiguous`` is set only by the local resolver, never by a
+    provider adapter, when the mention fits several candidates.
     """
 
     entry_type: Optional[EntryType]
@@ -55,6 +61,8 @@ class BackendOutput:
     school_item: Optional[SchoolItemKind] = None
     member_name: Optional[str] = field(default=None, repr=False)
     school_subject: Optional[str] = field(default=None, repr=False)
+    member_mention: Optional[str] = field(default=None, repr=False)
+    member_ambiguous: bool = False
 
 
 class ClassificationBackendError(ClassificationError):

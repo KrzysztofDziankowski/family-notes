@@ -13,7 +13,12 @@ invocation, validation, and local member resolution in one auditable place:
 4. Validate and resolve: validate the output against the same allow-list,
    then map a returned name to exactly one loaded membership locally.
    Duplicate names become an ``AMBIGUOUS_MEMBER`` follow-up; unknown,
-   inactive, and cross-family names become ``UNKNOWN_MEMBER``.
+   inactive, and cross-family names become ``UNKNOWN_MEMBER``. Before
+   validation, the person as the parent named them (``member_mention``, which
+   may be a diminutive such as "Hania") is matched against the same
+   candidates: one match selects that member, several matches become an
+   ``AMBIGUOUS_MEMBER`` follow-up, and no match leaves the model's name to the
+   allow-list.
 
 The service performs only reads and returns transient objects; it never
 creates, updates, or deletes database rows.
@@ -33,7 +38,7 @@ so the caller can retry instead of saving the note straight away.
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import Optional, Sequence
 
@@ -47,6 +52,7 @@ from ..eduvulcan.children import match_child
 from ..eduvulcan.types import ChildSnapshot
 from .backends import BackendOutput, BackendRequest, ClassificationBackend
 from .follow_up import follow_up_question
+from .names import match_mention
 from .types import (
     ClassificationError,
     ClassificationFollowUp,
@@ -122,6 +128,7 @@ def classify_for_parent(
     except ClassificationError as error:
         return ParentClassification(result=error.to_result())
 
+    output = _apply_member_mention(output, candidates)
     result = classify_output(request, output, require_school_subject=True)
     return _resolve_member(result, candidates)
 
@@ -145,7 +152,11 @@ def classify_follow_up_answer(
     question, and the answer. Its output is merged into the draft before a
     single validation: only the fields listed in ``draft.missing_fields`` (and
     ``grounded``) come from the output, so a changed title, type, or echoed
-    name cannot override or veto the draft. ``draft_member`` is the draft's
+    name cannot override or veto the draft. When the member was missing, the
+    answer text itself is matched against the candidates first, so a parent
+    answering "Hanna" is never asked again because the model echoed the
+    instruction's "Hania"; only otherwise is the model's mention used.
+    ``draft_member`` is the draft's
     resolved member; it is dropped unless it is an active member of the
     parent's family. Raises ``ValueError`` if ``draft`` has no missing fields.
     """
@@ -178,6 +189,8 @@ def classify_follow_up_answer(
         return ParentClassification(result=error.to_result())
 
     merged = _merge_answer(draft, _known_member_name(draft, draft_member, candidates), output)
+    if set(draft.missing_fields) & _MEMBER_FIELDS:
+        merged = _resolve_answer_member(merged, answer, candidates)
     result = classify_output(request, merged, require_school_subject=True)
     return _resolve_member(result, candidates)
 
@@ -217,6 +230,51 @@ def _merge_answer(
             if MissingField.SCHOOL_SUBJECT in missing
             else draft.school_subject
         ),
+        member_mention=output.member_mention if missing & _MEMBER_FIELDS else None,
+    )
+
+
+def _resolve_answer_member(
+    output: BackendOutput, answer: str, candidates: Sequence[FamilyMember]
+) -> BackendOutput:
+    """The member named by the answer itself, else the model's mention."""
+    matches = _match_candidates(answer, candidates)
+    if len(matches) == 1:
+        return replace(
+            output,
+            member_name=matches[0].display_name,
+            member_mention=None,
+            member_ambiguous=False,
+        )
+    return _apply_member_mention(output, candidates)
+
+
+def _apply_member_mention(
+    output: BackendOutput, candidates: Sequence[FamilyMember]
+) -> BackendOutput:
+    """Resolve the parent's mention against the active family candidates.
+
+    The parent's words win over the model's ``member_name``: a mention that
+    fits exactly one candidate selects that candidate, one that fits several
+    clears the name and flags ambiguity for validation, and one that fits
+    nobody leaves ``output`` to the exact allow-list check. Only family
+    candidates can ever be selected.
+    """
+    if not output.member_mention:
+        return output
+    matches = _match_candidates(output.member_mention, candidates)
+    if len(matches) == 1:
+        return replace(output, member_name=matches[0].display_name)
+    if len(matches) > 1:
+        return replace(output, member_name=None, member_ambiguous=True)
+    return output
+
+
+def _match_candidates(
+    mention: str, candidates: Sequence[FamilyMember]
+) -> Sequence[FamilyMember]:
+    return match_mention(
+        mention.strip(), candidates, display_name=lambda member: member.display_name
     )
 
 

@@ -72,7 +72,11 @@ def validate_output(
 
     missing: List[MissingField] = []
     member_name: Optional[str] = None
-    if output.member_name is not None:
+    if output.member_ambiguous:
+        # The local resolver found several family members fitting the
+        # parent's words; never pick one, ask instead.
+        missing.append(MissingField.AMBIGUOUS_MEMBER)
+    elif output.member_name is not None:
         candidate = normalize_member_name(output.member_name)
         occurrences = (
             _name_counts(request.allowed_member_names)[candidate] if candidate else 0
@@ -93,7 +97,9 @@ def validate_output(
         required.add(MissingField.DATE)
     if MissingField.DATE in required and output.date is None:
         missing.append(MissingField.DATE)
-    if MissingField.AFFECTED_MEMBER in required and output.member_name is None:
+    if MissingField.AFFECTED_MEMBER in required and (
+        output.member_name is None or output.member_ambiguous
+    ):
         missing.append(MissingField.AFFECTED_MEMBER)
     school_subject = _clean_subject(output.school_subject)
     if (

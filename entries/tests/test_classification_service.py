@@ -414,6 +414,159 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
             self.assertNotIn(sensitive, text)
 
 
+class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
+    """PK-01: the parent's short name selects a member of their own family."""
+
+    MENTION_SENTINEL = 'SENTINEL-MENTION-Hania-91c3'
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; rename her so each test
+        # chooses its own Hania/Anna collisions.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+
+    def add_hanna(self):
+        return self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+
+    def add_anna(self):
+        return self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+    def test_unique_short_name_resolves_to_the_family_member(self):
+        hanna = self.add_hanna()
+        backend = RecordingBackend(school_test_output(member_name=None, member_mention='Hania'))
+
+        outcome = self.classify(self.parent.user, backend, text='Hania ma sprawdzian')
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.member_name, 'Hanna')
+        self.assertEqual(outcome.result.school_subject, 'biologia')
+        self.assertEqual(outcome.member, hanna)
+
+    def test_parent_mention_wins_over_the_model_pick(self):
+        hanna = self.add_hanna()
+        backend = RecordingBackend(school_test_output(member_name='Michał', member_mention='Hania'))
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertEqual(outcome.member, hanna)
+
+    def test_short_name_fitting_two_members_asks_and_names_nobody(self):
+        self.add_hanna()
+        self.add_anna()
+        backend = RecordingBackend(school_test_output(member_name='Hanna', member_mention='Hania'))
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertEqual(
+            outcome.result.missing_fields,
+            (MissingField.AMBIGUOUS_MEMBER, MissingField.AFFECTED_MEMBER),
+        )
+        self.assertIsNone(outcome.result.member_name)
+        self.assertEqual(outcome.result.school_subject, 'biologia')
+        self.assertIsNone(outcome.member)
+
+    def test_stored_diminutive_of_the_same_group_makes_a_short_name_ambiguous(self):
+        # Pinned on purpose: "Hania" is also a form of Anna, so a family with
+        # Hanna and a member stored as "Ania" is asked who is meant.
+        self.add_hanna()
+        self.other_child.display_name = 'Ania'
+        self.other_child.save(update_fields=('display_name',))
+        backend = RecordingBackend(school_test_output(member_name='Hanna', member_mention='Hania'))
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)
+        self.assertIsNone(outcome.member)
+
+    def test_ambiguous_todo_asks_only_which_member(self):
+        self.add_hanna()
+        self.add_anna()
+        backend = RecordingBackend(
+            school_test_output(
+                entry_type=EntryType.TODO,
+                school_item=None,
+                date=None,
+                member_name=None,
+                member_mention='Hania',
+            )
+        )
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertEqual(outcome.result.missing_fields, (MissingField.AMBIGUOUS_MEMBER,))
+        self.assertIsNone(outcome.member)
+
+    def test_inactive_namesake_does_not_make_a_short_name_ambiguous(self):
+        hanna = self.add_hanna()
+        self._member('old-anna', FamilyMember.Role.CHILD, 'Anna', is_active=False)
+        self._member('foreign-anna', FamilyMember.Role.CHILD, 'Anna', family=self.other_family)
+        backend = RecordingBackend(school_test_output(member_name=None, member_mention='Hania'))
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.member, hanna)
+
+    def test_mentions_of_inactive_or_foreign_members_never_resolve(self):
+        cases = {
+            'inactive same-family member': ('Zosia', 'Zosia'),
+            'inactive member by its full name': ('Zosia', 'Zofia'),
+            'other-family child': ('Kuba', 'Kuba'),
+            'other-family child by its full name': ('Kuba', 'Jakub'),
+            'other-family parent': ('Tomek', 'Tomasz'),
+        }
+        for name, (returned, mention) in cases.items():
+            with self.subTest(name):
+                backend = RecordingBackend(
+                    school_test_output(member_name=returned, member_mention=mention)
+                )
+
+                outcome = self.classify(self.parent.user, backend)
+
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationUnavailable(reason=UnavailableReason.UNKNOWN_MEMBER),
+                )
+                self.assertIsNone(outcome.member)
+
+    def test_unmatched_mention_leaves_the_model_name_to_the_allow_list(self):
+        backend = RecordingBackend(school_test_output(member_name='Michał', member_mention='Bożydar'))
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.member, self.child)
+
+    def test_request_payload_is_unchanged_by_mentions(self):
+        self.add_hanna()
+        backend = RecordingBackend(school_test_output(member_name=None, member_mention='Hania'))
+
+        self.classify(self.parent.user, backend)
+
+        (request,) = backend.requests
+        self.assertEqual(request.allowed_member_names, ('Ewa', 'Michał', 'Ola', 'Hanna'))
+        self.assertIsNone(request.follow_up_answer)
+
+    def test_repr_never_contains_the_mention(self):
+        self.add_hanna()
+        self.add_anna()
+        output = school_test_output(member_name=None, member_mention=self.MENTION_SENTINEL)
+        ambiguous = school_test_output(member_name=None, member_mention='Hania')
+
+        outcomes = [
+            self.classify(self.parent.user, RecordingBackend(output)),
+            self.classify(self.parent.user, RecordingBackend(ambiguous)),
+        ]
+
+        text = repr(output) + repr(ambiguous) + repr(outcomes)
+        self.assertNotIn(self.MENTION_SENTINEL, text)
+        self.assertNotIn('Hania', text)
+
+
 class NoPersistenceTests(FamilyFixtureMixin, TestCase):
     """3.3: success, follow-up, and failure write nothing to the database."""
 

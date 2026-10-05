@@ -36,6 +36,7 @@ from family_access.models import Family, FamilyMember
 from .test_classification_service import FamilyFixtureMixin, RecordingBackend
 from .test_openai_backend import (
     FULL_SETTINGS,
+    MODEL,
     TIMEOUT,
     FakeClock,
     ScriptedTransport,
@@ -107,6 +108,34 @@ class FamilyClassificationOutcomeTests(TestCase):
         self.assertEqual(outcome.outcome, FamilyOutcome.CLASSIFIED)
         self.assertEqual(outcome.proposal.school_item, SchoolItemKind.TEST)
         self.assertEqual(outcome.member, BARTOSZ)
+
+    def test_school_event_naming_a_child_resolves_through_the_adapter(self):
+        clock = FakeClock()
+        body = response_body(
+            '{"entry_type": "calendar_event", "content": "Sprawdzian", "grounded": true, '
+            '"date": "2026-10-02", "date_source": "2 października", "time": null, '
+            '"school_item": "test", "member_name": "Bartosz", '
+            '"school_subject": "biologia", "member_mention": "Bartek"}'
+        )
+        transport = ScriptedTransport(clock, [(1.0, ok(body))])
+        backend = openai_backend.OpenAIClassificationBackend(
+            client=make_client(transport), model=MODEL, clock=clock, sleep=clock.sleep
+        )
+
+        outcome = classify(backend, text='Bartosz ma sprawdzian z biologii 2 października')
+
+        self.assertEqual(outcome.outcome, FamilyOutcome.CLASSIFIED)
+        self.assertEqual(outcome.proposal.school_item, SchoolItemKind.TEST)
+        self.assertEqual(outcome.proposal.date, EVENT_DATE)
+        self.assertEqual(outcome.member, BARTOSZ)
+
+    def test_member_mention_is_ignored_by_automated_classification(self):
+        unassigned = classify(RecordingBackend(output(member_name=None, member_mention='Łucja')))
+        named = classify(RecordingBackend(output(member_name='Łucja', member_mention='Bartosz')))
+
+        self.assertEqual(unassigned.outcome, FamilyOutcome.CLASSIFIED)
+        self.assertIsNone(unassigned.member)
+        self.assertEqual(named.member, LUCJA)
 
     def test_school_event_without_subject_is_classified_not_a_note(self):
         for kind in (
@@ -372,7 +401,7 @@ class FamilyClassificationPrivacyTests(TestCase):
         body = response_body(
             '{"entry_type": "note", "content": "Wycieczka %s", "grounded": true, '
             '"date": null, "date_source": null, "time": null, "school_item": null, "member_name": "Łucja", '
-            '"school_subject": null}'
+            '"school_subject": null, "member_mention": "Łucja"}'
             % TEXT_SENTINEL
         )
         transport = ScriptedTransport(clock, [(1.0, ok(body))])

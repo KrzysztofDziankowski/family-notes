@@ -33,6 +33,7 @@ SUBMITTED_SENTINEL = 'SENTINEL-SUBMITTED-7f3a9c'
 CONTENT_SENTINEL = 'SENTINEL-CONTENT-b81e44'
 MEMBER_SENTINEL = 'SENTINEL-MEMBER-Michał-5d02'
 SUBJECT_SENTINEL = 'SENTINEL-SUBJECT-9c41'
+MENTION_SENTINEL = 'SENTINEL-MENTION-Hania-4e7a'
 
 
 def make_request(text='Michał ma sprawdzian z biologii w poniedziałek', names=('Michał', 'Ania')):
@@ -502,6 +503,74 @@ class SchoolSubjectValidationTests(SimpleTestCase):
             validate_output(make_request(), make_output())
 
 
+class AmbiguousMemberValidationTests(SimpleTestCase):
+    """A locally detected ambiguous mention becomes the member clarification."""
+
+    def test_school_event_asks_which_member_and_names_nobody(self):
+        result = validate_output(
+            make_request(),
+            make_output(member_name=None, member_ambiguous=True),
+            require_school_subject=True,
+        )
+
+        self.assertIsInstance(result, ClassificationFollowUp)
+        self.assertEqual(
+            result.missing_fields,
+            (MissingField.AMBIGUOUS_MEMBER, MissingField.AFFECTED_MEMBER),
+        )
+        self.assertIsNone(result.member_name)
+
+    def test_ambiguity_wins_over_a_stale_allow_listed_name(self):
+        result = validate_output(
+            make_request(),
+            make_output(member_name='Michał', member_ambiguous=True),
+            require_school_subject=True,
+        )
+
+        self.assertIsInstance(result, ClassificationFollowUp)
+        self.assertIn(MissingField.AMBIGUOUS_MEMBER, result.missing_fields)
+        self.assertIsNone(result.member_name)
+
+    def test_every_recognized_entry_type_asks_for_the_member(self):
+        for entry_type in EntryType:
+            with self.subTest(entry_type=entry_type.value):
+                result = validate_output(
+                    make_request(),
+                    make_output(
+                        entry_type=entry_type,
+                        school_item=None,
+                        member_name=None,
+                        member_ambiguous=True,
+                    ),
+                    require_school_subject=True,
+                )
+
+                self.assertIsInstance(result, ClassificationFollowUp)
+                self.assertEqual(result.missing_fields, (MissingField.AMBIGUOUS_MEMBER,))
+                self.assertIsNone(result.member_name)
+
+    def test_unrecognized_entry_type_stays_a_general_note(self):
+        result = validate_output(
+            make_request(),
+            make_output(entry_type=None, member_name=None, member_ambiguous=True),
+            require_school_subject=True,
+        )
+
+        self.assertIsInstance(result, ClassificationProposal)
+        self.assertEqual(result.entry_type, EntryType.NOTE)
+        self.assertIsNone(result.member_name)
+
+    def test_mention_alone_does_not_change_validation(self):
+        result = validate_output(
+            make_request(),
+            make_output(member_mention='Misiek'),
+            require_school_subject=True,
+        )
+
+        self.assertIsInstance(result, ClassificationProposal)
+        self.assertEqual(result.member_name, 'Michał')
+
+
 class SensitiveRepresentationTests(SimpleTestCase):
     def sensitive_request(self):
         return make_request(
@@ -514,13 +583,15 @@ class SensitiveRepresentationTests(SimpleTestCase):
             content=CONTENT_SENTINEL,
             member_name=MEMBER_SENTINEL,
             school_subject=SUBJECT_SENTINEL,
+            member_mention=MENTION_SENTINEL,
         )
         values.update(overrides)
         return make_output(**values)
 
     def assert_safe(self, text):
         for sentinel in (
-            SUBMITTED_SENTINEL, CONTENT_SENTINEL, MEMBER_SENTINEL, SUBJECT_SENTINEL, 'Michał',
+            SUBMITTED_SENTINEL, CONTENT_SENTINEL, MEMBER_SENTINEL, SUBJECT_SENTINEL,
+            MENTION_SENTINEL, 'Michał',
         ):
             self.assertNotIn(sentinel, text)
 

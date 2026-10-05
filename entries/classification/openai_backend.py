@@ -20,8 +20,9 @@ attempt that could overrun the monotonic application deadline.
 Logging: one line per classification with provider, safe outcome category,
 status, request ID, elapsed milliseconds, and attempt count. Submitted text,
 follow-up answers, member names, response content (including the model's
-``date_source`` evidence), and provider exception bodies are never
-logged, attached to raised errors, or chained into tracebacks.
+``date_source`` evidence and ``member_mention``), and provider exception
+bodies are never logged, attached to raised errors, or chained into
+tracebacks.
 """
 
 from __future__ import annotations
@@ -107,6 +108,13 @@ class StructuredClassification(BaseModel):
             'klasowej lub zadania domowego, tylko jeśli wynika z polecenia; inaczej null.'
         )
     )
+    member_mention: Optional[str] = Field(
+        description=(
+            'Imię lub zdrobnienie osoby dokładnie tak, jak użył go rodzic, '
+            'przekształcone do mianownika (np. „Hania”); null, jeśli polecenie '
+            'nie wymienia żadnej osoby.'
+        )
+    )
 
 
 def _school_item_guide() -> str:
@@ -122,7 +130,12 @@ INSTRUCTIONS = (
     'rozpoznać, zwróć null. Daty względne (np. „w poniedziałek”, „jutro”) licz '
     'od daty odniesienia. Podawaj datę, godzinę i osobę tylko wtedy, gdy wynikają '
     'z polecenia; w przeciwnym razie zwróć null. member_name musi być dokładnie '
-    'jednym imieniem z listy dozwolonych osób, zapisanym bez zmian. Rodzaje spraw '
+    'jednym imieniem z listy dozwolonych osób, zapisanym bez zmian. '
+    'Zawsze wypełnij member_mention imieniem osoby w mianowniku, tak jak nazwał '
+    'ją rodzic (np. „Hania”), albo null, jeśli żadna osoba nie jest wymieniona. '
+    'Jeśli rodzic używa zdrobnienia lub skrótu imienia, w member_name podaj '
+    'pasujące imię z listy dozwolonych osób. Gdy dane wejściowe zawierają '
+    'odpowiedz_rodzica, member_mention to osoba wymieniona w odpowiedzi. Rodzaje spraw '
     f'szkolnych: {_school_item_guide()}. Nie wymyślaj dat, osób ani treści. '
     'Ustaw grounded na true tylko wtedy, gdy wszystkie zwrócone informacje '
     'wynikają z polecenia. '
@@ -348,6 +361,7 @@ def _translate(response: Any, request: BackendRequest) -> _Attempt:
             ),
             member_name=parsed.member_name,
             school_subject=parsed.school_subject,
+            member_mention=parsed.member_mention,
         )
     except (TypeError, ValueError):
         return failure(UnavailableReason.MALFORMED_OUTPUT)

@@ -79,6 +79,7 @@ def model_output(**fields):
         school_item=None,
         member_name=None,
         school_subject=None,
+        member_mention=None,
     )
     values.update(fields)
     return ok(response_body(json.dumps(values, ensure_ascii=False)))
@@ -472,6 +473,72 @@ class AmbiguityAndInventionTests(AdapterPathMixin, TestCase):
                 outcome = self.run_service([model_output(**answer)])
 
                 self.assertEqual(outcome.result, ClassificationUnavailable(reason=reason))
+                self.assertIsNone(outcome.member)
+
+
+class ShortNameTests(AdapterPathMixin, TestCase):
+    """PK-01 / US-01: "Hania ma jutro dentystę" in a family with Hanna."""
+
+    INSTRUCTION = 'Hania ma jutro dentystę'
+    TOMORROW = datetime.date(2026, 9, 20)
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; keep the corpus family
+        # free of that collision so each case picks its own.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+
+    def dentist(self, **fields):
+        values = dict(
+            entry_type='calendar_event',
+            content='Dentysta',
+            date=self.TOMORROW.isoformat(),
+            date_source='jutro',
+            member_mention='Hania',
+        )
+        values.update(fields)
+        return model_output(**values)
+
+    def test_short_name_resolves_to_the_family_member(self):
+        outcome = self.run_service([self.dentist(member_name=None)], text=self.INSTRUCTION)
+
+        self.assertEqual(self.sent_input()['dozwolone_osoby'], ['Ewa', 'Michał', 'Ola', 'Hanna'])
+        self.assertEqual(
+            outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Dentysta',
+                date=self.TOMORROW,
+                member_name='Hanna',
+            ),
+        )
+        self.assertEqual(outcome.member, self.hanna)
+
+    def test_short_name_fitting_two_members_asks_who_is_meant(self):
+        self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+        outcome = self.run_service([self.dentist(member_name='Hanna')], text=self.INSTRUCTION)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertEqual(outcome.result.missing_fields, (MissingField.AMBIGUOUS_MEMBER,))
+        self.assertIsNone(outcome.result.member_name)
+        self.assertEqual(outcome.result.date, self.TOMORROW)
+        self.assertIsNone(outcome.member)
+
+    def test_mentions_of_inactive_or_foreign_members_never_resolve(self):
+        for returned, mention in (('Zosia', 'Zofia'), ('Kuba', 'Jakub')):
+            with self.subTest(mention):
+                outcome = self.run_service(
+                    [self.dentist(member_name=returned, member_mention=mention)],
+                    text=self.INSTRUCTION,
+                )
+
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationUnavailable(reason=UnavailableReason.UNKNOWN_MEMBER),
+                )
                 self.assertIsNone(outcome.member)
 
 

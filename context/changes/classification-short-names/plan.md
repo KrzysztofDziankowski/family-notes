@@ -305,8 +305,8 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [x] 1.1 Matcher unit tests pass: `uv run python manage.py test entries.tests.test_short_names`
-- [x] 1.2 Django checks pass: `uv run python manage.py check`
+- [x] 1.1 Matcher unit tests pass: `uv run python manage.py test entries.tests.test_short_names` — e316efb
+- [x] 1.2 Django checks pass: `uv run python manage.py check` — e316efb
 
 #### Manual
 
@@ -316,12 +316,12 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [ ] 2.1 Adapter tests cover the new schema field, its translation and the unchanged input payload: `uv run python manage.py test entries.tests.test_openai_backend`
-- [ ] 2.2 Validation and service tests cover the unique, ambiguous and no-match cases, inactive and foreign safety, and repr safety: `uv run python manage.py test entries.tests.test_classification_contract entries.tests.test_classification_service`
-- [ ] 2.3 Follow-up answer tests cover resolving a short-name answer and the ambiguous answer: `uv run python manage.py test entries.tests.test_follow_up_answer`
-- [ ] 2.7 Follow-up answer text wins over the model's stale mention (Hanna+Anna family, instruction "Hania", answer "Hanna" → Hanna, no repeated question), and `school_subject` survives resolution and merge: `uv run python manage.py test entries.tests.test_follow_up_answer entries.tests.test_classification_service`
-- [ ] 2.4 Acceptance corpus includes the Hania → Hanna example and the ambiguity example: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [ ] 2.5 Automated family classification is unchanged, including a school event naming a child: `uv run python manage.py test entries.tests.test_family_classification entries.tests.test_conversion_worker`
+- [x] 2.1 Adapter tests cover the new schema field, its translation and the unchanged input payload: `uv run python manage.py test entries.tests.test_openai_backend`
+- [x] 2.2 Validation and service tests cover the unique, ambiguous and no-match cases, inactive and foreign safety, and repr safety: `uv run python manage.py test entries.tests.test_classification_contract entries.tests.test_classification_service`
+- [x] 2.3 Follow-up answer tests cover resolving a short-name answer and the ambiguous answer: `uv run python manage.py test entries.tests.test_follow_up_answer`
+- [x] 2.7 Follow-up answer text wins over the model's stale mention (Hanna+Anna family, instruction "Hania", answer "Hanna" → Hanna, no repeated question), and `school_subject` survives resolution and merge: `uv run python manage.py test entries.tests.test_follow_up_answer entries.tests.test_classification_service`
+- [x] 2.4 Acceptance corpus includes the Hania → Hanna example and the ambiguity example: `uv run python manage.py test entries.tests.test_classification_acceptance`
+- [x] 2.5 Automated family classification is unchanged, including a school event naming a child: `uv run python manage.py test entries.tests.test_family_classification entries.tests.test_conversion_worker`
 
 #### Manual
 

@@ -53,6 +53,7 @@ ANSWER_SENTINEL = 'SENTINEL-ANSWER-8b40e2'
 QUESTION_SENTINEL = 'SENTINEL-QUESTION-2c9d51'
 DATE_SOURCE_SENTINEL = 'SENTINEL-DATESOURCE-71af3e'
 SUBJECT_SENTINEL = 'SENTINEL-SUBJECT-0b6e14'
+MENTION_SENTINEL = 'SENTINEL-MENTION-Zosienka-6d2f'
 SENTINELS = (
     API_KEY_SENTINEL,
     SUBMITTED_SENTINEL,
@@ -65,6 +66,7 @@ SENTINELS = (
     QUESTION_SENTINEL,
     DATE_SOURCE_SENTINEL,
     SUBJECT_SENTINEL,
+    MENTION_SENTINEL,
 )
 
 ALLOWED_REQUEST_FIELDS = {
@@ -123,6 +125,7 @@ def structured(**overrides):
         school_item='test',
         member_name=MEMBER_SENTINEL,
         school_subject=f'biologia {SUBJECT_SENTINEL}',
+        member_mention=MENTION_SENTINEL,
     )
     values.update(overrides)
     return values
@@ -285,6 +288,7 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
                 'school_item',
                 'member_name',
                 'school_subject',
+                'member_mention',
             },
         )
         self.assertEqual(
@@ -292,6 +296,10 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
             [{'type': 'string'}, {'type': 'null'}],
         )
         self.assertIn('Przedmiot szkolny', schema['properties']['school_subject']['description'])
+        mention = schema['properties']['member_mention']
+        self.assertEqual(mention['anyOf'], [{'type': 'string'}, {'type': 'null'}])
+        self.assertIn('zdrobnienie', mention['description'])
+        self.assertIn('mianownika', mention['description'])
 
     def test_input_is_minimal_payload(self):
         backend = self.make_backend([ok()])
@@ -336,6 +344,11 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         self.assertIn('school_subject', INSTRUCTIONS)
         self.assertIn('przedmiot szkolny', INSTRUCTIONS)
         self.assertIn('nie wymyślaj go', INSTRUCTIONS)
+
+    def test_instructions_ask_for_the_mention_and_the_listed_name_for_a_diminutive(self):
+        self.assertIn('member_mention', INSTRUCTIONS)
+        self.assertIn('zdrobnienia', INSTRUCTIONS)
+        self.assertIn('odpowiedz_rodzica, member_mention to osoba wymieniona w odpowiedzi', INSTRUCTIONS)
 
     def test_follow_up_text_is_excluded_from_request_repr(self):
         text = repr(make_follow_up_request())
@@ -384,8 +397,11 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
                 school_item=SchoolItemKind.TEST,
                 member_name=MEMBER_SENTINEL,
                 school_subject=f'biologia {SUBJECT_SENTINEL}',
+                member_mention=MENTION_SENTINEL,
             ),
         )
+        self.assertFalse(output.member_ambiguous)
+        self.assertNotIn(MENTION_SENTINEL, repr(output))
         self.assertIs(type(output.entry_type), EntryType)
         self.assertIs(type(output.school_item), SchoolItemKind)
 
@@ -398,6 +414,7 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
                 school_item=None,
                 member_name=None,
                 school_subject=None,
+                member_mention=None,
             )
         )
         backend = self.make_backend([ok(response_body(text))])
@@ -408,6 +425,7 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         self.assertIsNone(output.date)
         self.assertIsNone(output.member_name)
         self.assertIsNone(output.school_subject)
+        self.assertIsNone(output.member_mention)
 
     def test_schema_forbids_extra_fields(self):
         with self.assertRaises(pydantic.ValidationError):
@@ -417,6 +435,9 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         cases = {
             'extra field': json.dumps({**structured(), 'database_id': 7}),
             'missing field': json.dumps({k: v for k, v in structured().items() if k != 'grounded'}),
+            'missing mention': json.dumps(
+                {k: v for k, v in structured().items() if k != 'member_mention'}
+            ),
             'unknown entry type': json.dumps(structured(entry_type='reminder')),
             'unknown school item': json.dumps(structured(school_item='exam')),
             'invalid date': json.dumps(structured(date='poniedziałek')),
