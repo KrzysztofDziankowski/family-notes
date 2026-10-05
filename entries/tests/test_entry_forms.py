@@ -194,6 +194,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
             'date': 'Data',
             'time': 'Godzina',
             'assigned_member': 'Dla kogo',
+            'school_subject': 'Przedmiot',
             'school_item': 'Element szkolny',
         }
         for form_class in self.form_classes:
@@ -360,4 +361,5 @@ class ReviewFormKeepsSilentClearingTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(form.cleaned_data['school_item'], '')
         self.assertNotIn('school_item', form.errors)
         self.assertEqual([f.name for f in form.visible_fields()],
-                         ['entry_type', 'content', 'date', 'time', 'assigned_member'])
+                         ['entry_type', 'content', 'date', 'time', 'assigned_member',
+                          'school_subject'])

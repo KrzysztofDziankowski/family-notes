@@ -15,6 +15,11 @@ from enum import Enum
 from typing import Literal, Optional, Tuple, Union
 
 
+# Upper bound on a free-text school subject, shared by the model column,
+# forms, classification and EduVulcan rules.
+SCHOOL_SUBJECT_MAX_LENGTH = 100
+
+
 class EntryType(str, Enum):
     TODO = 'todo'
     CALENDAR_EVENT = 'calendar_event'
@@ -94,6 +99,7 @@ class ClassificationProposal:
     time: Optional[datetime.time] = None
     school_item: Optional[SchoolItemKind] = None
     member_name: Optional[str] = field(default=None, repr=False)
+    school_subject: Optional[str] = field(default=None, repr=False)
     kind: Literal['proposal'] = field(default='proposal', init=False)
 
 
@@ -108,6 +114,7 @@ class ClassificationFollowUp:
     time: Optional[datetime.time] = None
     school_item: Optional[SchoolItemKind] = None
     member_name: Optional[str] = field(default=None, repr=False)
+    school_subject: Optional[str] = field(default=None, repr=False)
     kind: Literal['follow_up'] = field(default='follow_up', init=False)
 
 

@@ -122,7 +122,7 @@ def classify_for_parent(
     except ClassificationError as error:
         return ParentClassification(result=error.to_result())
 
-    result = classify_output(request, output)
+    result = classify_output(request, output, require_school_subject=True)
     return _resolve_member(result, candidates)
 
 
@@ -178,7 +178,7 @@ def classify_follow_up_answer(
         return ParentClassification(result=error.to_result())
 
     merged = _merge_answer(draft, _known_member_name(draft, draft_member, candidates), output)
-    result = classify_output(request, merged)
+    result = classify_output(request, merged, require_school_subject=True)
     return _resolve_member(result, candidates)
 
 
@@ -212,6 +212,11 @@ def _merge_answer(
         time=draft.time,
         school_item=draft.school_item,
         member_name=output.member_name if missing & _MEMBER_FIELDS else member_name,
+        school_subject=(
+            output.school_subject
+            if MissingField.SCHOOL_SUBJECT in missing
+            else draft.school_subject
+        ),
     )
 
 
@@ -363,7 +368,8 @@ def classify_for_family(
 
     if output.entry_type is None:
         return general_note()
-    result = classify_output(request, output)
+    # Automation cannot answer a question, so a missing subject is never asked.
+    result = classify_output(request, output, require_school_subject=False)
     if isinstance(result, ClassificationUnavailable):
         return general_note(reason=result.reason)
     if not isinstance(result, ClassificationProposal):

@@ -119,7 +119,7 @@ class LiveWireClassificationTests(SimpleTestCase):
         logger.debug('=== Backend output\n%r (content=%r, member_name=%r)',
                      output, output.content, output.member_name)
 
-        result = classify_output(request, output)
+        result = classify_output(request, output, require_school_subject=True)
         logger.debug('=== Validated result\n%r (content=%r, member_name=%r)',
                      result, getattr(result, 'content', None),
                      getattr(result, 'member_name', None))

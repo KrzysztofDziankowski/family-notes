@@ -53,6 +53,7 @@ def make_draft(missing=(MissingField.DATE,), member_name='Michał', **overrides)
         content=CONTENT,
         school_item=SchoolItemKind.QUIZ,
         member_name=member_name,
+        school_subject='matematyka',
     )
     values.update(overrides)
     return ClassificationFollowUp(**values)
@@ -97,6 +98,21 @@ class FollowUpQuestionTests(SimpleTestCase):
         self.assertEqual(
             self.question(MissingField.DATE, MissingField.AMBIGUOUS_MEMBER),
             'Kiedy odbędzie się „Kartkówka z matematyki” i której osoby dotyczy?',
+        )
+
+    def test_subject_question_is_asked_after_date_and_member(self):
+        self.assertEqual(
+            self.question(MissingField.SCHOOL_SUBJECT, content='Sprawdzian'),
+            'Z jakiego przedmiotu jest „Sprawdzian”?',
+        )
+        self.assertEqual(
+            self.question(
+                MissingField.SCHOOL_SUBJECT,
+                MissingField.AFFECTED_MEMBER,
+                MissingField.DATE,
+                content='Sprawdzian',
+            ),
+            'Kiedy odbędzie się „Sprawdzian” i kogo dotyczy i z jakiego przedmiotu?',
         )
 
     def test_order_is_deterministic(self):
@@ -152,10 +168,42 @@ class MergeTests(FollowUpAnswerTestMixin, TestCase):
                 date=FRIDAY,
                 school_item=SchoolItemKind.QUIZ,
                 member_name='Michał',
+                school_subject='matematyka',
             ),
         )
         self.assertEqual(outcome.member, self.child)
         self.assertEqual(len(backend.requests), 1)
+
+    def test_missing_subject_is_filled_from_answer(self):
+        draft = make_draft((MissingField.SCHOOL_SUBJECT,), date=FRIDAY, school_subject=None)
+        backend = RecordingBackend(answer_output(date=None, school_subject=' fizyka '))
+
+        outcome = self.answer(backend, draft=draft)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.school_subject, 'fizyka')
+        self.assertEqual(outcome.result.date, FRIDAY)
+        self.assertEqual(outcome.member, self.child)
+
+    def test_draft_subject_is_kept_when_not_missing(self):
+        backend = RecordingBackend(answer_output(school_subject='historia'))
+
+        outcome = self.answer(backend)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.school_subject, 'matematyka')
+
+    def test_unanswered_subject_stays_missing(self):
+        draft = make_draft(
+            (MissingField.DATE, MissingField.SCHOOL_SUBJECT), school_subject=None
+        )
+        backend = RecordingBackend(answer_output(school_subject=None))
+
+        outcome = self.answer(backend, draft=draft)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertEqual(outcome.result.missing_fields, (MissingField.SCHOOL_SUBJECT,))
+        self.assertEqual(outcome.result.date, FRIDAY)
 
     def test_different_type_title_and_time_in_answer_result_are_ignored(self):
         backend = RecordingBackend(

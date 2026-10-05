@@ -3,7 +3,7 @@ from django.db.models import Q
 
 from family_access.models import AutomationToken, Family, FamilyMember
 
-from .classification.types import EntryType, SchoolItemKind
+from .classification.types import SCHOOL_SUBJECT_MAX_LENGTH, EntryType, SchoolItemKind
 from .eduvulcan.types import OutputKind
 
 ENTRY_TYPE_LABELS = {
@@ -11,8 +11,6 @@ ENTRY_TYPE_LABELS = {
     EntryType.CALENDAR_EVENT: 'Wydarzenie',
     EntryType.NOTE: 'Notatka',
 }
-
-SCHOOL_SUBJECT_MAX_LENGTH = 100
 
 
 class Entry(models.Model):

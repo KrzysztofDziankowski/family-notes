@@ -108,6 +108,41 @@ class FamilyClassificationOutcomeTests(TestCase):
         self.assertEqual(outcome.proposal.school_item, SchoolItemKind.TEST)
         self.assertEqual(outcome.member, BARTOSZ)
 
+    def test_school_event_without_subject_is_classified_not_a_note(self):
+        for kind in (
+            SchoolItemKind.HOMEWORK,
+            SchoolItemKind.CLASS_TEST,
+            SchoolItemKind.TEST,
+            SchoolItemKind.QUIZ,
+        ):
+            for subject in (None, '  '):
+                with self.subTest(kind=kind.value, subject=subject):
+                    outcome = classify(
+                        RecordingBackend(
+                            output(school_item=kind, member_name='Bartosz', school_subject=subject)
+                        )
+                    )
+
+                    self.assertEqual(outcome.outcome, FamilyOutcome.CLASSIFIED)
+                    self.assertEqual(outcome.proposal.entry_type, EntryType.CALENDAR_EVENT)
+                    self.assertEqual(outcome.proposal.school_item, kind)
+                    self.assertIsNone(outcome.proposal.school_subject)
+                    self.assertEqual(outcome.member, BARTOSZ)
+
+    def test_returned_subject_is_carried_on_the_proposal(self):
+        outcome = classify(
+            RecordingBackend(
+                output(
+                    school_item=SchoolItemKind.QUIZ,
+                    member_name='Bartosz',
+                    school_subject=' Biologia ',
+                )
+            )
+        )
+
+        self.assertEqual(outcome.outcome, FamilyOutcome.CLASSIFIED)
+        self.assertEqual(outcome.proposal.school_subject, 'Biologia')
+
     def test_duplicate_snapshot_names_resolve_to_newest_child(self):
         newer = ChildSnapshot(pk=99, display_name='Łucja')
         backend = RecordingBackend(output())
@@ -336,7 +371,8 @@ class FamilyClassificationPrivacyTests(TestCase):
         clock = FakeClock()
         body = response_body(
             '{"entry_type": "note", "content": "Wycieczka %s", "grounded": true, '
-            '"date": null, "date_source": null, "time": null, "school_item": null, "member_name": "Łucja"}'
+            '"date": null, "date_source": null, "time": null, "school_item": null, "member_name": "Łucja", '
+            '"school_subject": null}'
             % TEXT_SENTINEL
         )
         transport = ScriptedTransport(clock, [(1.0, ok(body))])

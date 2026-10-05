@@ -359,11 +359,11 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [x] 1.1 Migration is present and model drift is clean: `uv run python manage.py makemigrations --check --dry-run`
-- [x] 1.2 Service tests cover required subject on confirm, create and update for each of the four kinds, optional subject elsewhere, subject length limit, and the automated path accepting a blank subject: `uv run python manage.py test entries.tests.test_entry_service`
-- [x] 1.3 Contract tests reflect the new `SCHOOL_SUBJECT` required field for exactly the four event kinds: `uv run python manage.py test entries.tests.test_classification_contract`
-- [x] 1.4 Django checks pass: `uv run python manage.py check`
-- [x] 1.6 Service tests cover the edit rule: updating a subject-less automated or legacy school event (reassign, move date, retitle) saves without a subject; clearing an existing subject fails; changing the school item to one of the four kinds without a subject fails: `uv run python manage.py test entries.tests.test_entry_service`
+- [x] 1.1 Migration is present and model drift is clean: `uv run python manage.py makemigrations --check --dry-run` — 6cf2ca4
+- [x] 1.2 Service tests cover required subject on confirm, create and update for each of the four kinds, optional subject elsewhere, subject length limit, and the automated path accepting a blank subject: `uv run python manage.py test entries.tests.test_entry_service` — 6cf2ca4
+- [x] 1.3 Contract tests reflect the new `SCHOOL_SUBJECT` required field for exactly the four event kinds: `uv run python manage.py test entries.tests.test_classification_contract` — 6cf2ca4
+- [x] 1.4 Django checks pass: `uv run python manage.py check` — 6cf2ca4
+- [x] 1.6 Service tests cover the edit rule: updating a subject-less automated or legacy school event (reassign, move date, retitle) saves without a subject; clearing an existing subject fails; changing the school item to one of the four kinds without a subject fails: `uv run python manage.py test entries.tests.test_entry_service` — 6cf2ca4
 
 #### Manual
 
@@ -373,10 +373,10 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [ ] 2.1 Validation tests prove that the four kinds without a subject produce a `SCHOOL_SUBJECT` follow-up only when required, that the subject is trimmed and passed through, and that a subject in an automated proposal never adds a missing field: `uv run python manage.py test entries.tests.test_classification_contract`
-- [ ] 2.2 Service tests cover parent classification, answer merge filling only a missing subject, and `classify_for_family` returning `CLASSIFIED` (not a general note) for a school event without a subject: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_family_classification entries.tests.test_follow_up_answer`
-- [ ] 2.3 Adapter tests cover the new schema field and translation, and that the input payload is unchanged: `uv run python manage.py test entries.tests.test_openai_backend entries.tests.test_classification_acceptance`
-- [ ] 2.5 Every `classify_output` caller, including the smoke command and the skipped live-wire tests, passes `require_school_subject` (no `TypeError`): `grep -rn "classify_output(" entries`
+- [x] 2.1 Validation tests prove that the four kinds without a subject produce a `SCHOOL_SUBJECT` follow-up only when required, that the subject is trimmed and passed through, and that a subject in an automated proposal never adds a missing field: `uv run python manage.py test entries.tests.test_classification_contract`
+- [x] 2.2 Service tests cover parent classification, answer merge filling only a missing subject, and `classify_for_family` returning `CLASSIFIED` (not a general note) for a school event without a subject: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_family_classification entries.tests.test_follow_up_answer`
+- [x] 2.3 Adapter tests cover the new schema field and translation, and that the input payload is unchanged: `uv run python manage.py test entries.tests.test_openai_backend entries.tests.test_classification_acceptance`
+- [x] 2.5 Every `classify_output` caller, including the smoke command and the skipped live-wire tests, passes `require_school_subject` (no `TypeError`): `grep -rn "classify_output(" entries`
 
 #### Manual
 

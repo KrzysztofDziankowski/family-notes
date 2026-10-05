@@ -41,6 +41,7 @@ def output(**overrides):
         grounded=True,
         school_item=SchoolItemKind.QUIZ,
         member_name='Kasia',
+        school_subject='matematyka',
     )
     values.update(overrides)
     return BackendOutput(**values)
@@ -149,6 +150,46 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertEqual(entry.assigned_member, self.kasia)
         self.assertEqual(entry.content, CONTENT)
         self.assertEqual(entry.school_item, SchoolItemKind.QUIZ.value)
+
+    def test_missing_subject_is_asked_and_the_answer_reaches_review(self):
+        response, data = self.ask(
+            first=output(date=NEXT_FRIDAY, school_subject=None), text='Kasia ma kartkówkę w piątek'
+        )
+
+        self.assertContains(response, f'Z jakiego przedmiotu jest „{CONTENT}”?')
+        self.assertEqual(data['missing'], ['school_subject'])
+        self.assertEqual(data['school_subject'], '')
+
+        response = self.answer(
+            data, output(date=None, school_subject='fizyka'), answer='z fizyki'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        form = response.context['review_form']
+        self.assertEqual(form.initial['school_subject'], 'fizyka')
+        self.assertEqual(form.initial['date'], NEXT_FRIDAY)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_hidden_subject_round_trips_and_tampered_missing_subject_is_dropped(self):
+        _, data = self.ask()
+        self.assertEqual(data['school_subject'], 'matematyka')
+
+        response = self.answer(
+            {**data, 'missing': ['date', 'school_subject']},
+            output(date=NEXT_FRIDAY, school_subject='historia'),
+            answer='w piątek',
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertEqual(response.context['review_form'].initial['school_subject'], 'matematyka')
+
+    def test_over_long_hidden_subject_is_stale(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='w piątek', school_subject='x' * 101)
+
+        self.assertContains(response, 'Nie udało się odczytać wpisu. Zacznij od nowa.')
+        self.assertEqual(self.backend.requests[1:], [])
 
     def test_answer_resolving_to_a_past_date_warns_on_the_proposal(self):
         _, data = self.ask()

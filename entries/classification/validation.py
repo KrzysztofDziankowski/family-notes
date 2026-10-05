@@ -24,6 +24,7 @@ from .types import (
     ClassificationProposal,
     ClassificationResult,
     EntryType,
+    SCHOOL_SUBJECT_MAX_LENGTH,
     MissingField,
     UnavailableReason,
 )
@@ -42,10 +43,23 @@ def _name_counts(allowed_member_names: Iterable[str]) -> Counter:
     return Counter(normalize_member_name(name) for name in allowed_member_names)
 
 
+def _clean_subject(value: Optional[str]) -> Optional[str]:
+    """Trimmed subject; blank or over-long values are dropped to ``None``."""
+    subject = (value or '').strip()
+    if not subject or len(subject) > SCHOOL_SUBJECT_MAX_LENGTH:
+        return None
+    return subject
+
+
 def validate_output(
-    request: BackendRequest, output: BackendOutput
+    request: BackendRequest, output: BackendOutput, *, require_school_subject: bool
 ) -> ClassificationResult:
-    """Return a proposal or follow-up, or raise ``ClassificationValidationError``."""
+    """Return a proposal or follow-up, or raise ``ClassificationValidationError``.
+
+    ``require_school_subject`` is true only where a parent can answer a
+    follow-up; automated callers pass false so a missing subject never turns
+    an otherwise complete proposal into a follow-up.
+    """
     if output.entry_type is None:
         return _general_note(request)
 
@@ -81,6 +95,13 @@ def validate_output(
         missing.append(MissingField.DATE)
     if MissingField.AFFECTED_MEMBER in required and output.member_name is None:
         missing.append(MissingField.AFFECTED_MEMBER)
+    school_subject = _clean_subject(output.school_subject)
+    if (
+        require_school_subject
+        and MissingField.SCHOOL_SUBJECT in required
+        and school_subject is None
+    ):
+        missing.append(MissingField.SCHOOL_SUBJECT)
 
     values = dict(
         entry_type=entry_type,
@@ -89,6 +110,7 @@ def validate_output(
         time=output.time,
         school_item=output.school_item,
         member_name=member_name,
+        school_subject=school_subject,
     )
     if missing:
         return ClassificationFollowUp(missing_fields=tuple(missing), **values)
@@ -96,11 +118,13 @@ def validate_output(
 
 
 def classify_output(
-    request: BackendRequest, output: BackendOutput
+    request: BackendRequest, output: BackendOutput, *, require_school_subject: bool
 ) -> ClassificationResult:
     """Like ``validate_output`` but maps rule violations to an unavailable result."""
     try:
-        return validate_output(request, output)
+        return validate_output(
+            request, output, require_school_subject=require_school_subject
+        )
     except ClassificationValidationError as error:
         return error.to_result()
 

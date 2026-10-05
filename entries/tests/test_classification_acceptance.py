@@ -78,6 +78,7 @@ def model_output(**fields):
         time=None,
         school_item=None,
         member_name=None,
+        school_subject=None,
     )
     values.update(fields)
     return ok(response_body(json.dumps(values, ensure_ascii=False)))
@@ -120,6 +121,7 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
+                    school_subject='biologia',
                 )
             ]
         )
@@ -132,8 +134,10 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                 date=PRD_MONDAY,
                 school_item=SchoolItemKind.TEST,
                 member_name='Michał',
+                school_subject='biologia',
             ),
         )
+        self.assertEqual(outcome.result.school_subject, 'biologia')
         self.assertEqual(outcome.result.date.weekday(), 0)
         self.assertEqual(outcome.member, self.child)
 
@@ -169,6 +173,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 date_source='Jutro',
                 school_item='quiz',
                 member_name='Ania',
+                school_subject='angielski',
             ),
             EntryType.CALENDAR_EVENT,
         ),
@@ -196,6 +201,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 date_source='W przyszły piątek',
                 school_item='homework',
                 member_name='Michał',
+                school_subject='polski',
             ),
             EntryType.CALENDAR_EVENT,
         ),
@@ -255,6 +261,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='class_test',
                     member_name='Michał',
+                    school_subject='matematyka',
                 ),
                 EntryType.CALENDAR_EVENT,
                 'child',
@@ -267,6 +274,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='homework',
                     member_name='Ania',
+                    school_subject='przyroda',
                 ),
                 EntryType.CALENDAR_EVENT,
                 'other_child',
@@ -343,6 +351,7 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
                     content='Sprawdzian z biologii',
                     school_item='test',
                     member_name='Michał',
+                    school_subject='biologia',
                 ),
                 (MissingField.DATE,),
             ),
@@ -353,16 +362,28 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
                     date='2026-09-22',
                     date_source='w poniedziałek',
                     school_item='quiz',
+                    school_subject='fizyka',
                 ),
                 (MissingField.AFFECTED_MEMBER,),
             ),
-            'homework without date or member': (
-                dict(entry_type='calendar_event', content='Zadanie domowe', school_item='homework'),
-                (MissingField.DATE, MissingField.AFFECTED_MEMBER),
+            'test without subject': (
+                dict(
+                    entry_type='calendar_event',
+                    content='Sprawdzian',
+                    date='2026-09-22',
+                    date_source='w poniedziałek',
+                    school_item='test',
+                    member_name='Michał',
+                ),
+                (MissingField.SCHOOL_SUBJECT,),
             ),
-            'school test typed as note still needs date and member': (
+            'homework without date, member or subject': (
+                dict(entry_type='calendar_event', content='Zadanie domowe', school_item='homework'),
+                (MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT),
+            ),
+            'school test typed as note still needs date, member and subject': (
                 dict(entry_type='note', content='Sprawdzian', school_item='test'),
-                (MissingField.DATE, MissingField.AFFECTED_MEMBER),
+                (MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT),
             ),
             'substitution without date': (
                 dict(entry_type='note', content='Zastępstwo z WF', school_item='substitution'),
@@ -387,6 +408,7 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
             date=PRD_REFERENCE_DATE.isoformat(),
             school_item='quiz',
             member_name='Ania',
+            school_subject='matematyka',
         )
         for date_source in (None, 'w sobotę'):
             with self.subTest(date_source=date_source):

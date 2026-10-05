@@ -15,6 +15,7 @@ _PHRASES = {
     MissingField.DATE: ('Kiedy odbędzie się {subject}', 'kiedy odbędzie się'),
     MissingField.AFFECTED_MEMBER: ('Kogo dotyczy {subject}', 'kogo dotyczy'),
     MissingField.AMBIGUOUS_MEMBER: ('Której osoby dotyczy {subject}', 'której osoby dotyczy'),
+    MissingField.SCHOOL_SUBJECT: ('Z jakiego przedmiotu jest {subject}', 'z jakiego przedmiotu'),
 }
 _FALLBACK_SUBJECT = 'ten wpis'
 # Without a title, "Kiedy odbędzie się ten wpis?" reads oddly, so the date opening
@@ -25,7 +26,7 @@ _FALLBACK_DATE_OPENING = 'Na kiedy planowany jest {subject}'
 def follow_up_question(draft: ClassificationFollowUp) -> str:
     """Return one Polish question covering every missing field of ``draft``.
 
-    Fields are asked in a fixed order (date, then member), whatever order the
+    Fields are asked in a fixed order (date, member, then school subject), whatever order the
     draft lists them in. An ambiguous member supersedes an absent one, so the
     member is asked about once. Raises ``ValueError`` when nothing is missing.
     """

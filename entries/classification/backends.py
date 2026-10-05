@@ -54,6 +54,7 @@ class BackendOutput:
     time: Optional[datetime.time] = None
     school_item: Optional[SchoolItemKind] = None
     member_name: Optional[str] = field(default=None, repr=False)
+    school_subject: Optional[str] = field(default=None, repr=False)
 
 
 class ClassificationBackendError(ClassificationError):

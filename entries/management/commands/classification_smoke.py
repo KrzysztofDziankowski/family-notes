@@ -77,7 +77,8 @@ class Command(BaseCommand):
                 output = backend.classify(request)
             finally:
                 backend.close()
-            result = classify_output(request, output)
+            # Provider health only, not the parent flow: never ask for a subject.
+            result = classify_output(request, output, require_school_subject=False)
         except ClassificationError as error:
             result = error.to_result()
         elapsed = clock() - started_at

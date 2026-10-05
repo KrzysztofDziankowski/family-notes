@@ -10,6 +10,7 @@ from family_access.models import FamilyMember
 from .classification.follow_up import follow_up_question
 from .classification.service import MAX_FOLLOW_UP_ANSWER_LENGTH, MAX_SUBMITTED_TEXT_LENGTH
 from .classification.types import (
+    SCHOOL_SUBJECT_MAX_LENGTH,
     ClassificationFollowUp,
     ClassificationProposal,
     EntryType,
@@ -22,6 +23,7 @@ MISSING_FIELD_HINTS = {
     MissingField.DATE: ('date', 'Podaj datę.'),
     MissingField.AFFECTED_MEMBER: ('assigned_member', 'Wybierz osobę, której dotyczy wpis.'),
     MissingField.AMBIGUOUS_MEMBER: ('assigned_member', 'Wybierz osobę.'),
+    MissingField.SCHOOL_SUBJECT: ('school_subject', 'Podaj przedmiot.'),
 }
 PAST_DATE_WARNING = (
     'Data {date} jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
@@ -80,6 +82,12 @@ class EntryFieldsForm(forms.Form):
         required=False,
         empty_label='Cała rodzina',
     )
+    school_subject = forms.CharField(
+        label='Przedmiot',
+        max_length=SCHOOL_SUBJECT_MAX_LENGTH,
+        required=False,
+        strip=True,
+    )
 
     def __init__(self, membership, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -136,7 +144,9 @@ class EntryReviewForm(EntryFieldsForm):
         """Visible fields paired with the hint shown for a missing value."""
         return [
             {'field': self[name], 'hint': self.missing.get(name, '')}
-            for name in ('entry_type', 'content', 'date', 'time', 'assigned_member')
+            for name in (
+                'entry_type', 'content', 'school_subject', 'date', 'time', 'assigned_member',
+            )
         ]
 
     def display_date(self):
@@ -238,6 +248,7 @@ def review_form_from_classification(membership, outcome, submitted_text, *, toda
             date=result.date,
             time=result.time,
             school_item=result.school_item.value if result.school_item else '',
+            school_subject=result.school_subject or '',
             assigned_member=outcome.member.pk if outcome.member else None,
         )
         if isinstance(result, ClassificationFollowUp):
@@ -261,7 +272,10 @@ class HiddenTimeInput(forms.TimeInput):
 FOLLOW_UP_DEFAULT_QUESTION = 'Uzupełnij brakujące informacje'
 FOLLOW_UP_ANSWER_REQUIRED_ERROR = 'Wpisz odpowiedź albo wybierz „Pomiń”.'
 FOLLOW_UP_STALE_ERROR = 'Nie udało się odczytać wpisu. Zacznij od nowa.'
-_DRAFT_FIELDS = ('entry_type', 'content', 'date', 'time', 'school_item', 'assigned_member', 'missing')
+_DRAFT_FIELDS = (
+    'entry_type', 'content', 'date', 'time', 'school_item', 'school_subject',
+    'assigned_member', 'missing',
+)
 
 
 class FollowUpAnswerForm(forms.Form):
@@ -280,6 +294,12 @@ class FollowUpAnswerForm(forms.Form):
     school_item = forms.ChoiceField(
         choices=[('', '')] + Entry.SCHOOL_ITEM_CHOICES,
         required=False,
+        widget=forms.HiddenInput,
+    )
+    school_subject = forms.CharField(
+        max_length=SCHOOL_SUBJECT_MAX_LENGTH,
+        required=False,
+        strip=True,
         widget=forms.HiddenInput,
     )
     assigned_member = forms.ModelChoiceField(
@@ -349,6 +369,7 @@ def follow_up_form_from_classification(membership, outcome, text):
             'date': result.date,
             'time': result.time,
             'school_item': result.school_item.value if result.school_item else '',
+            'school_subject': result.school_subject or '',
             'assigned_member': outcome.member.pk if outcome.member else None,
             'missing': [field.value for field in result.missing_fields],
         },
@@ -372,6 +393,7 @@ def _draft_from_cleaned(cleaned):
     entry_type = school_item.entry_type if school_item else EntryType(cleaned['entry_type'])
     member = cleaned['assigned_member']
     date = cleaned['date']
+    school_subject = cleaned['school_subject'] or None
 
     required = set(school_item.required_fields) if school_item else set()
     if entry_type == EntryType.CALENDAR_EVENT:
@@ -383,6 +405,8 @@ def _draft_from_cleaned(cleaned):
         allowed.add(MissingField.AMBIGUOUS_MEMBER)
         if MissingField.AFFECTED_MEMBER in required:
             allowed.add(MissingField.AFFECTED_MEMBER)
+    if MissingField.SCHOOL_SUBJECT in required and school_subject is None:
+        allowed.add(MissingField.SCHOOL_SUBJECT)
     posted = {MissingField(value) for value in cleaned['missing']}
     missing = tuple(field for field in MissingField if field in posted & allowed)
 
@@ -394,6 +418,7 @@ def _draft_from_cleaned(cleaned):
         time=cleaned['time'],
         school_item=school_item,
         member_name=member.display_name if member else None,
+        school_subject=school_subject,
     )
     return draft, member
 
@@ -407,6 +432,7 @@ def proposal_from_draft(draft):
         time=draft.time,
         school_item=draft.school_item,
         member_name=draft.member_name,
+        school_subject=draft.school_subject,
     )
 
 
@@ -421,6 +447,7 @@ def skip_review_form(membership, draft, member, *, today=None):
             'time': draft.time,
             'assigned_member': member.pk if member else None,
             'school_item': '',
+            'school_subject': draft.school_subject or '',
             'submission_key': uuid.uuid4(),
         },
         today=today,

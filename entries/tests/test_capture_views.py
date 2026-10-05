@@ -138,6 +138,7 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
+                    school_subject='biologia',
                 )
             ],
         )
@@ -160,6 +161,8 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
         self.assertContains(review, 'value="2026-09-21"')
         self.assertContains(review, 'poniedziałek, 21 września 2026')
         self.assertContains(review, PRD_CONTENT)
+        self.assertEqual(form.initial['school_subject'], 'biologia')
+        self.assertContains(review, 'value="biologia"')
 
         data = {
             name: '' if value is None else str(value)

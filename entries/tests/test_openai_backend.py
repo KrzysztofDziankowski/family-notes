@@ -52,6 +52,7 @@ REFUSAL_SENTINEL = 'SENTINEL-REFUSAL-d7714b'
 ANSWER_SENTINEL = 'SENTINEL-ANSWER-8b40e2'
 QUESTION_SENTINEL = 'SENTINEL-QUESTION-2c9d51'
 DATE_SOURCE_SENTINEL = 'SENTINEL-DATESOURCE-71af3e'
+SUBJECT_SENTINEL = 'SENTINEL-SUBJECT-0b6e14'
 SENTINELS = (
     API_KEY_SENTINEL,
     SUBMITTED_SENTINEL,
@@ -63,6 +64,7 @@ SENTINELS = (
     ANSWER_SENTINEL,
     QUESTION_SENTINEL,
     DATE_SOURCE_SENTINEL,
+    SUBJECT_SENTINEL,
 )
 
 ALLOWED_REQUEST_FIELDS = {
@@ -120,6 +122,7 @@ def structured(**overrides):
         time='08:00',
         school_item='test',
         member_name=MEMBER_SENTINEL,
+        school_subject=f'biologia {SUBJECT_SENTINEL}',
     )
     values.update(overrides)
     return values
@@ -281,8 +284,14 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
                 'time',
                 'school_item',
                 'member_name',
+                'school_subject',
             },
         )
+        self.assertEqual(
+            schema['properties']['school_subject']['anyOf'],
+            [{'type': 'string'}, {'type': 'null'}],
+        )
+        self.assertIn('Przedmiot szkolny', schema['properties']['school_subject']['description'])
 
     def test_input_is_minimal_payload(self):
         backend = self.make_backend([ok()])
@@ -322,6 +331,11 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         )
         self.assertEqual(body['instructions'], INSTRUCTIONS)
         self.assertIn('odpowiedź rodzica', INSTRUCTIONS)
+
+    def test_instructions_ask_for_the_subject_without_inventing_it(self):
+        self.assertIn('school_subject', INSTRUCTIONS)
+        self.assertIn('przedmiot szkolny', INSTRUCTIONS)
+        self.assertIn('nie wymyślaj go', INSTRUCTIONS)
 
     def test_follow_up_text_is_excluded_from_request_repr(self):
         text = repr(make_follow_up_request())
@@ -369,6 +383,7 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
                 time=datetime.time(8, 0),
                 school_item=SchoolItemKind.TEST,
                 member_name=MEMBER_SENTINEL,
+                school_subject=f'biologia {SUBJECT_SENTINEL}',
             ),
         )
         self.assertIs(type(output.entry_type), EntryType)
@@ -376,7 +391,14 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
 
     def test_null_entry_type_and_optional_fields_are_preserved(self):
         text = json.dumps(
-            structured(entry_type=None, date=None, time=None, school_item=None, member_name=None)
+            structured(
+                entry_type=None,
+                date=None,
+                time=None,
+                school_item=None,
+                member_name=None,
+                school_subject=None,
+            )
         )
         backend = self.make_backend([ok(response_body(text))])
 
@@ -385,6 +407,7 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         self.assertIsNone(output.entry_type)
         self.assertIsNone(output.date)
         self.assertIsNone(output.member_name)
+        self.assertIsNone(output.school_subject)
 
     def test_schema_forbids_extra_fields(self):
         with self.assertRaises(pydantic.ValidationError):

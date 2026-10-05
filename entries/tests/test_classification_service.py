@@ -50,6 +50,7 @@ def school_test_output(member_name='Michał', **overrides):
         date=MONDAY,
         school_item=SchoolItemKind.TEST,
         member_name=member_name,
+        school_subject='biologia',
     )
     values.update(overrides)
     return BackendOutput(**values)
@@ -370,6 +371,30 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
 
         self.assertIsInstance(outcome.result, ClassificationProposal)
         self.assertIsNone(outcome.member)
+
+    def test_school_event_without_subject_asks_the_parent(self):
+        for kind in (
+            SchoolItemKind.HOMEWORK,
+            SchoolItemKind.CLASS_TEST,
+            SchoolItemKind.TEST,
+            SchoolItemKind.QUIZ,
+        ):
+            with self.subTest(kind=kind.value):
+                backend = RecordingBackend(school_test_output(school_item=kind, school_subject=None))
+
+                outcome = self.classify(self.parent.user, backend)
+
+                self.assertIsInstance(outcome.result, ClassificationFollowUp)
+                self.assertEqual(outcome.result.missing_fields, (MissingField.SCHOOL_SUBJECT,))
+                self.assertEqual(outcome.member, self.child)
+
+    def test_returned_subject_is_trimmed_onto_the_proposal(self):
+        backend = RecordingBackend(school_test_output(school_subject='  biologia '))
+
+        outcome = self.classify(self.parent.user, backend)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.school_subject, 'biologia')
 
     def test_backend_error_becomes_unavailable_result(self):
         backend = RecordingBackend(error=ClassificationBackendError(UnavailableReason.TIMEOUT))
