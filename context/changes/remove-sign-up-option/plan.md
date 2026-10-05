@@ -209,10 +209,10 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Automated
 
-- [ ] 1.1 Signup tests prove that GET/POST `/accounts/signup/` render the Polish closed page and create no user.
-- [ ] 1.2 Adapter tests prove that local signup is closed and social signup is open, and that a new social login creates an unmapped `User` that sees only the unconfigured state.
-- [ ] 1.3 Targeted tests pass: `uv run python manage.py test family_access family_notes`
-- [ ] 1.4 Django checks and migration check pass: `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 Signup tests prove that GET/POST `/accounts/signup/` render the Polish closed page and create no user.
+- [x] 1.2 Adapter tests prove that local signup is closed and social signup is open, and that a new social login creates an unmapped `User` that sees only the unconfigured state.
+- [x] 1.3 Targeted tests pass: `uv run python manage.py test family_access family_notes`
+- [x] 1.4 Django checks and migration check pass: `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
 
 #### Manual
 

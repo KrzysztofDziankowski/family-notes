@@ -1,9 +1,9 @@
 ---
 change_id: remove-sign-up-option
 title: User can sign in through the intended account flow without a sign-up option
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

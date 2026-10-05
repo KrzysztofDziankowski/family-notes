@@ -185,6 +185,10 @@ CACHES = {'default': {
 }}
 
 ACCOUNT_RATE_LIMITS = {'login': '30/m/ip', 'login_failed': '10/m/ip,5/300s/key'}
+# Local self-registration is closed; Google first sign-in still creates the user
+# that a superuser then maps to a family member (family_access.auth_adapters).
+ACCOUNT_ADAPTER = 'family_access.auth_adapters.ClosedSignupAccountAdapter'
+SOCIALACCOUNT_ADAPTER = 'family_access.auth_adapters.ExternalSignInSocialAccountAdapter'
 # nginx overwrites this header; direct runserver development uses REMOTE_ADDR.
 ALLAUTH_TRUSTED_CLIENT_IP_HEADER = 'X-Real-IP' if not DEBUG else None
 
