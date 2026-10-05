@@ -275,16 +275,16 @@ No schema or data migration, no backfill and no feature flag. Rollback is to rem
 
 #### Automated
 
-- [x] 2.1 View tests cover each route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user.
-- [x] 2.2 Mutation-denial tests prove the database is unchanged after a 403, a 404 or a guard error.
-- [x] 2.3 Foreign and nonexistent member ids return the same status and show no foreign content.
-- [x] 2.4 Accessibility audit cases pass for the member list, the edit form (valid and invalid) and the account page: `uv run python manage.py test family_access.tests.test_membership_accessibility`.
-- [x] 2.5 State-gallery tests prove DEBUG gating, parent-only access and no database writes.
-- [x] 2.6 Regression tests cover deactivation effects on assignee choices, EduVulcan child snapshots, parent entry visibility, token 401 and the account page, and access restored after reactivation.
-- [x] 2.7 Full tests pass: `uv run python manage.py test`.
-- [x] 2.8 Django checks pass: `uv run python manage.py check`.
-- [x] 2.9 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [x] 2.13 View tests prove an inactive parent's row renders the reactivation confirmation with "Ta osoba odzyska uprawnienia rodzica.", an inactive child's row does not, and a parent reactivation emits only the id-only log line.
+- [x] 2.1 View tests cover each route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user. — df712be
+- [x] 2.2 Mutation-denial tests prove the database is unchanged after a 403, a 404 or a guard error. — df712be
+- [x] 2.3 Foreign and nonexistent member ids return the same status and show no foreign content. — df712be
+- [x] 2.4 Accessibility audit cases pass for the member list, the edit form (valid and invalid) and the account page: `uv run python manage.py test family_access.tests.test_membership_accessibility`. — df712be
+- [x] 2.5 State-gallery tests prove DEBUG gating, parent-only access and no database writes. — df712be
+- [x] 2.6 Regression tests cover deactivation effects on assignee choices, EduVulcan child snapshots, parent entry visibility, token 401 and the account page, and access restored after reactivation. — df712be
+- [x] 2.7 Full tests pass: `uv run python manage.py test`. — df712be
+- [x] 2.8 Django checks pass: `uv run python manage.py check`. — df712be
+- [x] 2.9 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — df712be
+- [x] 2.13 View tests prove an inactive parent's row renders the reactivation confirmation with "Ta osoba odzyska uprawnienia rodzica.", an inactive child's row does not, and a parent reactivation emits only the id-only log line. — df712be
 
 #### Manual
 
