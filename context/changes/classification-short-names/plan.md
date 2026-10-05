@@ -339,5 +339,5 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Manual
 
-- [ ] 3.6 At 360px width, the `question_ambiguous_member` gallery state reads naturally in Polish and the answer field is usable.
+- [x] 3.6 At 360px width, the `question_ambiguous_member` gallery state reads naturally in Polish and the answer field is usable.
 - [ ] 3.7 In Chrome on Android, a parent in a family with "Hanna" captures an instruction about "Hania", sees Hanna preselected, and saves the entry assigned to Hanna.

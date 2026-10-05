@@ -355,7 +355,7 @@ Context resolution adds one indexed membership query per request, which is negli
 
 #### Manual
 
-- [ ] 1.6 A reviewer confirms no view passes `request.user` to a service or form, and every service added by S-03, S-04 and S-07 takes the context membership.
+- [x] 1.6 A reviewer confirms no view passes `request.user` to a service or form, and every service added by S-03, S-04 and S-07 takes the context membership.
 
 ### Phase 2: Constraint Swap, Chooser, Switcher and Stale-Tab Guard
 
@@ -376,9 +376,9 @@ Context resolution adds one indexed membership query per request, which is negli
 #### Manual
 
 - [ ] 2.10 At 360px width a two-family user picks a family, sees its name in the header, switches, and sees only the other family's entries.
-- [ ] 2.11 With two tabs on different families, saving a capture in the stale tab shows the Polish 409 page and creates no entry.
-- [ ] 2.12 The operator adds a second membership in Django admin for an existing user, and that user sees the "Zmień rodzinę" link on the next request.
-- [ ] 2.13 A keyboard-only pass on the chooser and the header switcher follows the `context/foundation/accessibility.md` checklist.
+- [x] 2.11 With two tabs on different families, saving a capture in the stale tab shows the Polish 409 page and creates no entry.
+- [x] 2.12 The operator adds a second membership in Django admin for an existing user, and that user sees the "Zmień rodzinę" link on the next request.
+- [x] 2.13 A keyboard-only pass on the chooser and the header switcher follows the `context/foundation/accessibility.md` checklist.
 
 ### Phase 3: Cross-Family Isolation Matrix, Automation and Worker Regression
 
@@ -392,5 +392,5 @@ Context resolution adds one indexed membership query per request, which is negli
 
 #### Manual
 
-- [ ] 3.6 With the seeded two-family user, a reviewer completes parent capture in one family and the child view in the other, and confirms no data from the other family appears anywhere.
-- [ ] 3.7 A reviewer confirms that a single-family user's flows (seeded parent and child) look and behave exactly as before.
+- [x] 3.6 With the seeded two-family user, a reviewer completes parent capture in one family and the child view in the other, and confirms no data from the other family appears anywhere.
+- [x] 3.7 A reviewer confirms that a single-family user's flows (seeded parent and child) look and behave exactly as before.

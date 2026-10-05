@@ -240,6 +240,6 @@ None.
 
 #### Manual
 
-- [ ] 2.5 At phone width (360 px), a parent sees entries grouped by child, then by parent, then "Cała rodzina", in both list modes, and the heading hierarchy reads clearly.
-- [ ] 2.6 An entry reassigned in "Edytuj" moves to the new assignee's group after saving.
-- [ ] 2.7 Phone-width screenshots of the grouped upcoming and past gallery states are saved under `context/changes/parent-list-child-grouping/screenshots/`.
+- [x] 2.5 At phone width (360 px), a parent sees entries grouped by child, then by parent, then "Cała rodzina", in both list modes, and the heading hierarchy reads clearly.
+- [x] 2.6 An entry reassigned in "Edytuj" moves to the new assignee's group after saving.
+- [x] 2.7 Phone-width screenshots of the grouped upcoming and past gallery states are saved under `context/changes/parent-list-child-grouping/screenshots/`.

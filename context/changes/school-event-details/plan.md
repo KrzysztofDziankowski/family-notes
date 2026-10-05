@@ -367,7 +367,7 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Manual
 
-- [ ] 1.5 Running the migration against a copy of a database containing existing school entries leaves every row with an empty subject and no other change.
+- [x] 1.5 Running the migration against a copy of a database containing existing school entries leaves every row with an empty subject and no other change.
 
 ### Phase 2: Classification Recognizes and Asks for the Subject
 
@@ -392,7 +392,7 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Manual
 
-- [ ] 3.4 At 360px width in the capture state gallery, the review form shows the school type select and subject field clearly, and the subject question reads naturally in Polish.
+- [x] 3.4 At 360px width in the capture state gallery, the review form shows the school type select and subject field clearly, and the subject question reads naturally in Polish.
 - [ ] 3.5 In Chrome on Android, a parent captures a test without a subject, answers the question, sees the subject in review, saves, and sees it on the detail page.
 
 ### Phase 4: Automated Intake and Read Compatibility
@@ -408,5 +408,5 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Manual
 
-- [ ] 4.7 A forwarded EduVulcan "Sprawdzian" notification on a local stack creates an entry whose detail page shows the subject.
-- [ ] 4.8 A pre-existing school entry without a subject still renders on parent and child detail pages and in the API response.
+- [x] 4.7 A forwarded EduVulcan "Sprawdzian" notification on a local stack creates an entry whose detail page shows the subject.
+- [x] 4.8 A pre-existing school entry without a subject still renders on parent and child detail pages and in the API response.

@@ -243,7 +243,7 @@ None; saved entries are unchanged.
 
 #### Manual
 
-- [ ] 1.4 Reading `INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording of the title rule (with the "kasia zrobić pranie w piątek" example) and the relative-date rules
+- [x] 1.4 Reading `INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording of the title rule (with the "kasia zrobić pranie w piątek" example) and the relative-date rules
 
 ### Phase 2: Deterministic Title Guard
 
@@ -258,7 +258,7 @@ None; saved entries are unchanged.
 
 #### Manual
 
-- [ ] 2.6 Reviewing the guard's test table confirms no case removes a non-assignee name or an unaccepted date phrase
+- [x] 2.6 Reviewing the guard's test table confirms no case removes a non-assignee name or an unaccepted date phrase
 
 ### Phase 3: Live Check
 
@@ -268,7 +268,7 @@ None; saved entries are unchanged.
 
 #### Manual
 
-- [ ] 3.2 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live owner-example case passes
-- [ ] 3.5 With `CLASSIFICATION_LIVE_EVAL=1`, the live same-weekday case (reference Friday 2026-10-09, "w piątek") returns 2026-10-16
-- [ ] 3.3 In the running app as `test_rodzic`, entering "kasia zrobić pranie w piątek" shows the review form with title "Zrobić pranie", the coming Friday's date and Kasia selected; saving creates exactly that entry
-- [ ] 3.4 An instruction without a person or date (e.g. "Kupić mleko") still produces the same title as before
+- [x] 3.2 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live owner-example case passes
+- [x] 3.5 With `CLASSIFICATION_LIVE_EVAL=1`, the live same-weekday case (reference Friday 2026-10-09, "w piątek") returns 2026-10-16
+- [x] 3.3 In the running app as `test_rodzic`, entering "kasia zrobić pranie w piątek" shows the review form with title "Zrobić pranie", the coming Friday's date and Kasia selected; saving creates exactly that entry
+- [x] 3.4 An instruction without a person or date (e.g. "Kupić mleko") still produces the same title as before

@@ -232,12 +232,12 @@ No database or data changes. Rollback: remove the script include and widget attr
 
 #### Manual
 
-- [ ] 1.6 Desktop Chrome: Enter on the capture box submits; Shift+Enter inserts a newline; Enter on empty or whitespace-only text does nothing; holding Enter posts only once.
-- [ ] 1.7 Desktop Chrome: in the follow-up question, Enter performs "Dalej" (the answer is classified), never "Pomiń".
+- [x] 1.6 Desktop Chrome: Enter on the capture box submits; Shift+Enter inserts a newline; Enter on empty or whitespace-only text does nothing; holding Enter posts only once.
+- [x] 1.7 Desktop Chrome: in the follow-up question, Enter performs "Dalej" (the answer is classified), never "Pomiń".
 - [ ] 1.8 Android Chrome with Gboard: the keyboard shows a send action; typing Polish diacritics by long press and swipe typing never submits mid-word; the send key submits.
-- [ ] 1.9 With JavaScript disabled, all opted-in forms still submit only through their buttons, Enter inserts a newline, and no Enter hint is visible.
-- [ ] 1.10 Review, structured create and edit forms: Enter in "Tytuł" still inserts a newline and does not save.
-- [ ] 1.12 Review form: Enter in „Popraw opis” runs „Popraw” (the revised proposal is shown), no entry is saved, and an empty correction box ignores Enter.
+- [x] 1.9 With JavaScript disabled, all opted-in forms still submit only through their buttons, Enter inserts a newline, and no Enter hint is visible.
+- [x] 1.10 Review, structured create and edit forms: Enter in "Tytuł" still inserts a newline and does not save.
+- [x] 1.12 Review form: Enter in „Popraw opis” runs „Popraw” (the revised proposal is shown), no entry is saved, and an empty correction box ignores Enter.
 
 ### Phase 2: Regression and Release Verification
 

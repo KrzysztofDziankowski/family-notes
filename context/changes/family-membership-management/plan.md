@@ -269,7 +269,7 @@ No schema or data migration, no backfill and no feature flag. Rollback is to rem
 
 #### Manual
 
-- [ ] 1.7 A reviewer confirms the service log lines contain only ids and event names, with no emails or display names.
+- [x] 1.7 A reviewer confirms the service log lines contain only ids and event names, with no emails or display names.
 
 ### Phase 2: Parent Member-Management UI and Regression
 
@@ -288,6 +288,6 @@ No schema or data migration, no backfill and no feature flag. Rollback is to rem
 
 #### Manual
 
-- [ ] 2.10 At 360px width a parent can rename a member and deactivate and reactivate a child, and sees the guard explanation for themselves and the last parent.
-- [ ] 2.11 A keyboard-only pass on the member list and edit page follows the `context/foundation/accessibility.md` checklist.
-- [ ] 2.12 The operator adds a new member in Django admin for a user created by Google first sign-in, and that member appears in the in-app list on the next request.
+- [x] 2.10 At 360px width a parent can rename a member and deactivate and reactivate a child, and sees the guard explanation for themselves and the last parent.
+- [x] 2.11 A keyboard-only pass on the member list and edit page follows the `context/foundation/accessibility.md` checklist.
+- [x] 2.12 The operator adds a new member in Django admin for a user created by Google first sign-in, and that member appears in the in-app list on the next request.

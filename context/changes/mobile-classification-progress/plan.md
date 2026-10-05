@@ -427,11 +427,11 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Manual
 
-- [ ] 1.7 Desktop Chrome with network throttling: after "Rozpoznaj", the spinner and running panel appear immediately, the counter advances, and the slow copy appears after 10 s; the next page then shows the review, question, or unavailable notice.
-- [ ] 1.8 Follow-up: "Dalej" (click and Enter) shows the indicator and Enter sets `aria-busy` on the form; "Pomiń" does not show it; Enter while busy does not post a second time.
-- [ ] 1.9 DevTools offline before submitting: the submission is blocked, the text stays, and the offline copy appears; Enter while still offline is blocked too; going back online, both Enter and tapping "Rozpoznaj" submit.
-- [ ] 1.12 Review form with throttling: „Popraw” (click and Enter in „Popraw opis”) shows the indicator, „Zapisz wpis” does not; after forcing the stalled state (DevTools offline-then-online or a stubbed slow backend), "Spróbuj ponownie" re-posts to `entries:correct` and no entry is saved.
-- [ ] 1.10 Back button after a completed classification: the restored capture page is not busy and no stale panel is visible.
+- [x] 1.7 Desktop Chrome with network throttling: after "Rozpoznaj", the spinner and running panel appear immediately, the counter advances, and the slow copy appears after 10 s; the next page then shows the review, question, or unavailable notice.
+- [x] 1.8 Follow-up: "Dalej" (click and Enter) shows the indicator and Enter sets `aria-busy` on the form; "Pomiń" does not show it; Enter while busy does not post a second time.
+- [x] 1.9 DevTools offline before submitting: the submission is blocked, the text stays, and the offline copy appears; Enter while still offline is blocked too; going back online, both Enter and tapping "Rozpoznaj" submit.
+- [x] 1.12 Review form with throttling: „Popraw” (click and Enter in „Popraw opis”) shows the indicator, „Zapisz wpis” does not; after forcing the stalled state (DevTools offline-then-online or a stubbed slow backend), "Spróbuj ponownie" re-posts to `entries:correct` and no entry is saved.
+- [x] 1.10 Back button after a completed classification: the restored capture page is not busy and no stale panel is visible.
 
 ### Phase 2: Installable PWA Shell
 
@@ -447,9 +447,9 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Manual
 
-- [ ] 2.8 Desktop Chrome DevTools → Application: manifest shows no installability errors, the service worker at `/sw.js` is activated with scope `/`, and Cache Storage holds only the precached offline page, two stylesheets and the icon after browsing entries and running a classification.
-- [ ] 2.9 Desktop Chrome DevTools offline: navigating to `/entries/` shows the styled "Brak połączenia" page; "Spróbuj ponownie" after reconnecting loads the real page.
-- [ ] 2.10 Logging out and in as a child shows the child's own home page with no stale parent content, online and after the offline page.
+- [x] 2.8 Desktop Chrome DevTools → Application: manifest shows no installability errors, the service worker at `/sw.js` is activated with scope `/`, and Cache Storage holds only the precached offline page, two stylesheets and the icon after browsing entries and running a classification.
+- [x] 2.9 Desktop Chrome DevTools offline: navigating to `/entries/` shows the styled "Brak połączenia" page; "Spróbuj ponownie" after reconnecting loads the real page.
+- [x] 2.10 Logging out and in as a child shows the child's own home page with no stale parent content, online and after the offline page.
 
 ### Phase 3: State Gallery and Mobile Verification
 
@@ -463,7 +463,7 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Manual
 
-- [ ] 3.6 The five progress gallery states and the offline page are reviewed at 360 px width: no clipping, readable copy, visible spinner, reachable retry button; a screenshot is saved under the change folder.
+- [x] 3.6 The five progress gallery states and the offline page are reviewed at 360 px width: no clipping, readable copy, visible spinner, reachable retry button; a screenshot is saved under the change folder.
 - [ ] 3.7 Chrome on Android against production HTTPS (or USB port-forwarding to `localhost`): FamilyNotes installs from the browser menu, opens standalone from the home-screen icon at the role's home page, and shows the FamilyNotes name and icon.
 - [ ] 3.8 Installed app: signing in with Google and with username/password both return to the standalone window logged in.
 - [ ] 3.9 Installed app: a capture shows the indicator and then the review; switching to airplane mode while waiting may briefly show the connection-lost copy and then Chrome's own error page; pressing Back restores the capture page (not busy, text kept) and resubmitting after reconnecting completes.

@@ -427,7 +427,7 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Manual
 
-- [ ] 1.4 Reading `DATE_RULES` and `MULTI_INSTRUCTIONS` confirms natural Polish wording that states the rules from Assumed Decision 1 and the one-entry-per-date split
+- [x] 1.4 Reading `DATE_RULES` and `MULTI_INSTRUCTIONS` confirms natural Polish wording that states the rules from Assumed Decision 1 and the one-entry-per-date split
 
 ### Phase 2: Batch review and all-or-nothing save
 
@@ -439,7 +439,7 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Manual
 
-- [ ] 2.4 With a stubbed or live backend on a phone-width browser, the three-meetings instruction shows three ticked proposals at 18:00 with the expected dates; unticking one and saving creates exactly two entries, both listed in the saved panel
+- [x] 2.4 With a stubbed or live backend on a phone-width browser, the three-meetings instruction shows three ticked proposals at 18:00 with the expected dates; unticking one and saving creates exactly two entries, both listed in the saved panel
 
 ### Phase 3: Per-proposal free-text correction in the batch review
 
@@ -450,7 +450,7 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Manual
 
-- [ ] 3.3 On a phone-width browser, „zmień godzinę na 19:00” on the second of three proposals changes only that proposal's time, and saving creates the three entries with the corrected time on the second
+- [x] 3.3 On a phone-width browser, „zmień godzinę na 19:00” on the second of three proposals changes only that proposal's time, and saving creates the three entries with the corrected time on the second
 
 ### Phase 4: States page, acceptance corpus and live check
 
@@ -461,5 +461,5 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Manual
 
-- [ ] 4.3 The batch sections on `/entries/_states/` render at 360 px width with nothing clipped or overflowing
+- [x] 4.3 The batch sections on `/entries/_states/` render at 360 px width with nothing clipped or overflowing
 - [ ] 4.4 A live run with an OpenAI key: the PRD three-meetings instruction (Polish and English) yields three proposals at 18:00 with the dates from Assumed Decision 1 within 30 s, and a single-entry instruction still yields one proposal

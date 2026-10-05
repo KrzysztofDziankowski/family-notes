@@ -216,7 +216,7 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Manual
 
-- [ ] 1.5 With `runserver`, `/accounts/signup/` shows "Rejestracja jest wyłączona" in the app layout at phone width.
+- [x] 1.5 With `runserver`, `/accounts/signup/` shows "Rejestracja jest wyłączona" in the app layout at phone width.
 - [ ] 1.6 A Google account never used with the app completes sign-in and lands on the "not configured" status; a superuser can then map it in admin and the user sees family data on the next request.
 
 ### Phase 2: Remove the Visible Sign-Up Option
@@ -228,4 +228,4 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Manual
 
-- [ ] 2.3 At 360 px and 1280 px the login page shows the Google button and password form with no sign-up option; screenshots are saved under `context/changes/remove-sign-up-option/screenshots/`.
+- [x] 2.3 At 360 px and 1280 px the login page shows the Google button and password form with no sign-up option; screenshots are saved under `context/changes/remove-sign-up-option/screenshots/`.

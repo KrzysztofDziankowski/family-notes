@@ -356,7 +356,7 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Manual
 
-- [ ] 1.4 Reading `CORRECTION_INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording that states the preserve-unmentioned rule and the relative-date rules from Assumed Decision 6
+- [x] 1.4 Reading `CORRECTION_INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording that states the preserve-unmentioned rule and the relative-date rules from Assumed Decision 6
 
 ### Phase 2: Correction step in the capture review
 
@@ -367,7 +367,7 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Manual
 
-- [ ] 2.3 With a stubbed or live backend on a phone-width browser, a parent corrects the date of a proposal with „zmień datę na 15 października”, sees the revised proposal with the other fields unchanged, and saves it
+- [x] 2.3 With a stubbed or live backend on a phone-width browser, a parent corrects the date of a proposal with „zmień datę na 15 października”, sees the revised proposal with the other fields unchanged, and saves it
 
 ### Phase 3: States page and live check
 
@@ -378,5 +378,5 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Manual
 
-- [ ] 3.3 The `corrected` and `correction_failed` sections on `/entries/_states/` render at 360 px width with nothing clipped or overflowing
+- [x] 3.3 The `corrected` and `correction_failed` sections on `/entries/_states/` render at 360 px width with nothing clipped or overflowing
 - [ ] 3.4 A live run with an OpenAI key: „zmień datę na 15 października” and „to dla Tymka” each change only the named field, within 30 s per step

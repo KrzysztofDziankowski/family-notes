@@ -301,10 +301,10 @@ None. No schema or data change. Existing entries keep their assignees. The OpenA
 
 #### Manual
 
-- [ ] 2.3 At phone width, a parent creates a note via "Nowy wpis" assigned to themselves and another assigned to the other parent; both show the right name in the list and detail.
-- [ ] 2.4 Via "Dodaj wpis z tekstu", a parent writes a note naming the other parent; the review form pre-selects that parent and saving keeps it.
-- [ ] 2.5 Signed in as a child, neither note is visible in "Moje wpisy".
-- [ ] 2.6 A phone-width screenshot of the gallery list state is saved under `context/changes/parent-note-assignment/screenshots/`.
+- [x] 2.3 At phone width, a parent creates a note via "Nowy wpis" assigned to themselves and another assigned to the other parent; both show the right name in the list and detail.
+- [x] 2.4 Via "Dodaj wpis z tekstu", a parent writes a note naming the other parent; the review form pre-selects that parent and saving keeps it.
+- [x] 2.5 Signed in as a child, neither note is visible in "Moje wpisy".
+- [x] 2.6 A phone-width screenshot of the gallery list state is saved under `context/changes/parent-note-assignment/screenshots/`.
 
 ### Phase 3: Self-Reference Resolves to the Requesting Parent
 
@@ -317,6 +317,6 @@ None. No schema or data change. Existing entries keep their assignees. The OpenA
 
 #### Manual
 
-- [ ] 3.5 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live self-reference case passes.
-- [ ] 3.6 In the running app as `test_rodzic` (Ewa), entering "dla mnie: kupić mleko" shows the review form with title "Kupić mleko" and Ewa preselected; saving keeps Ewa as the assignee.
-- [ ] 3.7 Reading the adapter module docstring confirms that the privacy contract lists `autor_polecenia` and records the owner approval of 2026-10-04.
+- [x] 3.5 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live self-reference case passes.
+- [x] 3.6 In the running app as `test_rodzic` (Ewa), entering "dla mnie: kupić mleko" shows the review form with title "Kupić mleko" and Ewa preselected; saving keeps Ewa as the assignee.
+- [x] 3.7 Reading the adapter module docstring confirms that the privacy contract lists `autor_polecenia` and records the owner approval of 2026-10-04.
