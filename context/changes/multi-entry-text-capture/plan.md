@@ -456,8 +456,8 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Automated
 
-- [x] 4.1 States page and acceptance tests pass
-- [x] 4.2 Full suite passes
+- [x] 4.1 States page and acceptance tests pass — 004bd4e
+- [x] 4.2 Full suite passes — 004bd4e
 
 #### Manual
 
