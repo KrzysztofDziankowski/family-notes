@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.db import DatabaseError
 from django.conf import settings
 from django.template.loader import render_to_string
-from django.test import SimpleTestCase, TestCase
+from django.test import Client, SimpleTestCase, TestCase
 from django.urls import reverse
 
 from entries.models import Entry
@@ -99,6 +99,27 @@ class LoginPageTests(TestCase):
         response = self.client.get(reverse('account_login'), {'next': '/entries/mine/'})
 
         self.assertContains(response, '/accounts/google/login/?next=%2Fentries%2Fmine%2F')
+
+    def test_google_button_posts_straight_to_the_provider(self):
+        response = self.client.get(reverse('account_login'))
+
+        self.assertContains(
+            response, '<form method="post" action="/accounts/google/login/">'
+        )
+        self.assertNotContains(response, 'href="/accounts/google/login/')
+
+    def test_google_login_post_skips_the_intermediate_page(self):
+        client = Client(enforce_csrf_checks=True)
+        page = client.get(reverse('account_login'))
+        token = page.cookies['csrftoken'].value
+
+        response = client.post(
+            '/accounts/google/login/?next=%2Fentries%2Fmine%2F',
+            {'csrfmiddlewaretoken': token},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response['Location'].startswith('https://accounts.google.com/'))
 
     def test_login_page_offers_no_sign_up_option(self):
         response = self.client.get(reverse('account_login'))

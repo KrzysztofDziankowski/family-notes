@@ -14,7 +14,12 @@ administrator (see family_access.auth_adapters).
     <h1>Zaloguj się</h1>
     {% if SOCIALACCOUNT_ENABLED %}
         {% provider_login_url 'google' as google_login_url %}
-        <p><a role="button" class="fn-login-google" href="{{ google_login_url }}">Zaloguj przez Google</a></p>
+        {% comment %}A POST goes straight to Google; a plain link (GET) would stop on
+        allauth's intermediate "Kontynuuj" page.{% endcomment %}
+        <form method="post" action="{{ google_login_url }}">
+            {% csrf_token %}
+            <button type="submit" class="fn-login-google">Zaloguj przez Google</button>
+        </form>
         {% include "socialaccount/snippets/login_extra.html" %}
     {% endif %}
     {% if not SOCIALACCOUNT_ONLY %}
