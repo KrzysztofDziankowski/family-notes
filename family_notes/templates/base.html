@@ -12,6 +12,7 @@
     <script src="{% static 'js/pwa-register.js' %}" data-sw-url="{% url 'service_worker' %}" defer></script>
 </head>
 <body>
+    <a class="fn-skip-link" href="#main">Przejdź do treści</a>
     <header class="container">
         <nav aria-label="Główna nawigacja">
             <ul>
@@ -32,7 +33,7 @@
             </ul>
         </nav>
     </header>
-    <main class="container">
+    <main id="main" class="container" tabindex="-1">
         {% block messages %}{% endblock %}
         {% block content %}{% endblock %}
     </main>

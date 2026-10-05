@@ -859,3 +859,23 @@ class FieldAssociationTests(CaptureViewMixin, TestCase):
         assert_described_by(
             self, response, 'id_correction', ['id_correction_error', 'id_correction-enter-hint']
         )
+
+
+class ErrorTitleTests(CaptureViewMixin, TestCase):
+    """An invalid re-render is recognisable from the page title (S-17)."""
+
+    def test_valid_renders_have_the_plain_title(self):
+        self.assertContains(self.client.get(CAPTURE_URL), '<title>Dodaj wpis | FamilyNotes</title>')
+        response, _ = self.classify_with(self.proposal(), member=self.child)
+        self.assertContains(response, '<title>Dodaj wpis | FamilyNotes</title>')
+
+    def test_invalid_capture_title_starts_with_error(self):
+        response = self.client.post(CAPTURE_URL, {'text': ''})
+
+        self.assertContains(response, '<title>Błąd: Dodaj wpis | FamilyNotes</title>')
+
+    def test_confirm_invalid_title_starts_with_error(self):
+        response = self.client.post(CONFIRM_URL, self.confirm_data(content=''))
+
+        self.assertEqual(response.context['state'], 'invalid')
+        self.assertContains(response, '<title>Błąd: Dodaj wpis | FamilyNotes</title>')

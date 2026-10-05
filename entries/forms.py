@@ -551,6 +551,10 @@ class BatchReviewForm:
     def included_forms(self):
         return [form for form in self.forms if form.is_included()]
 
+    def has_errors(self):
+        """Whether the rendered batch shows any error (page title prefix, S-17)."""
+        return bool(self._non_field_errors) or any(form.errors for form in self.forms)
+
     def is_valid(self):
         if not self.is_bound or self.stale or self.correcting:
             return False

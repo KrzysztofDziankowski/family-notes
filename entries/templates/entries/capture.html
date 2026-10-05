@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Dodaj wpis{% endblock %}
+{# "Błąd: " makes an invalid re-render audible on page load, without JavaScript (S-17). #}
+{% block title %}{% if capture_form.errors or follow_up_form.errors or review_form.errors or batch_form.has_errors %}Błąd: {% endif %}Dodaj wpis{% endblock %}
 
 {% block content %}
 <h1>Dodaj wpis</h1>

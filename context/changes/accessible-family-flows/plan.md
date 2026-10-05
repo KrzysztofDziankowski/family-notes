@@ -383,10 +383,10 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Automated
 
-- [x] 1.1 Field association tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entry_forms`
-- [x] 1.2 State gallery tests still pass: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states`
-- [x] 1.3 Django checks pass: `uv run python manage.py check`
-- [x] 1.4 No model changes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 Field association tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entry_forms` — 462fcba
+- [x] 1.2 State gallery tests still pass: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states` — 462fcba
+- [x] 1.3 Django checks pass: `uv run python manage.py check` — 462fcba
+- [x] 1.4 No model changes: `uv run python manage.py makemigrations --check --dry-run` — 462fcba
 
 #### Manual
 
@@ -397,9 +397,9 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Automated
 
-- [ ] 2.1 Layout and title tests pass: `uv run python manage.py test family_notes.tests entries.tests.test_manage_views entries.tests.test_capture_views`
-- [ ] 2.2 Child and gallery views still pass: `uv run python manage.py test entries.tests.test_child_views entries.tests.test_child_states_view entries.tests.test_states_view entries.tests.test_manage_states`
-- [ ] 2.3 Django checks pass: `uv run python manage.py check`
+- [x] 2.1 Layout and title tests pass: `uv run python manage.py test family_notes.tests entries.tests.test_manage_views entries.tests.test_capture_views`
+- [x] 2.2 Child and gallery views still pass: `uv run python manage.py test entries.tests.test_child_views entries.tests.test_child_states_view entries.tests.test_states_view entries.tests.test_manage_states`
+- [x] 2.3 Django checks pass: `uv run python manage.py check`
 
 #### Manual
 

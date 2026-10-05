@@ -397,6 +397,29 @@ class CreateTests(ManageViewMixin, TestCase):
         self.assertContains(response, 'aria-invalid="true"')
         self.assertContains(response, 'id="id_content_error"')
 
+    def test_invalid_create_has_an_error_title_and_a_linked_summary(self):
+        data = self.form_data(
+            content='',
+            school_item=SchoolItemKind.HOMEWORK.value,
+            entry_type=EntryType.NOTE.value,
+            submission_key=str(uuid.uuid4()),
+        )
+
+        response = self.client.post(CREATE_URL, data)
+
+        self.assertContains(response, '<title>Błąd: Nowy wpis | FamilyNotes</title>')
+        html = response.content.decode()
+        summary = html[html.index('Popraw zaznaczone pola.'):html.index('</div>', html.index('Popraw zaznaczone pola.'))]
+        self.assertIn('<a href="#id_content">Tytuł</a>', summary)
+        self.assertIn('<a href="#id_school_item">Element szkolny</a>', summary)
+        self.assertLess(summary.index('#id_content'), summary.index('#id_school_item'))
+        self.assertNotIn('#id_date', summary)
+
+    def test_valid_create_form_title_has_no_error_prefix(self):
+        response = self.client.get(CREATE_URL)
+
+        self.assertContains(response, '<title>Nowy wpis | FamilyNotes</title>')
+
     def test_create_form_offers_every_editable_field_and_a_submission_key(self):
         """2.6"""
         response = self.client.get(CREATE_URL)
@@ -535,6 +558,8 @@ class EditTests(ManageViewMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-invalid="true"')
+        self.assertContains(response, '<title>Błąd: Edytuj wpis | FamilyNotes</title>')
+        self.assertContains(response, '<a href="#id_assigned_member">Dla kogo</a>')
         entry.refresh_from_db()
         self.assertEqual(entry.content, 'Bez zmian')
 
@@ -573,6 +598,21 @@ class DeleteTests(ManageViewMixin, TestCase):
 
 class ManagementTemplateTests(ManageViewMixin, TestCase):
     """2.6: create, capture, edit and delete actions are reachable."""
+
+    def test_edit_links_carry_visually_hidden_entry_context(self):
+        self.entry('Oddać książkę do biblioteki', date=self.days(1))
+        long = self.entry('Bardzo długi opis ' * 10, date=self.days(2))
+
+        response = self.client.get(INDEX_URL)
+
+        self.assertContains(
+            response,
+            'Edytuj<span class="fn-visually-hidden">: Oddać książkę do biblioteki</span></a>',
+        )
+        self.assertContains(
+            response,
+            f'Edytuj<span class="fn-visually-hidden">: {long.content[:59]}…</span></a>',
+        )
 
     def test_index_exposes_structured_create_and_capture(self):
         response = self.client.get(INDEX_URL)

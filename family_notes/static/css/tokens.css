@@ -6,7 +6,10 @@
      danger #b3261e / #fdecea, success-bg #e6f2ee (accent tint), notice #fff6e0 / #d9a520,
      spacing, radius and the accent rule width.
    - focus = accent, chosen for ≥3:1 non-text contrast (child-list-ui): #2f6f5e gives 5.91:1 on surface
-     #ffffff and 5.56:1 on bg #f7f8fa. accent-focus stays as a soft tint (link underline) only. */
+     #ffffff and 5.56:1 on bg #f7f8fa. accent-focus stays as a soft tint (link underline) only.
+   - control-border #7d8590, chosen for ≥3:1 non-text contrast of form-control boundaries
+     (accessible-family-flows, WCAG 1.4.11): 3.51:1 on bg #f7f8fa, 3.73:1 on surface #ffffff and
+     3.63:1 on Pico's input background #fbfcfc. Pico's own #cfd5e2 measured about 1.4:1. */
 
 /* Semantic project tokens: the single source of design values for product views. */
 :root {
@@ -16,6 +19,7 @@
   --fn-color-text-strong: #3d454d;
   --fn-color-muted: #5d6670;
   --fn-color-border: #d9dde2;
+  --fn-color-control-border: #7d8590;
   --fn-color-accent: #2f6f5e;
   --fn-color-accent-hover: #255a4c;
   --fn-color-accent-focus: rgba(47, 111, 94, 0.25);
@@ -58,10 +62,59 @@
   --pico-primary-focus: var(--fn-color-focus);
   --pico-primary-inverse: var(--fn-color-accent-inverse);
   --pico-card-background-color: var(--fn-color-surface);
+  --pico-secondary-focus: var(--fn-color-focus);
+  --pico-form-element-border-color: var(--fn-color-control-border);
   --pico-form-element-invalid-border-color: var(--fn-color-danger);
   --pico-form-element-invalid-active-border-color: var(--fn-color-danger);
   --pico-del-color: var(--fn-color-danger);
   --pico-ins-color: var(--fn-color-success);
+}
+
+/* Accessibility (accessible-family-flows, WCAG 2.2 AA). One visible focus indicator for every
+   interactive element: a solid outline offset from the element, measured against the page
+   background, so it never merges with an accent fill. :root raises the specificity above Pico's
+   flush box-shadow rings, which are suppressed. */
+:root :is(a, button, [role="button"], [type="submit"], [type="button"], summary, select, input, textarea):focus-visible {
+  outline: 2px solid var(--fn-color-focus);
+  outline-offset: var(--fn-space-1);
+  --pico-box-shadow: none;
+  box-shadow: none;
+}
+
+/* Hidden visually, still read by screen readers. */
+.fn-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* "Przejdź do treści": off-screen until focused, then shown at the top of the page. */
+.fn-skip-link {
+  position: absolute;
+  top: var(--fn-space-2);
+  left: var(--fn-space-2);
+  z-index: 10;
+  padding: var(--fn-space-2) var(--fn-space-3);
+  background: var(--fn-color-surface);
+  color: var(--fn-color-accent);
+  border-radius: var(--fn-radius);
+  transform: translateY(-200%);
+}
+
+.fn-skip-link:focus {
+  transform: none;
+}
+
+/* The skip-link target takes focus programmatically only; it is not a control. */
+main[tabindex="-1"]:focus {
+  outline: none;
 }
 
 /* Shared component classes used by product templates. */
@@ -168,12 +221,6 @@
   text-decoration: none;
 }
 
-.fn-entry-link:focus-visible {
-  outline: 2px solid var(--fn-color-focus);
-  outline-offset: var(--fn-space-1);
-  box-shadow: none;
-}
-
 .fn-entry-type {
   display: block;
   color: var(--fn-color-accent);
@@ -231,12 +278,6 @@
 
 .fn-tabs a:hover {
   border-color: var(--fn-color-accent);
-}
-
-.fn-tabs a:focus-visible {
-  outline: 2px solid var(--fn-color-focus);
-  outline-offset: var(--fn-space-1);
-  box-shadow: none;
 }
 
 .fn-tabs a[aria-current="page"] {

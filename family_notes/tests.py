@@ -218,3 +218,37 @@ class ExceptionSummaryTests(SimpleTestCase):
         self.assertTrue(summary.startswith('DatabaseError stack='))
         self.assertIn(' <- caused by Driver sqlstate=0A000 stack=', summary)
         self.assertNotIn('SECRET', summary)
+
+
+SKIP_LINK = '<a class="fn-skip-link" href="#main">Przejdź do treści</a>'
+
+
+class SkipLinkTests(FamilyFixtureMixin, TestCase):
+    """Every layout starts with a skip link to ``<main id="main">`` (S-17, WCAG 2.4.1)."""
+
+    def assert_skip_link_first(self, body):
+        self.assertIn(SKIP_LINK, body)
+        self.assertIn('<main id="main" class="container" tabindex="-1">', body)
+        after_body = body[body.index('<body'):]
+        self.assertLess(after_body.index(SKIP_LINK), after_body.index('<nav'))
+        self.assertTrue(after_body.split('<a ', 1)[1].startswith('class="fn-skip-link"'))
+
+    def test_layout_pages_start_with_the_skip_link(self):
+        cases = (
+            ('login', None, reverse('account_login'), 200),
+            ('parent list', self.parent, reverse('entries:index'), 200),
+            ('child list', self.child, reverse('entries:child_list'), 200),
+            ('403', self.parent, reverse('entries:child_list'), 403),
+            ('anonymous 404', None, '/does-not-exist/', 404),
+        )
+        for name, member, url, status in cases:
+            with self.subTest(name):
+                self.client.logout()
+                if member is not None:
+                    self.client.force_login(member.user)
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, status)
+                self.assert_skip_link_first(response.content.decode())
+
+    def test_500_has_its_own_skip_link(self):
+        self.assert_skip_link_first(render_to_string('500.html'))

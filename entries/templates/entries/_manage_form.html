@@ -10,6 +10,9 @@ Structured create/edit form. Parameters: form, entry (None when creating).
     {% elif form.errors %}
         <div class="fn-panel fn-panel--danger" role="alert">
             <p>Popraw zaznaczone pola.</p>
+            <ul>
+                {% for field in form.visible_fields %}{% if field.errors %}<li><a href="#{{ field.auto_id }}">{{ field.label }}</a></li>{% endif %}{% endfor %}
+            </ul>
         </div>
     {% endif %}
     {% include "entries/_field.html" with field=form.entry_type hint="" %}
