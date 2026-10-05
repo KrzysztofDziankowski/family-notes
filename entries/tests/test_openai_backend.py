@@ -29,6 +29,7 @@ from entries.classification.backends import (
     ClassificationBackendError,
 )
 from entries.classification.openai_backend import (
+    DATE_RULES,
     INSTRUCTIONS,
     OpenAIClassificationBackend,
     StructuredClassification,
@@ -350,6 +351,25 @@ class AdapterRequestTests(BackendHarness, SimpleTestCase):
         self.assertIn('zdrobnienia', INSTRUCTIONS)
         self.assertIn('odpowiedz_rodzica, member_mention to osoba wymieniona w odpowiedzi', INSTRUCTIONS)
 
+    def test_instructions_keep_only_the_action_in_the_title(self):
+        self.assertIn('W content podaj samą czynność słowami rodzica', INSTRUCTIONS)
+        self.assertIn('pomiń imię osoby, którą wpisujesz w member_name', INSTRUCTIONS)
+        self.assertIn('słowa podające datę lub godzinę', INSTRUCTIONS)
+        self.assertIn('„kasia zrobić pranie w piątek” content to „Zrobić pranie”', INSTRUCTIONS)
+        self.assertIn('Inne osoby i szczegóły zostaw', INSTRUCTIONS)
+        self.assertIn('przedmiot szkolny także zostaje w treści', INSTRUCTIONS)
+        self.assertIn('„Kartkówka z matematyki”', INSTRUCTIONS)
+        self.assertLess(INSTRUCTIONS.index('W content podaj'), INSTRUCTIONS.index(DATE_RULES))
+
+    def test_content_description_excludes_assignee_and_date_but_keeps_details(self):
+        description = StructuredClassification.model_fields['content'].description
+
+        self.assertIn('sama czynność słowami rodzica', description)
+        self.assertIn('wielką literą', description)
+        self.assertIn('bez imienia osoby przypisanej w member_name', description)
+        self.assertIn('bez słów podających datę lub godzinę', description)
+        self.assertIn('przedmiot szkolny', description)
+
     def test_follow_up_text_is_excluded_from_request_repr(self):
         text = repr(make_follow_up_request())
 
@@ -496,6 +516,28 @@ class DateGroundingTests(BackendHarness, SimpleTestCase):
     def test_instructions_forbid_reference_date_as_default(self):
         self.assertIn('nigdy nie używaj daty odniesienia jako domyślnej', INSTRUCTIONS)
         self.assertIn('date_source', INSTRUCTIONS)
+
+    def test_instructions_end_with_the_shared_date_rules(self):
+        self.assertTrue(INSTRUCTIONS.endswith(DATE_RULES))
+        self.assertEqual(INSTRUCTIONS.count(DATE_RULES), 1)
+
+    def test_date_rules_state_timezone_week_start_and_relative_dates(self):
+        self.assertIn('Europe/Warsaw', DATE_RULES)
+        self.assertIn('tydzień zaczyna się w poniedziałek', DATE_RULES)
+        self.assertIn('„W przyszłym tygodniu w <dzień>”', DATE_RULES)
+        self.assertIn('następnym tygodniu kalendarzowym', DATE_RULES)
+        self.assertIn('„Dziś” oznacza datę odniesienia', DATE_RULES)
+        self.assertIn('Dzień i miesiąc bez roku', DATE_RULES)
+
+    def test_date_rules_state_the_same_weekday_rule_explicitly(self):
+        self.assertIn('najbliższe wystąpienie po dacie odniesienia', DATE_RULES)
+        self.assertIn('w ten sam dzień tygodnia', DATE_RULES)
+        self.assertIn('data odniesienia plus 7 dni', DATE_RULES)
+        self.assertIn('nigdy o samą datę odniesienia', DATE_RULES)
+
+    def test_date_rules_leave_the_correction_shift_rule_out(self):
+        self.assertNotIn('bieżącej daty propozycji', DATE_RULES)
+        self.assertNotIn('propozycj', DATE_RULES)
 
     def test_invented_date_without_evidence_is_dropped(self):
         for date_source in (None, '', '   ', '„”'):

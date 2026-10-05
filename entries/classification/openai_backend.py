@@ -77,7 +77,13 @@ class StructuredClassification(BaseModel):
         )
     )
     content: str = Field(
-        description='Zwięzła treść wpisu po polsku, oparta wyłącznie na poleceniu.'
+        description=(
+            'Zwięzła treść wpisu po polsku, oparta wyłącznie na poleceniu: sama '
+            'czynność słowami rodzica, zaczynająca się wielką literą, bez imienia '
+            'osoby przypisanej w member_name i bez słów podających datę lub godzinę '
+            'wpisaną w date i time. Inne osoby, szczegóły i przedmiot szkolny '
+            'zostają w treści.'
+        )
     )
     grounded: bool = Field(
         description='true tylko wtedy, gdy każda zwrócona informacja wynika z polecenia.'
@@ -121,6 +127,30 @@ def _school_item_guide() -> str:
     return '; '.join(f'{kind.value} ({kind.label})' for kind in SchoolItemKind)
 
 
+# Shared relative-date rules (S-20). Later slices (free-text correction,
+# multi-entry capture) reuse this constant unchanged; ``INSTRUCTIONS`` already
+# ends with it, so prompts built from ``INSTRUCTIONS`` must not append it again.
+DATE_RULES = (
+    'Zasady dat: liczysz je w strefie czasowej Europe/Warsaw, a tydzień zaczyna '
+    'się w poniedziałek. Sam dzień tygodnia (np. „w piątek”) oznacza jego '
+    'najbliższe wystąpienie po dacie odniesienia: jeśli data odniesienia wypada '
+    'w ten sam dzień tygodnia, chodzi o ten dzień w następnym tygodniu (data '
+    'odniesienia plus 7 dni), nigdy o samą datę odniesienia. „W przyszłym '
+    'tygodniu w <dzień>” oznacza ten dzień tygodnia w następnym tygodniu '
+    'kalendarzowym. „Dziś” oznacza datę odniesienia. Dzień i miesiąc bez roku '
+    'oznaczają najbliższą taką datę przypadającą w dniu odniesienia lub później.'
+)
+
+_TITLE_RULE = (
+    'W content podaj samą czynność słowami rodzica, zaczynając wielką literą: '
+    'pomiń imię osoby, którą wpisujesz w member_name, oraz słowa podające datę '
+    'lub godzinę, które trafiają do date_source, date i time. Na przykład dla '
+    'polecenia „kasia zrobić pranie w piątek” content to „Zrobić pranie”, data '
+    'to najbliższy piątek, a osoba to Kasia. Inne osoby i szczegóły zostaw '
+    '(np. „Kupić prezent dla babci”); przedmiot szkolny także zostaje w treści '
+    '(np. „Kartkówka z matematyki”). '
+)
+
 INSTRUCTIONS = (
     'Klasyfikujesz polecenie rodzica dotyczące spraw rodzinnych i szkolnych. '
     'Dane wejściowe to JSON z datą odniesienia, dniem tygodnia, ustawieniami '
@@ -149,7 +179,9 @@ INSTRUCTIONS = (
     'Jeśli polecenie (ani odpowiedź rodzica) nie podaje daty, zwróć date i '
     'date_source jako null i nigdy nie używaj daty odniesienia jako domyślnej; '
     'date_source musi zawierać dosłownie skopiowane słowa rodzica z wartości pola '
-    'polecenie albo odpowiedz_rodzica (nie nazwę pola JSON).'
+    'polecenie albo odpowiedz_rodzica (nie nazwę pola JSON). '
+    + _TITLE_RULE
+    + DATE_RULES
 )
 
 

@@ -236,10 +236,10 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [ ] 1.1 Adapter contract tests pass, including the new instruction and payload assertions: `uv run python manage.py test entries.tests.test_openai_backend`
-- [ ] 1.2 Existing acceptance tests still pass unchanged: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [ ] 1.3 Django checks pass: `uv run python manage.py check`
-- [ ] 1.5 Contract tests assert that `DATE_RULES` states the same-weekday rule explicitly and that the schema field set is exactly the post-S-01/S-02 set (including `school_subject` and `member_mention`): `uv run python manage.py test entries.tests.test_openai_backend`
+- [x] 1.1 Adapter contract tests pass, including the new instruction and payload assertions: `uv run python manage.py test entries.tests.test_openai_backend`
+- [x] 1.2 Existing acceptance tests still pass unchanged: `uv run python manage.py test entries.tests.test_classification_acceptance`
+- [x] 1.3 Django checks pass: `uv run python manage.py check`
+- [x] 1.5 Contract tests assert that `DATE_RULES` states the same-weekday rule explicitly and that the schema field set is exactly the post-S-01/S-02 set (including `school_subject` and `member_mention`): `uv run python manage.py test entries.tests.test_openai_backend`
 
 #### Manual
 
