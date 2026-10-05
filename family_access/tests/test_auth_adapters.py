@@ -48,6 +48,42 @@ class LocalSignupClosedTests(TestCase):
         self.assertFalse(get_account_adapter(request).is_open_for_signup(request))
 
 
+class SignInMessageTests(TestCase):
+    """No "signed in/out" confirmation is queued, so none can surface later."""
+
+    password = 'test-haslo-123'
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='test_kasia', password=self.password,
+        )
+
+    def test_sign_in_queues_no_confirmation(self):
+        response = self.client.post(
+            reverse('account_login'),
+            {'login': 'test_kasia', 'password': self.password},
+            follow=True,
+        )
+
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+        self.assertNotContains(response, 'Zalogowano')
+        self.assertEqual(list(response.context['messages']), [])
+
+    def test_sign_out_then_login_page_shows_no_stale_message(self):
+        self.client.post(
+            reverse('account_login'),
+            {'login': 'test_kasia', 'password': self.password},
+        )
+        self.client.post(reverse('account_logout'))
+
+        response = self.client.get(reverse('account_login'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Zalogowano')
+        self.assertNotContains(response, 'Wylogowano')
+        self.assertEqual(list(response.context['messages']), [])
+
+
 class GoogleFirstSignInTests(TestCase):
     email = 'new.parent@example.test'
 
