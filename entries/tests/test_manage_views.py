@@ -572,7 +572,12 @@ class ManagementTemplateTests(ManageViewMixin, TestCase):
         delete_form = html[html.index(f'action="{delete_url(entry.pk)}"') - 40:]
         self.assertIn('method="post"', delete_form)
         self.assertIn('csrfmiddlewaretoken', delete_form)
-        self.assertNotIn('<script', html)
+        # The delete disclosure needs no JavaScript: the page loads only the
+        # site-wide service-worker registration (S-06), nothing of its own.
+        main = html[html.index('<main'):html.index('</main>')]
+        self.assertNotIn('<script', main)
+        self.assertEqual(html.count('<script'), 1)
+        self.assertIn('js/pwa-register.js', html)
 
     def test_parent_navigation_links_to_the_index(self):
         for url in (reverse('account_status'), reverse('entries:capture')):

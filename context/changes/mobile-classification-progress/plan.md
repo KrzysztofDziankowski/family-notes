@@ -417,13 +417,13 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [x] 1.1 View tests prove the capture form and follow-up form render the progress partial with all five hidden `data-progress-state` blocks, the exact Polish copy, the retry button, and the `data-progress-slow-after="10"` / `data-progress-stalled-after="35"` attributes under default settings.
-- [x] 1.2 A view test with `override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)` proves both thresholds follow the settings (`6` and `22`).
-- [x] 1.3 View tests prove the review form (proposal, `correction_failed`, confirm-invalid) renders the progress partial, „Popraw” carries `data-classification-submit`, „Zapisz wpis” does not, and the review form has no `data-classification-default`; capture and follow-up forms carry `data-classification-default`, "Pomiń" has no `data-classification-submit`; structured create/edit forms and the saved panel do not render the partial.
-- [x] 1.11 A markup test proves that in every rendered progress partial no ancestor of `[role=status][data-progress-live]` carries `hidden`, and that the region contains the five hidden state blocks.
-- [x] 1.4 View tests prove the capture page and DEBUG state gallery include both the `js/classification-progress.js` and S-05 `js/enter-submit.js` script tags, and a test proves the new file resolves through Django's static files finders.
-- [x] 1.5 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view`.
-- [x] 1.6 Django checks pass: `uv run python manage.py check`.
+- [x] 1.1 View tests prove the capture form and follow-up form render the progress partial with all five hidden `data-progress-state` blocks, the exact Polish copy, the retry button, and the `data-progress-slow-after="10"` / `data-progress-stalled-after="35"` attributes under default settings. — f2a88eb
+- [x] 1.2 A view test with `override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)` proves both thresholds follow the settings (`6` and `22`). — f2a88eb
+- [x] 1.3 View tests prove the review form (proposal, `correction_failed`, confirm-invalid) renders the progress partial, „Popraw” carries `data-classification-submit`, „Zapisz wpis” does not, and the review form has no `data-classification-default`; capture and follow-up forms carry `data-classification-default`, "Pomiń" has no `data-classification-submit`; structured create/edit forms and the saved panel do not render the partial. — f2a88eb
+- [x] 1.11 A markup test proves that in every rendered progress partial no ancestor of `[role=status][data-progress-live]` carries `hidden`, and that the region contains the five hidden state blocks. — f2a88eb
+- [x] 1.4 View tests prove the capture page and DEBUG state gallery include both the `js/classification-progress.js` and S-05 `js/enter-submit.js` script tags, and a test proves the new file resolves through Django's static files finders. — f2a88eb
+- [x] 1.5 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view`. — f2a88eb
+- [x] 1.6 Django checks pass: `uv run python manage.py check`. — f2a88eb
 
 #### Manual
 
@@ -437,13 +437,13 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [ ] 2.1 PWA tests prove `/manifest.webmanifest`, `/sw.js` and `/offline/` return 200 to anonymous users with `application/manifest+json`, `text/javascript` + `Cache-Control: no-cache`, and `Cache-Control: no-cache` respectively.
-- [ ] 2.2 A manifest test proves `id`, `start_url` and `scope` are `/`, `display` is `standalone`, `lang` is `pl`, `orientation` is absent, `theme_color`/`background_color` match the `tokens.css` values, and the 192, 512 and maskable 512 icons resolve through Django's static files finders.
-- [ ] 2.3 A service worker source test proves the non-GET early return, the precache list, the unescaped literal `"/offline/"` and the release-derived cache name are present, and that `cache.put`, `indexedDB`, `push`/`sync`/`notificationclick` event listeners and any `/entries/`, `/api/`, `/account/`, `/accounts/` or `/admin/` URL are absent.
-- [ ] 2.4 An offline page test proves the Polish copy renders and, for an authenticated parent, no username, "Wyloguj" or CSRF token appears.
-- [ ] 2.5 Layout tests prove the login page and parent entry list include the manifest link, `apple-touch-icon` and `js/pwa-register.js` with `data-sw-url="/sw.js"`.
-- [ ] 2.6 Focused tests pass: `uv run python manage.py test family_notes`.
-- [ ] 2.7 Django checks pass: `uv run python manage.py check`.
+- [x] 2.1 PWA tests prove `/manifest.webmanifest`, `/sw.js` and `/offline/` return 200 to anonymous users with `application/manifest+json`, `text/javascript` + `Cache-Control: no-cache`, and `Cache-Control: no-cache` respectively.
+- [x] 2.2 A manifest test proves `id`, `start_url` and `scope` are `/`, `display` is `standalone`, `lang` is `pl`, `orientation` is absent, `theme_color`/`background_color` match the `tokens.css` values, and the 192, 512 and maskable 512 icons resolve through Django's static files finders.
+- [x] 2.3 A service worker source test proves the non-GET early return, the precache list, the unescaped literal `"/offline/"` and the release-derived cache name are present, and that `cache.put`, `indexedDB`, `push`/`sync`/`notificationclick` event listeners and any `/entries/`, `/api/`, `/account/`, `/accounts/` or `/admin/` URL are absent.
+- [x] 2.4 An offline page test proves the Polish copy renders and, for an authenticated parent, no username, "Wyloguj" or CSRF token appears.
+- [x] 2.5 Layout tests prove the login page and parent entry list include the manifest link, `apple-touch-icon` and `js/pwa-register.js` with `data-sw-url="/sw.js"`.
+- [x] 2.6 Focused tests pass: `uv run python manage.py test family_notes`.
+- [x] 2.7 Django checks pass: `uv run python manage.py check`.
 
 #### Manual
 

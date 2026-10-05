@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% comment %}
+Offline fallback (S-06), precached anonymously by the service worker. It must
+stay user-independent: no navigation, no CSRF token, no account data.
+{% endcomment %}
+
+{% block title %}Brak połączenia{% endblock %}
+
+{% block nav %}{% endblock %}
+
+{% block content %}
+<section class="fn-panel fn-panel--notice" data-state-part="offline">
+    <h1>Brak połączenia</h1>
+    <p>Nie możesz teraz połączyć się z FamilyNotes. Sprawdź połączenie z internetem. Twoje wpisy nie są zapisywane na tym urządzeniu.</p>
+    <div class="fn-actions">
+        <a href="">Spróbuj ponownie</a>
+        <a href="{% url 'home' %}">Strona główna</a>
+    </div>
+</section>
+{% endblock %}

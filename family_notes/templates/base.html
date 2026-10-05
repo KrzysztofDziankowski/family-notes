@@ -6,6 +6,10 @@
     <title>{% block title %}{% endblock %} | FamilyNotes</title>
     <link rel="stylesheet" href="{% static 'vendor/pico/pico.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="manifest" href="{% url 'web_manifest' %}">
+    <link rel="icon" href="{% static 'pwa/icon-192.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'pwa/apple-touch-icon.png' %}">
+    <script src="{% static 'js/pwa-register.js' %}" data-sw-url="{% url 'service_worker' %}" defer></script>
 </head>
 <body>
     <header class="container">

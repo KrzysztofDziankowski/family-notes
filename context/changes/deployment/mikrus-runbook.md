@@ -526,6 +526,24 @@ listener, or Certbot. Mikrus accepts public HTTPS for `<PUBLIC_HOST>` and forwar
 plain HTTP to port `20121`, as configured for `familynotes.mikrus.dev` in the
 subdomain panel.
 
+### Installable web app routes (S-06)
+
+`/sw.js`, `/manifest.webmanifest` and `/offline/` are served by Django through
+`location /`; they need no nginx change. Do not add a `/sw.js` static alias or a
+long `expires` for it: the service worker must stay at the root (scope `/`) and
+must be re-checked on every navigation (Django sends `Cache-Control: no-cache`).
+If a Content-Security-Policy is ever added, it needs `worker-src 'self'` and
+`manifest-src 'self'` (plus `script-src 'self'` and `img-src 'self'`).
+
+Post-release smoke check:
+
+```bash
+curl -sI https://familynotes.mikrus.dev/sw.js
+# expect: HTTP 200, Content-Type: text/javascript; charset=utf-8, Cache-Control: no-cache
+curl -s https://familynotes.mikrus.dev/manifest.webmanifest
+# expect: JSON with "start_url": "/"
+```
+
 ## Install or Update the Release Gate Pair
 
 The privileged helper `/usr/local/sbin/family-notes-deploy` sources the readiness
