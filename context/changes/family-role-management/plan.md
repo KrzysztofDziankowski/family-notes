@@ -250,16 +250,16 @@ No schema change, no data backfill and no feature flag. Rollback is to remove th
 
 #### Automated
 
-- [x] 2.1 View tests cover the role route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user, with no database change on denial.
-- [x] 2.2 Foreign and nonexistent member ids return the same status and show no foreign content.
-- [x] 2.3 Effective-access tests prove the next-request behavior after demotion and promotion across web views, the automation API and home routing.
-- [x] 2.4 Accessibility audit cases pass for the promotion, demotion, self-demotion, last-parent and guard-error states: `uv run python manage.py test family_access.tests.test_membership_accessibility`.
-- [x] 2.5 State-gallery tests prove the new role states render under DEBUG only and write no rows.
-- [x] 2.12 Regression tests prove a demoted parent appears in the EduVulcan child snapshot and is matched by display name.
-- [x] 2.13 Notice tests prove a parent demoted or deactivated by another parent sees the matching Polish notice exactly once on the next request, a self-demoted parent does not see it, and a promotion shows no notice.
-- [x] 2.6 Full tests pass: `uv run python manage.py test`.
-- [x] 2.7 Django checks pass: `uv run python manage.py check`.
-- [x] 2.8 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 2.1 View tests cover the role route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user, with no database change on denial. — 1fed84a
+- [x] 2.2 Foreign and nonexistent member ids return the same status and show no foreign content. — 1fed84a
+- [x] 2.3 Effective-access tests prove the next-request behavior after demotion and promotion across web views, the automation API and home routing. — 1fed84a
+- [x] 2.4 Accessibility audit cases pass for the promotion, demotion, self-demotion, last-parent and guard-error states: `uv run python manage.py test family_access.tests.test_membership_accessibility`. — 1fed84a
+- [x] 2.5 State-gallery tests prove the new role states render under DEBUG only and write no rows. — 1fed84a
+- [x] 2.12 Regression tests prove a demoted parent appears in the EduVulcan child snapshot and is matched by display name. — 1fed84a
+- [x] 2.13 Notice tests prove a parent demoted or deactivated by another parent sees the matching Polish notice exactly once on the next request, a self-demoted parent does not see it, and a promotion shows no notice. — 1fed84a
+- [x] 2.6 Full tests pass: `uv run python manage.py test`. — 1fed84a
+- [x] 2.7 Django checks pass: `uv run python manage.py check`. — 1fed84a
+- [x] 2.8 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 1fed84a
 
 #### Manual
 
