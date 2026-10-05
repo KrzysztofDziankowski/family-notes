@@ -249,12 +249,12 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [x] 2.1 Guard unit tests pass: `uv run python manage.py test entries.tests.test_title_cleanup`
-- [x] 2.2 Owner-example acceptance tests pass for clean and echoing model outputs: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [x] 2.3 Classification service, follow-up and family classification tests still pass: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_follow_up_answer entries.tests.test_family_classification`
-- [x] 2.4 EduVulcan conversion tests still pass: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_eduvulcan_acceptance`
-- [x] 2.5 Full suite and checks pass: `uv run python manage.py test` and `uv run python manage.py check`
-- [x] 2.7 Guard keeps what was not extracted: an unmatched leading name stays, and the school subject stays in "Kartkówka z matematyki": `uv run python manage.py test entries.tests.test_title_cleanup entries.tests.test_classification_acceptance`
+- [x] 2.1 Guard unit tests pass: `uv run python manage.py test entries.tests.test_title_cleanup` — f513172
+- [x] 2.2 Owner-example acceptance tests pass for clean and echoing model outputs: `uv run python manage.py test entries.tests.test_classification_acceptance` — f513172
+- [x] 2.3 Classification service, follow-up and family classification tests still pass: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_follow_up_answer entries.tests.test_family_classification` — f513172
+- [x] 2.4 EduVulcan conversion tests still pass: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_eduvulcan_acceptance` — f513172
+- [x] 2.5 Full suite and checks pass: `uv run python manage.py test` and `uv run python manage.py check` — f513172
+- [x] 2.7 Guard keeps what was not extracted: an unmatched leading name stays, and the school subject stays in "Kartkówka z matematyki": `uv run python manage.py test entries.tests.test_title_cleanup entries.tests.test_classification_acceptance` — f513172
 
 #### Manual
 
@@ -264,7 +264,7 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [ ] 3.1 Default suite still skips live tests: `uv run python manage.py test entries.tests.test_classification_live_wire`
+- [x] 3.1 Default suite still skips live tests: `uv run python manage.py test entries.tests.test_classification_live_wire`
 
 #### Manual
 

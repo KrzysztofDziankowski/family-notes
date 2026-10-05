@@ -44,6 +44,15 @@ REFERENCE_DATE = datetime.date(2026, 10, 5)
 TOMORROW = datetime.date(2026, 10, 6)
 REDACTED_HEADERS = {'authorization', 'cookie', 'set-cookie'}
 
+# S-20 owner example: the title keeps only the action.
+LAUNDRY_INSTRUCTION = 'kasia zrobić pranie w piątek'
+LAUNDRY_TITLE = 'zrobić pranie'
+SUNDAY = datetime.date(2026, 10, 4)
+COMING_FRIDAY = datetime.date(2026, 10, 9)
+# A bare weekday typed on that weekday means next week's day, never today.
+FRIDAY = datetime.date(2026, 10, 9)
+NEXT_FRIDAY = datetime.date(2026, 10, 16)
+
 
 def _headers(headers):
     return '\n'.join(
@@ -130,3 +139,37 @@ class LiveWireClassificationTests(SimpleTestCase):
         self.assertEqual(result.member_name, 'Kasia')
         self.assertEqual(result.date, TOMORROW)
         self.assertIn('biolog', result.content.lower())
+
+    def classify_laundry(self, reference_date):
+        request = BackendRequest(
+            submitted_text=LAUNDRY_INSTRUCTION,
+            allowed_member_names=MEMBER_NAMES,
+            reference_date=reference_date,
+            locale='pl-PL',
+        )
+        backend = build_openai_backend(client=make_logging_client())
+        try:
+            output = backend.classify(request)
+        finally:
+            backend.close()
+        result = classify_output(request, output, require_school_subject=True)
+        logger.debug('=== Validated result\n%r (content=%r, member_name=%r)',
+                     result, getattr(result, 'content', None),
+                     getattr(result, 'member_name', None))
+        return result
+
+    def test_title_keeps_only_the_action(self):
+        result = self.classify_laundry(SUNDAY)
+
+        self.assertIsInstance(result, ClassificationProposal)
+        self.assertEqual(result.entry_type, EntryType.TODO)
+        self.assertEqual(result.content.casefold(), LAUNDRY_TITLE)
+        self.assertEqual(result.date, COMING_FRIDAY)
+        self.assertEqual(result.member_name, 'Kasia')
+
+    def test_bare_weekday_on_the_same_weekday_means_next_week(self):
+        result = self.classify_laundry(FRIDAY)
+
+        self.assertIsInstance(result, ClassificationProposal)
+        self.assertEqual(result.date, NEXT_FRIDAY)
+        self.assertEqual(result.date, FRIDAY + datetime.timedelta(days=7))
