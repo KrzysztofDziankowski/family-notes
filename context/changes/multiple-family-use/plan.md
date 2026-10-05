@@ -384,11 +384,11 @@ Context resolution adds one indexed membership query per request, which is negli
 
 #### Automated
 
-- [x] 3.1 The cross-family matrix passes for every listed web route: `uv run python manage.py test entries.tests.test_multi_family_access family_access.tests.test_multi_family_access`.
-- [x] 3.2 Automation and worker regression tests pass: `uv run python manage.py test entries.tests.test_entries_api entries.tests.test_notification_intake entries.tests.test_conversion_worker`.
-- [x] 3.3 Full tests pass: `uv run python manage.py test`.
-- [x] 3.4 Django checks pass: `uv run python manage.py check`.
-- [x] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 3.1 The cross-family matrix passes for every listed web route: `uv run python manage.py test entries.tests.test_multi_family_access family_access.tests.test_multi_family_access`. — 98314b6
+- [x] 3.2 Automation and worker regression tests pass: `uv run python manage.py test entries.tests.test_entries_api entries.tests.test_notification_intake entries.tests.test_conversion_worker`. — 98314b6
+- [x] 3.3 Full tests pass: `uv run python manage.py test`. — 98314b6
+- [x] 3.4 Django checks pass: `uv run python manage.py check`. — 98314b6
+- [x] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 98314b6
 
 #### Manual
 
