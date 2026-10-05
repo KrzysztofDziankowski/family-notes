@@ -10,8 +10,10 @@ import uuid
 
 from django.contrib.messages import constants
 from django.contrib.messages.storage.base import Message
+from django.db import connection
 from django.template.loader import render_to_string
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,6 +28,20 @@ CREATE_URL = reverse('entries:create')
 FOREIGN_SENTINEL = 'SENTINEL-OBCA-RODZINA-4b2d'
 ROW_PATTERN = re.compile(r'data-entry-row="(\d+)"')
 SECTION_PATTERN = re.compile(r'data-list-section="(\w+)"')
+GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
+
+
+def group_html(html, key):
+    """The rendered ``data-assignee-group`` block with ``key``."""
+    start = html.index(f'data-assignee-group="{key}"')
+    end = html.find('data-assignee-group="', start + 1)
+    return html[start:end if end != -1 else len(html)]
+
+
+def group_heading(html, key):
+    return re.search(
+        r'<h2 class="fn-manage-section-title">([^<]*)</h2>', group_html(html, key)
+    ).group(1)
 
 
 def detail_url(pk):
@@ -198,6 +214,12 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         self.assertContains(response, 'Michał')
         self.assertContains(response, 'Bez daty</span>')
         self.assertContains(response, ', 08:00')
+        # S-08: the assignee name sits in the group heading, not in the row.
+        html = response.content.decode()
+        self.assertEqual(group_heading(html, f'member-{self.child.pk}'), 'Michał')
+        row = group_html(html, f'member-{self.child.pk}')
+        self.assertIn(f'data-entry-row="{self.tomorrow.pk}"', row)
+        self.assertNotIn('<span>Michał</span>', row)
 
 
 class EmptyIndexTests(ManageViewMixin, TestCase):
@@ -619,6 +641,13 @@ class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase)
         self.assertEqual(self.rendered_rows(index), [mine.pk, theirs.pk])
         self.assertContains(index, 'Ewa')
         self.assertContains(index, 'Paweł')
+        # S-08: each parent-assigned row sits under its parent's group heading.
+        html = index.content.decode()
+        for entry, member in ((mine, self.parent), (theirs, self.second_parent)):
+            with self.subTest(heading=member.display_name):
+                key = f'member-{member.pk}'
+                self.assertEqual(group_heading(html, key), member.display_name)
+                self.assertIn(f'data-entry-row="{entry.pk}"', group_html(html, key))
         for entry, name in ((mine, 'Ewa'), (theirs, 'Paweł')):
             with self.subTest(name=name):
                 detail = self.client.get(detail_url(entry.pk))
@@ -665,3 +694,149 @@ class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase)
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse('account_login'), response['Location'])
+
+
+class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
+    """S-08: the parent index groups entries by assignee in both modes."""
+
+    def setUp(self):
+        super().setUp()
+        e = self.entry
+        # Created out of group order: the order comes from roles and member pks.
+        self.family_today = e('Rodzina dziś', date=self.today)
+        self.pawel_tomorrow = e('Paweł jutro', date=self.days(1), assigned_member=self.second_parent)
+        self.ewa_undated = e('Ewa bez daty', assigned_member=self.parent)
+        self.ania_tomorrow = e('Ania jutro', date=self.days(1), assigned_member=self.other_child)
+        self.michal_next_week = e('Michał za tydzień', date=self.days(7), assigned_member=self.child)
+        self.michal_today = e(
+            'Michał dziś', date=self.today, time=datetime.time(8), assigned_member=self.child
+        )
+        self.michal_undated = e('Michał bez daty', assigned_member=self.child)
+        self.zosia_today = e('Zosia dziś', date=self.today, assigned_member=self.inactive_child)
+        self.family_undated = e('Rodzina bez daty')
+        self.michal_yesterday = e('Michał wczoraj', date=self.days(-1), assigned_member=self.child)
+        self.michal_last_week = e('Michał tydzień temu', date=self.days(-7), assigned_member=self.child)
+        self.jolanta_yesterday = e(
+            'Jolanta wczoraj', date=self.days(-1), assigned_member=self.inactive_parent
+        )
+        self.family_yesterday = e('Rodzina wczoraj', date=self.days(-1))
+        self.foreign = e(
+            FOREIGN_SENTINEL,
+            family=self.other_family,
+            date=self.today,
+            assigned_member=self.other_family_child,
+        )
+
+    def key(self, member):
+        return f'member-{member.pk}'
+
+    def test_upcoming_groups_children_then_parents_then_family(self):
+        html = self.client.get(INDEX_URL).content.decode()
+
+        self.assertEqual(
+            GROUP_PATTERN.findall(html),
+            [
+                self.key(self.child),
+                self.key(self.other_child),
+                self.key(self.inactive_child),
+                self.key(self.parent),
+                self.key(self.second_parent),
+                'family',
+            ],
+        )
+        self.assertEqual(
+            [group_heading(html, key) for key in GROUP_PATTERN.findall(html)],
+            ['Michał', 'Ania', 'Zosia (nieaktywne konto)', 'Ewa', 'Paweł', 'Cała rodzina'],
+        )
+
+    def test_past_groups_children_then_parents_then_family(self):
+        html = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
+
+        self.assertEqual(
+            GROUP_PATTERN.findall(html),
+            [self.key(self.child), self.key(self.inactive_parent), 'family'],
+        )
+        self.assertEqual(
+            group_heading(html, self.key(self.inactive_parent)), 'Jolanta (nieaktywne konto)'
+        )
+
+    def test_rows_keep_the_mode_order_inside_a_group(self):
+        upcoming = group_html(self.client.get(INDEX_URL).content.decode(), self.key(self.child))
+        past = group_html(
+            self.client.get(INDEX_URL, {'view': 'past'}).content.decode(), self.key(self.child)
+        )
+
+        self.assertEqual(
+            [int(pk) for pk in ROW_PATTERN.findall(upcoming)],
+            [self.michal_today.pk, self.michal_next_week.pk, self.michal_undated.pk],
+        )
+        self.assertEqual(SECTION_PATTERN.findall(upcoming), ['dated', 'undated'])
+        self.assertIn('<h3 class="fn-manage-subsection-title">Z datą</h3>', upcoming)
+        self.assertIn('<h3 class="fn-manage-subsection-title">Bez daty</h3>', upcoming)
+        self.assertEqual(
+            [int(pk) for pk in ROW_PATTERN.findall(past)],
+            [self.michal_yesterday.pk, self.michal_last_week.pk],
+        )
+        self.assertEqual(SECTION_PATTERN.findall(past), ['past'])
+        self.assertNotIn('fn-manage-subsection-title', past)
+
+    def test_group_with_only_undated_rows_has_no_dated_section(self):
+        html = self.client.get(INDEX_URL).content.decode()
+
+        self.assertEqual(SECTION_PATTERN.findall(group_html(html, self.key(self.parent))), ['undated'])
+
+    def test_each_own_family_entry_renders_exactly_once(self):
+        expected = {
+            'upcoming': {
+                self.family_today, self.pawel_tomorrow, self.ewa_undated, self.ania_tomorrow,
+                self.michal_next_week, self.michal_today, self.michal_undated,
+                self.zosia_today, self.family_undated,
+            },
+            'past': {
+                self.michal_yesterday, self.michal_last_week, self.jolanta_yesterday,
+                self.family_yesterday,
+            },
+        }
+        for mode, entries in expected.items():
+            with self.subTest(mode=mode):
+                response = self.client.get(INDEX_URL, {'view': mode})
+                rows = self.rendered_rows(response)
+                self.assertEqual(sorted(rows), sorted(entry.pk for entry in entries))
+                self.assertNotContains(response, FOREIGN_SENTINEL)
+                self.assertNotIn(self.key(self.other_family_child), GROUP_PATTERN.findall(
+                    response.content.decode()
+                ))
+
+    def test_reassigned_entry_moves_to_the_new_group(self):
+        self.client.post(
+            edit_url(self.family_undated.pk),
+            self.form_data(
+                entry_type=EntryType.TODO.value,
+                content='Rodzina bez daty',
+                date='',
+                time='',
+                assigned_member=str(self.other_child.pk),
+            ),
+        )
+
+        html = self.client.get(INDEX_URL).content.decode()
+
+        self.assertIn(
+            f'data-entry-row="{self.family_undated.pk}"', group_html(html, self.key(self.other_child))
+        )
+        self.assertNotIn(
+            f'data-entry-row="{self.family_undated.pk}"', group_html(html, 'family')
+        )
+
+    def test_grouping_adds_no_queries_per_row(self):
+        with self.assertNumQueries(self._index_queries()):
+            self.client.get(INDEX_URL)
+        for index in range(5):
+            self.entry(f'Dodatkowy {index}', date=self.days(2), assigned_member=self.second_parent)
+        with self.assertNumQueries(self._index_queries()):
+            self.client.get(INDEX_URL)
+
+    def _index_queries(self):
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get(INDEX_URL)
+        return len(queries.captured_queries)

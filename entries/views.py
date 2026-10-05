@@ -40,6 +40,7 @@ from .classification.types import (
 )
 from .forms import (
     CORRECTION_TOO_LONG_ERROR,
+    INACTIVE_MEMBER_SUFFIX,
     BatchEntryForm,
     BatchReviewForm,
     CaptureForm,
@@ -65,6 +66,7 @@ from .listing import (
     SECTION_UNDATED,
     UPCOMING,
     EntrySection,
+    group_by_assignee,
     group_by_day,
     normalize_list_mode,
     partition_entries,
@@ -501,9 +503,16 @@ def _saved_entries(membership, saved):
 
 # Fictional kitchen-sink data: never real family members or saved rows.
 # Children first, then one parent (S-07), in the real form's pk-like order.
+# One table feeds the form choices and the synthetic list rows (S-08 grouping):
+# (choice value, synthetic pk, display name, role).
 STATES_PARENT_NAME = 'Marta'
-STATES_MEMBER_CHOICES = [
-    ('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek'), ('s3', STATES_PARENT_NAME),
+STATES_MEMBERS = (
+    ('s1', 900101, 'Kasia', FamilyMember.Role.CHILD),
+    ('s2', 900102, 'Tymek', FamilyMember.Role.CHILD),
+    ('s3', 900103, STATES_PARENT_NAME, FamilyMember.Role.PARENT),
+)
+STATES_MEMBER_CHOICES = [('', 'Cała rodzina')] + [
+    (value, name) for value, _pk, name, _role in STATES_MEMBERS
 ]
 # Also the gallery's fictional "today", so the past-date warning is deterministic.
 STATES_DATE = datetime.date(2026, 10, 5)
@@ -905,20 +914,39 @@ def _mark_invalid_fields(form):
             attrs['aria-describedby'] = f'{form[name].auto_id}-error'
 
 
-def _index_sections(sections):
+FAMILY_GROUP_HEADING = 'Cała rodzina'
+
+
+def _assignee_heading(member):
+    if member is None:
+        return FAMILY_GROUP_HEADING
+    if not member.is_active:
+        return f'{member.display_name}{INACTIVE_MEMBER_SUFFIX}'
+    return member.display_name
+
+
+def _index_groups(sections):
+    """Assignee groups (S-08) over the partitioned ``sections``; each is evaluated once."""
     return [
-        {'key': section.key, 'label': SECTION_LABELS[section.key], 'entries': list(section.entries)}
-        for section in sections
+        {
+            'key': group.key,
+            'heading': _assignee_heading(group.member),
+            'sections': [
+                {'key': section.key, 'label': SECTION_LABELS[section.key], 'entries': section.entries}
+                for section in group.sections
+            ],
+        }
+        for group in group_by_assignee(sections)
     ]
 
 
 def _index_context(mode, sections):
-    sections = _index_sections(sections)
+    groups = _index_groups(sections)
     return {
         'mode': mode,
         'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
-        'sections': sections,
-        'is_empty': not any(section['entries'] for section in sections),
+        'groups': groups,
+        'is_empty': not groups,
         'empty_message': EMPTY_LIST_MESSAGES[mode],
     }
 
@@ -1051,8 +1079,16 @@ def _synthetic_entry(offset, **fields):
     member = values.pop('member', None)
     entry = Entry(**values)
     if member:
-        entry.assigned_member = FamilyMember(display_name=member)
+        entry.assigned_member = _states_member(member)
     return entry
+
+
+def _states_member(display_name):
+    """Unsaved fictional member from ``STATES_MEMBERS``, with its synthetic pk and role."""
+    for _value, pk, name, role in STATES_MEMBERS:
+        if name == display_name:
+            return FamilyMember(pk=pk, display_name=name, role=role, is_active=True)
+    raise ValueError(f'Unknown gallery member: {display_name}')
 
 
 def _synthetic_list(mode, sections):

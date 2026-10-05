@@ -226,17 +226,17 @@ None.
 
 #### Automated
 
-- [x] 1.1 Grouping tests prove group order (children, parents, then "Cała rodzina"), input-order preservation, exact-once membership, and empty-section omission.
-- [x] 1.2 Listing tests pass: `uv run python manage.py test entries.tests.test_entry_listing`
+- [x] 1.1 Grouping tests prove group order (children, parents, then "Cała rodzina"), input-order preservation, exact-once membership, and empty-section omission. — 553107c
+- [x] 1.2 Listing tests pass: `uv run python manage.py test entries.tests.test_entry_listing` — 553107c
 
 ### Phase 2: Grouped Parent Index and Gallery
 
 #### Automated
 
-- [ ] 2.1 View tests prove group sequence, in-group order, exact-once rendering, and the inactive suffix in both modes, and the existing ordering and isolation tests stay green.
-- [ ] 2.2 Gallery tests assert the grouped upcoming state renders children, parent, and "Cała rodzina" groups.
-- [ ] 2.3 Entries tests pass: `uv run python manage.py test entries.tests`
-- [ ] 2.4 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 2.1 View tests prove group sequence, in-group order, exact-once rendering, and the inactive suffix in both modes, and the existing ordering and isolation tests stay green.
+- [x] 2.2 Gallery tests assert the grouped upcoming state renders children, parent, and "Cała rodzina" groups.
+- [x] 2.3 Entries tests pass: `uv run python manage.py test entries.tests`
+- [x] 2.4 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
 
 #### Manual
 

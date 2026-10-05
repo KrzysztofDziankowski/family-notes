@@ -252,6 +252,14 @@
   margin: var(--fn-space-3) 0 var(--fn-space-2);
 }
 
+/* Section label inside an assignee group of the parent list (S-08). */
+.fn-manage-subsection-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--fn-color-muted);
+  margin: 0 0 var(--fn-space-1);
+}
+
 .fn-empty {
   background: var(--fn-color-surface);
   border: 1px dashed var(--fn-color-border);
