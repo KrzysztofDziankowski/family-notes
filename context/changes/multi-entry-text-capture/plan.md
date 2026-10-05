@@ -445,8 +445,8 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Automated
 
-- [x] 3.1 Batch view tests including correction pass
-- [x] 3.2 Full suite passes
+- [x] 3.1 Batch view tests including correction pass — c93c4fc
+- [x] 3.2 Full suite passes — c93c4fc
 
 #### Manual
 
@@ -456,8 +456,8 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Automated
 
-- [ ] 4.1 States page and acceptance tests pass
-- [ ] 4.2 Full suite passes
+- [x] 4.1 States page and acceptance tests pass
+- [x] 4.2 Full suite passes
 
 #### Manual
 

@@ -22,6 +22,7 @@ from family_notes.log_safety import exception_summary
 from .classification.service import (
     MAX_PROPOSALS_PER_INSTRUCTION,
     CorrectionRejection,
+    ParentBatchClassification,
     ParentClassification,
     classify_entries_for_parent,
     classify_follow_up_answer,
@@ -579,6 +580,76 @@ def states(request):
     )
     failed_correction_form.initial['correction'] = 'bla bla'
 
+    def synthetic_batch(*results, reference=STATES_DATE):
+        batch = ParentBatchClassification(
+            items=tuple(ParentClassification(result=result) for result in results)
+        )
+        form = batch_review_form_from_classification(membership, batch, today=reference)
+        for entry_form in form.forms:
+            _use_synthetic_members(entry_form)
+        return form
+
+    def batch_meeting(date, **overrides):
+        values = dict(
+            entry_type=EntryType.CALENDAR_EVENT,
+            content='Spotkanie z wychowawczynią',
+            date=date,
+            time=datetime.time(18, 0),
+        )
+        values.update(overrides)
+        return ClassificationProposal(**values)
+
+    # „dziś, jutro i w przyszłym tygodniu w poniedziałek o 18:00”
+    meeting_dates = (
+        STATES_DATE,
+        STATES_DATE + datetime.timedelta(days=1),
+        STATES_DATE + datetime.timedelta(days=7),
+    )
+    # Said on Sunday: „jutro” and „w przyszłym tygodniu w poniedziałek” are one day.
+    sunday = STATES_DATE - datetime.timedelta(days=1)
+    duplicate_batch = synthetic_batch(
+        batch_meeting(STATES_DATE), batch_meeting(STATES_DATE), reference=sunday
+    )
+    missing_batch = synthetic_batch(
+        batch_meeting(meeting_dates[0]),
+        ClassificationFollowUp(
+            missing_fields=(MissingField.DATE,),
+            entry_type=EntryType.CALENDAR_EVENT,
+            content='Spotkanie z wychowawczynią',
+            time=datetime.time(18, 0),
+        ),
+    )
+    invalid_batch_data = {'count': '2', 'action': 'save'}
+    for index, date in enumerate(meeting_dates[:2]):
+        invalid_batch_data.update({
+            f'e{index}-entry_type': EntryType.CALENDAR_EVENT.value,
+            f'e{index}-content': 'Spotkanie z wychowawczynią',
+            f'e{index}-date': date.isoformat(),
+            f'e{index}-time': '18:00',
+            f'e{index}-submission_key': str(uuid.uuid4()),
+        })
+    invalid_batch = BatchReviewForm(membership, invalid_batch_data)
+    for entry_form in invalid_batch.forms:
+        _use_synthetic_members(entry_form)
+    invalid_batch.is_valid()
+    corrected_batch = synthetic_batch(
+        batch_meeting(meeting_dates[0]),
+        batch_meeting(meeting_dates[1], time=datetime.time(19, 0)),
+        batch_meeting(meeting_dates[2]),
+    )
+    corrected_batch.notices[1] = BATCH_CORRECTION_NOTICE.format(
+        number=2, notice='zaktualizowano: godzina.'
+    )
+    saved_meetings = [
+        Entry(
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Spotkanie z wychowawczynią',
+            date=date,
+            time=datetime.time(18, 0),
+        )
+        for date in meeting_dates
+    ]
+
     sections = [
         {'name': 'empty', 'label': 'Pusty formularz', 'capture_form': CaptureForm()},
         {
@@ -687,6 +758,46 @@ def states(request):
             'label': 'Zapisano',
             'saved_entries': [saved_entry],
             'capture_form': CaptureForm(),
+        },
+        {
+            'name': 'batch',
+            'label': 'Kilka wpisów do sprawdzenia',
+            'batch_form': synthetic_batch(*(batch_meeting(date) for date in meeting_dates)),
+        },
+        {
+            'name': 'batch_duplicate',
+            'label': 'Kilka wpisów: dwa takie same (polecenie w niedzielę)',
+            'batch_form': duplicate_batch,
+        },
+        {
+            'name': 'batch_missing',
+            'label': 'Kilka wpisów: brakująca data',
+            'batch_form': missing_batch,
+        },
+        {
+            'name': 'batch_invalid',
+            'label': 'Kilka wpisów: nic nie wybrano',
+            'batch_form': invalid_batch,
+        },
+        {
+            'name': 'batch_corrected',
+            'label': 'Kilka wpisów: jeden po poprawce',
+            'batch_form': corrected_batch,
+        },
+        {
+            'name': 'batch_saved',
+            'label': 'Zapisano kilka wpisów',
+            'saved_entries': saved_meetings,
+            'capture_form': CaptureForm(),
+        },
+        {
+            'name': 'too_many',
+            'label': 'Za dużo wpisów w poleceniu',
+            'notice': TOO_MANY_ENTRIES_NOTICE,
+            'review_form': synthetic_review(
+                ClassificationUnavailable(reason=UnavailableReason.TOO_MANY_ENTRIES),
+                text='Trening codziennie przez dwa tygodnie o 17:00',
+            ),
         },
     ]
     return render(

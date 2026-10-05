@@ -1,7 +1,8 @@
 """Representative acceptance corpus for the classification boundary.
 
-Every case runs the real ``classify_for_parent`` service with the real
-``OpenAIClassificationBackend``. The OpenAI client is a real SDK client whose
+Every case runs the real ``classify_entries_for_parent`` service (the one
+capture calls) with the real ``OpenAIClassificationBackend``; single-entry
+answers are scripted as one-entry lists, as the list schema returns them. The OpenAI client is a real SDK client whose
 HTTP transport is scripted, so request serialization, adapter translation,
 domain validation, and local member resolution are all exercised without
 network access, nondeterminism, or real sleeps. The model does the date
@@ -31,7 +32,11 @@ from django.test import SimpleTestCase, TestCase, override_settings
 
 from entries.classification.backends import BackendOutput, ClassificationBackendError
 from entries.classification.openai_backend import OpenAIClassificationBackend, build_openai_backend
-from entries.classification.service import classify_for_parent, correct_proposal_for_parent
+from entries.classification.service import (
+    classify_entries_for_parent,
+    classify_for_parent,
+    correct_proposal_for_parent,
+)
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
@@ -95,6 +100,31 @@ def model_entry_output(**fields):
     return model_list_output(fields)
 
 
+def as_list_step(step):
+    """A scripted single-object answer re-wrapped as a one-entry list.
+
+    Anything that is not a parsable single answer (errors, refusals,
+    malformed text, timing wrappers' failures) is returned unchanged.
+    """
+    if not isinstance(step[0], str):
+        duration, outcome = step
+        return (duration, as_list_step(outcome))
+    if step[0] != 'response' or step[1] != 200:
+        return step
+    _, code, body, request_id = step
+    content = body['output'][0]['content'][0]
+    if content.get('type') != 'output_text':
+        return step
+    try:
+        value = json.loads(content['text'])
+    except ValueError:
+        return step
+    if not isinstance(value, dict) or 'entry_type' not in value:
+        return step
+    wrapped = json.dumps({'entries': [value]}, ensure_ascii=False)
+    return ('response', code, response_body(wrapped, status=body['status']), request_id)
+
+
 def model_values(**fields):
     values = dict(
         entry_type=None,
@@ -116,6 +146,12 @@ class AdapterPathMixin(FamilyFixtureMixin):
     """Runs the service through the real adapter over a scripted transport."""
 
     def run_service(self, steps, text=PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE):
+        """The single result of the capture service for a one-entry answer."""
+        batch = self.run_batch([as_list_step(step) for step in steps], text, reference_date)
+        self.assertTrue(batch.is_single)
+        return batch.single
+
+    def run_batch(self, steps, text=PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE):
         self.clock = FakeClock()
         self.transport = ScriptedTransport(self.clock, steps)
         backend = OpenAIClassificationBackend(
@@ -124,7 +160,7 @@ class AdapterPathMixin(FamilyFixtureMixin):
             clock=self.clock,
             sleep=self.clock.sleep,
         )
-        return classify_for_parent(
+        return classify_entries_for_parent(
             self.parent.user,
             text,
             reference_date=reference_date,
@@ -771,6 +807,83 @@ class FreeTextCorrectionTests(AdapterPathMixin, TestCase):
         self.assertIsNone(correction.outcome)
 
 
+# PK-05 / US-05: one instruction on Wednesday 2026-10-07 asks for three
+# meetings at 18:00: today, tomorrow and Monday next week (2026-10-12).
+MULTI_REFERENCE_DATE = datetime.date(2026, 10, 7)
+MULTI_INSTRUCTION = (
+    'Dodaj spotkanie z wychowawczynią dziś, jutro i w przyszłym tygodniu '
+    'w poniedziałek o 18:00'
+)
+MULTI_INSTRUCTION_EN = (
+    'Add a meeting with the class teacher today, tomorrow and next week on '
+    'Monday at 18:00'
+)
+MULTI_DATES = (
+    datetime.date(2026, 10, 7),
+    datetime.date(2026, 10, 8),
+    datetime.date(2026, 10, 12),
+)
+MULTI_SOURCES = ('dziś', 'jutro', 'w przyszłym tygodniu w poniedziałek')
+
+
+class MultiEntryPrdTests(AdapterPathMixin, TestCase):
+    """PK-05 / US-05: one instruction becomes three meeting proposals."""
+
+    def meeting(self, date, date_source, **fields):
+        values = dict(
+            entry_type='calendar_event',
+            content=f'Spotkanie z wychowawczynią {date_source}',
+            date=date.isoformat(),
+            date_source=date_source,
+            time='18:00',
+        )
+        values.update(fields)
+        return values
+
+    def test_prd_example_yields_three_meetings_at_six_pm(self):
+        batch = self.run_batch(
+            [model_list_output(*(self.meeting(d, s) for d, s in zip(MULTI_DATES, MULTI_SOURCES)))],
+            text=MULTI_INSTRUCTION,
+            reference_date=MULTI_REFERENCE_DATE,
+        )
+
+        self.assertEqual(
+            [item.result for item in batch.items],
+            [
+                ClassificationProposal(
+                    entry_type=EntryType.CALENDAR_EVENT,
+                    content='Spotkanie z wychowawczynią',
+                    date=date,
+                    time=datetime.time(18, 0),
+                )
+                for date in MULTI_DATES
+            ],
+        )
+        sent = self.sent_input()
+        self.assertEqual(sent['data_odniesienia'], '2026-10-07')
+        self.assertEqual(sent['dzien_tygodnia'], 'środa')
+        self.assertEqual(sent['polecenie'], MULTI_INSTRUCTION)
+        (body,) = self.transport.bodies()
+        self.assertIn('entries', body['text']['format']['schema']['properties'])
+
+    def test_an_invented_date_is_dropped_for_that_meeting_only(self):
+        batch = self.run_batch(
+            [
+                model_list_output(
+                    self.meeting(MULTI_DATES[0], 'dziś'),
+                    self.meeting(MULTI_DATES[1], 'pojutrze'),
+                )
+            ],
+            text=MULTI_INSTRUCTION,
+            reference_date=MULTI_REFERENCE_DATE,
+        )
+
+        self.assertIsInstance(batch.items[0].result, ClassificationProposal)
+        follow_up = batch.items[1].result
+        self.assertIsInstance(follow_up, ClassificationFollowUp)
+        self.assertEqual(follow_up.missing_fields, (MissingField.DATE,))
+
+
 class ProviderFailureTests(AdapterPathMixin, TestCase):
     def test_provider_failures_become_safe_unavailable_results(self):
         cases = {
@@ -903,6 +1016,31 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
         )
         self.assertLess(elapsed, PRD_BUDGET_SECONDS)
         return outcome
+
+    def test_prd_three_meetings_example(self):
+        for text in (MULTI_INSTRUCTION, MULTI_INSTRUCTION_EN):
+            with self.subTest(text=text):
+                started = time.monotonic()
+                batch = classify_entries_for_parent(
+                    self.parent.user, text, reference_date=MULTI_REFERENCE_DATE, locale='pl-PL'
+                )
+                self.assertLess(time.monotonic() - started, PRD_BUDGET_SECONDS)
+
+                results = [item.result for item in batch.items]
+                self.assertEqual(len(results), 3, results)
+                for result in results:
+                    self.assertIsInstance(result, ClassificationProposal)
+                    self.assertEqual(result.entry_type, EntryType.CALENDAR_EVENT)
+                    self.assertEqual(result.time, datetime.time(18, 0))
+                self.assertEqual(sorted(result.date for result in results), list(MULTI_DATES))
+
+    def test_single_entry_instruction_stays_single(self):
+        batch = classify_entries_for_parent(
+            self.parent.user, PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
+        )
+
+        self.assertTrue(batch.is_single)
+        self.assertEqual(batch.single.result.date, PRD_MONDAY)
 
     def test_prd_example(self):
         outcome = self.classify_live(PRD_INSTRUCTION)

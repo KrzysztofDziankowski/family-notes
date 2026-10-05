@@ -26,6 +26,13 @@ STATE_NAMES = (
     'correction_failed',
     'invalid',
     'saved',
+    'batch',
+    'batch_duplicate',
+    'batch_missing',
+    'batch_invalid',
+    'batch_corrected',
+    'batch_saved',
+    'too_many',
 )
 
 
@@ -77,6 +84,14 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.assertContains(response, 'bla bla</textarea>')
         self.assertContains(response, 'Popraw opis')
         self.assertContains(response, 'Kasia')
+        self.assertContains(response, 'Sprawdź wpisy (3)')
+        self.assertContains(response, 'Taki sam jak wpis 1.')
+        self.assertContains(response, 'Wybierz co najmniej jeden wpis.')
+        self.assertContains(response, 'Wpis 2: zaktualizowano: godzina.')
+        self.assertContains(response, 'Dodano wpisy (3)')
+        self.assertContains(response, views.TOO_MANY_ENTRIES_NOTICE)
+        self.assertContains(response, 'id="id_e1-date-hint"')
+        self.assertContains(response, 'id="e2-correct-submit"')
         for real_name in ('Michał', 'Ania', 'Ewa'):
             self.assertNotContains(response, real_name)
         classify.assert_not_called()
