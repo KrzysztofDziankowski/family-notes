@@ -66,3 +66,87 @@ class MembershipAccessibilityTests(MembershipFixtureMixin, TestCase):
 
         self.assertContains(response, reverse('family_members'))
         assert_accessible(self, response)
+
+
+class RoleAccessibilityTests(MembershipFixtureMixin, TestCase):
+    """S-15 role states on the real edit page."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.parent.user)
+
+    def edit(self, member):
+        return self.client.get(reverse('family_member_edit', args=[member.pk]))
+
+    def test_promotion_form_for_a_child(self):
+        response = self.edit(self.child)
+
+        self.assertContains(response, 'Ta osoba będzie mogła zarządzać wpisami')
+        assert_accessible(self, response)
+
+    def test_demotion_form_for_another_parent(self):
+        response = self.edit(self.other_parent)
+
+        self.assertContains(response, 'tokeny automatyzacji zostaną unieważnione')
+        assert_accessible(self, response)
+
+    def test_self_demotion_checkbox_on_own_row(self):
+        response = self.edit(self.parent)
+
+        self.assertContains(response, 'name="confirm_self"')
+        assert_accessible(self, response)
+
+    def test_last_parent_explanation(self):
+        FamilyMember.objects.filter(pk=self.other_parent.pk).update(
+            role=FamilyMember.Role.CHILD
+        )
+
+        response = self.edit(self.parent)
+
+        self.assertContains(response, 'To ostatni aktywny rodzic')
+        self.assertNotContains(response, 'name="role"')
+        assert_accessible(self, response)
+
+    def test_guard_errors(self):
+        url = reverse('family_member_role', args=[self.parent.pk])
+        FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
+        cases = {
+            'missing confirmation': (url, {'role': 'child'}),
+            'inactive target': (
+                reverse('family_member_role', args=[self.child.pk]), {'role': 'parent'}
+            ),
+            'invalid role': (
+                reverse('family_member_role', args=[self.other_parent.pk]), {'role': 'admin'}
+            ),
+        }
+        for label, (target, data) in cases.items():
+            with self.subTest(case=label):
+                response = self.client.post(target, data)
+                self.assertContains(response, 'role="alert"')
+                self.assertContains(response, '<title>Błąd: ')
+                assert_accessible(self, response)
+
+    def test_last_parent_guard_error(self):
+        FamilyMember.objects.filter(pk=self.other_parent.pk).update(
+            role=FamilyMember.Role.CHILD
+        )
+
+        response = self.client.post(
+            reverse('family_member_role', args=[self.parent.pk]),
+            {'role': 'child', 'confirm_self': 'on'},
+        )
+
+        self.assertContains(response, 'Rodzina musi mieć co najmniej jednego aktywnego rodzica.')
+        assert_accessible(self, response)
+
+    def test_changed_membership_notice(self):
+        sam = self.client_class()
+        sam.force_login(self.other_parent.user)
+        self.client.post(
+            reverse('family_member_role', args=[self.other_parent.pk]), {'role': 'child'}
+        )
+
+        response = sam.get(reverse('home'), follow=True)
+
+        self.assertContains(response, 'zmienił Twoją rolę')
+        assert_accessible(self, response)

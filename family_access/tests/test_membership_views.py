@@ -306,7 +306,9 @@ class StateGalleryTests(MembershipFixtureMixin, TestCase):
         for copy in (PARENT_REACTIVATION_COPY, LAST_PARENT_ERROR, ACTIVE_ELSEWHERE_ERROR,
                      DUPLICATE_NAME_ERROR, 'Podaj imię.'):
             self.assertContains(response, copy)
-        self.assertContains(response, 'open>', count=2)
+        # Two S-14 list confirmations plus five S-15 role confirmations
+        # (promote, demote, self-demote, its invalid re-render, guard error).
+        self.assertContains(response, 'open>', count=7)
         writes = [
             query['sql'] for query in queries.captured_queries
             if query['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))

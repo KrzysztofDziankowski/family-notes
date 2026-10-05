@@ -5,6 +5,7 @@ from .views import (
     family_member_deactivate,
     family_member_edit,
     family_member_reactivate,
+    family_member_role,
     family_member_states,
     family_members,
 )
@@ -24,4 +25,5 @@ urlpatterns = [
         family_member_reactivate,
         name='family_member_reactivate',
     ),
+    path('family/members/<int:pk>/role/', family_member_role, name='family_member_role'),
 ]

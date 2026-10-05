@@ -30,6 +30,10 @@ out of scope.
 - Account status (parent, child, unconfigured account).
 - Family member management (S-14): member list (with guard error and notice), display-name
   edit (valid and invalid), and the account page link (`family_access/tests/test_membership_accessibility.py`).
+- Family role change (S-15) on the member edit page: promotion and demotion forms, the
+  self-demotion checkbox, the last-parent explanation, guard errors (missing confirmation,
+  inactive target, invalid role, last parent) and the changed-membership notice on the child
+  home page (same test module).
 - The S-06 `/offline/` page (anonymous and signed in) and web manifest: no orientation lock
   (SC 1.3.4).
 - 403, 404 (signed in and anonymous) and 500 pages.

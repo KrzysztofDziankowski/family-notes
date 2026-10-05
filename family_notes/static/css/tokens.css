@@ -364,6 +364,15 @@ main[tabindex="-1"]:focus {
   margin: 0;
 }
 
+/* Family role change (S-15) */
+.fn-member-role {
+  margin-top: var(--fn-space-4);
+}
+
+.fn-member-role fieldset {
+  margin-bottom: var(--fn-space-3);
+}
+
 /* Child view (S-03) */
 .fn-day-heading {
   font-size: 1rem;

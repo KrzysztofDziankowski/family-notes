@@ -34,7 +34,7 @@
         </nav>
     </header>
     <main id="main" class="container" tabindex="-1">
-        {% block messages %}{% endblock %}
+        {% block messages %}{% include "entries/_manage_messages.html" %}{% endblock %}
         {% block content %}{% endblock %}
     </main>
     {% block extra_body %}{% endblock %}

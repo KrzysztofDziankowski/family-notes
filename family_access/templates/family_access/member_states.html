@@ -15,6 +15,9 @@
     {% if section.form %}
         {% include "family_access/_member_form.html" with form=section.form.form member=section.form.member %}
     {% endif %}
+    {% if section.role %}
+        {% include "family_access/_member_role.html" with role=section.role %}
+    {% endif %}
 </section>
 {% endfor %}
 {% endblock %}

@@ -7,7 +7,7 @@ confirm_open}), error (optional guard error). Confirmations are no-JavaScript <d
     <p>{{ error }}</p>
 </div>
 {% endif %}
-<p class="fn-muted" data-state-part="admin-note">Nowe osoby dodaje do rodziny administrator rodziny. Tutaj możesz zmienić imię osoby oraz wyłączyć albo przywrócić jej dostęp.</p>
+<p class="fn-muted" data-state-part="admin-note">Nowe osoby dodaje do rodziny administrator rodziny. Tutaj możesz zmienić imię i rolę osoby oraz wyłączyć albo przywrócić jej dostęp.</p>
 <ul class="fn-entry-list">
     {% for row in rows %}
     {% with member=row.member %}
@@ -16,7 +16,7 @@ confirm_open}), error (optional guard error). Confirmations are no-JavaScript <d
         <p class="fn-entry-meta fn-muted">
             <span>{% if member.role == "parent" %}Rodzic{% else %}Dziecko{% endif %}</span>
             <span>{% if member.is_active %}Dostęp aktywny{% else %}Dostęp wyłączony{% endif %}</span>
-            <a href="{% url 'family_member_edit' member.pk %}">Zmień imię<span class="fn-visually-hidden">: {{ member.display_name }}</span></a>
+            <a href="{% url 'family_member_edit' member.pk %}">Zmień imię lub rolę<span class="fn-visually-hidden">: {{ member.display_name }}</span></a>
         </p>
         {% if member.is_active %}
             {% if row.can_deactivate %}

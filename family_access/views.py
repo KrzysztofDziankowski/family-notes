@@ -10,12 +10,14 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from entries.forms import describe_fields
 
 from .access import get_active_membership, is_parent
-from .forms import MemberRenameForm
+from .forms import MemberRenameForm, MemberRoleForm
 from .membership import (
     ACTIVE_ELSEWHERE_ERROR,
     DUPLICATE_NAME_ERROR,
     LAST_PARENT_ERROR,
+    can_change_role,
     can_deactivate,
+    change_member_role,
     deactivate_member,
     family_members as list_family_members,
     get_family_member,
@@ -23,10 +25,20 @@ from .membership import (
     rename_member,
 )
 from .models import FamilyMember
+from .notices import remember_membership
 
 MEMBER_RENAMED_MESSAGE = 'Zapisano nowe imię: {name}.'
 MEMBER_DEACTIVATED_MESSAGE = 'Wyłączono dostęp: {name}.'
 MEMBER_REACTIVATED_MESSAGE = 'Przywrócono dostęp: {name}.'
+MEMBER_PROMOTED_MESSAGE = 'Zmieniono rolę: {name} jest teraz rodzicem.'
+MEMBER_DEMOTED_MESSAGE = (
+    'Zmieniono rolę: {name} jest teraz dzieckiem. '
+    'Tokeny automatyzacji tej osoby zostały unieważnione.'
+)
+ROLE_UNCHANGED_MESSAGE = 'Rola bez zmian: {name}.'
+SELF_DEMOTED_MESSAGE = (
+    'Twoja rola to teraz „Dziecko”. Nie możesz już zarządzać wpisami ani członkami rodziny.'
+)
 
 
 @login_required
@@ -77,7 +89,7 @@ def _render_members(request, actor, error=''):
     return render(request, 'family_access/members.html', _members_context(actor, error))
 
 
-def _edit_context(form, member):
+def _edit_context(form, member, role=None):
     describe_fields(form)
     field = form['display_name']
     if member.role == FamilyMember.Role.CHILD:
@@ -86,7 +98,44 @@ def _edit_context(form, member):
         attrs['aria-describedby'] = ' '.join(
             filter(None, [attrs.get('aria-describedby', ''), note_id])
         )
-    return {'form': form, 'member': member}
+    return {'form': form, 'member': member, 'role': role}
+
+
+def _other_role(member):
+    if member.role == FamilyMember.Role.PARENT:
+        return FamilyMember.Role.CHILD
+    return FamilyMember.Role.PARENT
+
+
+def _role_context(member, *, is_self, can_change, form=None, error='', open_=False,
+                  auto_id='id_%s'):
+    """The role section of the edit page (S-15); an unbound form preselects the other role."""
+    if form is None:
+        form = MemberRoleForm(
+            member=member, is_self=is_self, initial={'role': _other_role(member)},
+            auto_id=auto_id,
+        )
+    describe_fields(form)
+    return {
+        'member': member,
+        'form': form,
+        'can_change': can_change,
+        'open': open_ or bool(form.errors) or bool(error),
+        'error': error,
+    }
+
+
+def _render_edit(request, actor, member, rename_form, *, role_form=None, role_error=''):
+    role = _role_context(
+        member,
+        is_self=member.pk == actor.pk,
+        can_change=can_change_role(actor, member),
+        form=role_form,
+        error=role_error,
+    )
+    return render(
+        request, 'family_access/member_edit.html', _edit_context(rename_form, member, role)
+    )
 
 
 @require_GET
@@ -117,7 +166,49 @@ def family_member_edit(request, pk):
                     request, MEMBER_RENAMED_MESSAGE.format(name=renamed.display_name)
                 )
                 return redirect('family_members')
-    return render(request, 'family_access/member_edit.html', _edit_context(form, member))
+    return _render_edit(request, actor, member, form)
+
+
+@require_POST
+@login_required
+def family_member_role(request, pk):
+    """Change a member's role (S-15); guard errors re-render the edit page."""
+    actor = _require_parent(request)
+    member = _member_or_404(actor, pk)
+    is_self = member.pk == actor.pk
+    form = MemberRoleForm(request.POST, member=member, is_self=is_self)
+    role_error = ''
+    if form.is_valid():
+        old_role = member.role
+        try:
+            changed = change_member_role(
+                actor,
+                member.pk,
+                form.cleaned_data['role'],
+                confirm_self=form.cleaned_data.get('confirm_self', False),
+            )
+        except FamilyMember.DoesNotExist:
+            raise Http404 from None
+        except ValidationError as error:
+            role_error = ' '.join(error.messages)
+            member.refresh_from_db()
+        else:
+            if changed.role == old_role:
+                message = ROLE_UNCHANGED_MESSAGE
+            elif changed.role == FamilyMember.Role.PARENT:
+                message = MEMBER_PROMOTED_MESSAGE
+            elif is_self:
+                # The session saw the change itself: no "someone demoted you" notice.
+                remember_membership(request, changed)
+                messages.success(request, SELF_DEMOTED_MESSAGE)
+                return redirect('home')
+            else:
+                message = MEMBER_DEMOTED_MESSAGE
+            messages.success(request, message.format(name=changed.display_name))
+            return redirect('family_members')
+    rename_form = MemberRenameForm(initial={'display_name': member.display_name})
+    return _render_edit(request, actor, member, rename_form, role_form=form,
+                        role_error=role_error)
 
 
 def _mutate(request, pk, service, success_message):
@@ -176,6 +267,15 @@ def _states_form(name, member, data=None, *, error=''):
     return _edit_context(form, member)
 
 
+def _states_role(name, member, *, is_self=False, can_change=True, data=None, error='',
+                 open_=True):
+    form = None
+    if data is not None:
+        form = MemberRoleForm(data, member=member, is_self=is_self, auto_id=f'id_{name}_%s')
+    return _role_context(member, is_self=is_self, can_change=can_change, form=form,
+                         error=error, open_=open_, auto_id=f'id_{name}_%s')
+
+
 def family_member_states(request):
     """DEBUG-only gallery of every member-management state from unsaved synthetic data."""
     if not settings.DEBUG:
@@ -215,5 +315,21 @@ def family_member_states(request):
         {'name': 'edit_duplicate', 'label': 'Błąd: imię już zajęte',
          'form': _states_form('edit_duplicate', son, {'display_name': 'kasia'},
                               error=DUPLICATE_NAME_ERROR)},
+        {'name': 'role_promote', 'label': 'Zmiana roli: dziecko zostaje rodzicem',
+         'role': _states_role('role_promote', child)},
+        {'name': 'role_demote', 'label': 'Zmiana roli: rodzic zostaje dzieckiem',
+         'role': _states_role('role_demote', other_parent)},
+        {'name': 'role_self_demote', 'label': 'Zmiana własnej roli z potwierdzeniem',
+         'role': _states_role('role_self_demote', parent, is_self=True)},
+        {'name': 'role_self_demote_invalid', 'label': 'Błąd: brak potwierdzenia własnej zmiany',
+         'role': _states_role('role_self_demote_invalid', parent, is_self=True,
+                              data={'role': FamilyMember.Role.CHILD})},
+        {'name': 'role_last_parent', 'label': 'Ostatni aktywny rodzic: rola bez zmiany',
+         'role': _states_role('role_last_parent', parent, is_self=True, can_change=False)},
+        {'name': 'role_guard_error', 'label': 'Błąd: ostatni rodzic przy zmianie roli',
+         'role': _states_role('role_guard_error', other_parent, error=LAST_PARENT_ERROR,
+                              open_=False)},
+        {'name': 'role_inactive', 'label': 'Osoba bez dostępu: najpierw przywróć dostęp',
+         'role': _states_role('role_inactive', former_child)},
     ]
     return render(request, 'family_access/member_states.html', {'sections': sections})
