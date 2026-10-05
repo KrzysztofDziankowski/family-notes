@@ -264,7 +264,7 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [x] 3.1 Default suite still skips live tests: `uv run python manage.py test entries.tests.test_classification_live_wire`
+- [x] 3.1 Default suite still skips live tests: `uv run python manage.py test entries.tests.test_classification_live_wire` — a242ecc
 
 #### Manual
 
