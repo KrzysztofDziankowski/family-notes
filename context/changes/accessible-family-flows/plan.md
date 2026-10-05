@@ -411,12 +411,12 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Automated
 
-- [x] 3.1 Audit tests pass: `uv run python manage.py test entries.tests.test_accessibility family_notes.test_accessibility`
-- [x] 3.2 Token contrast test passes: `uv run python manage.py test family_notes.test_tokens_contrast`
-- [x] 3.3 Deliberate break detected: temporarily restoring `id="{{ field.auto_id }}-error"` in `_field.html` makes `entries.tests.test_accessibility` fail, and reverting makes it pass
-- [x] 3.4 Full suite passes: `uv run python manage.py test`
-- [x] 3.5 Django checks pass: `uv run python manage.py check`
-- [x] 3.6 No model changes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 3.1 Audit tests pass: `uv run python manage.py test entries.tests.test_accessibility family_notes.test_accessibility` — bd3617e
+- [x] 3.2 Token contrast test passes: `uv run python manage.py test family_notes.test_tokens_contrast` — bd3617e
+- [x] 3.3 Deliberate break detected: temporarily restoring `id="{{ field.auto_id }}-error"` in `_field.html` makes `entries.tests.test_accessibility` fail, and reverting makes it pass — bd3617e
+- [x] 3.4 Full suite passes: `uv run python manage.py test` — bd3617e
+- [x] 3.5 Django checks pass: `uv run python manage.py check` — bd3617e
+- [x] 3.6 No model changes: `uv run python manage.py makemigrations --check --dry-run` — bd3617e
 
 #### Manual
 
