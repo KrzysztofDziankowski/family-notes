@@ -310,7 +310,7 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Manual
 
-- [ ] 1.3 The owner skims the dictionary and confirms it covers the family's names and expected diminutives.
+- [x] 1.3 The owner skims the dictionary and confirms it covers the family's names and expected diminutives.
 
 ### Phase 2: Classification Resolves Mentions with Clarification on Ambiguity
 

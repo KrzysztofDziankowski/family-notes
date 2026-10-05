@@ -30,3 +30,8 @@ Environment: headless Chromium (Playwright, `/usr/bin/chromium-browser`) against
 
 - 4.2 PASS (fixed) — while Chromium's calendar/clock icon has focus, the date/time input matches only `:focus-within` (not `:focus` / `:focus-visible`), and the `::-webkit-calendar-picker-indicator` pseudo-element cannot be styled on focus (tried; no effect). `tokens.css` now draws the shared 2px `--fn-color-focus` outline on `input:is([type="date"], [type="time"]):focus-within`. On `/entries/create/`: Shift+Tab from "Godzina" onto the date icon → computed outline solid; Tab past the time segments to the clock icon → outline solid (`screenshots/4-2-date-picker-focus-fixed.png`, `4-2-time-picker-focus-fixed.png`). The same widgets render on edit, review and follow-up. Regression test: `family_notes/test_tokens_rules.py`.
 - 4.5 PASS (fixed) — two-family header wraps (see `multiple-family-use` 2.10): no horizontal scroll at 320 and 360 px on `/entries/` and the chooser (`screenshots/4-5-two-family-header-320-fixed.png`). axe was not re-run in this pass, so the earlier chooser `target-size` note on "Wróć do konta" (measured on the overflowing page) is not re-confirmed.
+
+## Owner decisions (2026-10-05)
+
+- 1.5 — Accepted as is: an empty capture submit shows the browser's native "required" bubble; the Polish server error still appears for whitespace-only input. No `novalidate`.
+- 2.4 — Accepted as is: on the capture page the textarea's autofocus means the first Tab goes to "Rozpoznaj"; the skip link works on all other covered pages.

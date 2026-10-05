@@ -390,7 +390,7 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Manual
 
-- [ ] 1.5 In the browser, submitting an empty capture form shows the Polish error under the field, and the accessibility inspector shows the textarea described by that error text.
+- [x] 1.5 In the browser, submitting an empty capture form shows the Polish error under the field, and the accessibility inspector shows the textarea described by that error text.
 - [x] 1.6 On the review step with a past date, the date input's accessible description includes the warning and the readable weekday date.
 
 ### Phase 2: Layout, Focus and Contrast Tokens
@@ -403,7 +403,7 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Manual
 
-- [ ] 2.4 Pressing Tab once on any covered page reveals "Przejdź do treści", and activating it moves focus into the main content.
+- [x] 2.4 Pressing Tab once on any covered page reveals "Przejdź do treści", and activating it moves focus into the main content.
 - [x] 2.5 Tabbing through the capture, follow-up, management list, edit form and child list shows a clearly visible focus outline on every link, button (including "Wyloguj", "Pomiń" and "Dodaj wpis z tekstu"), select, textarea and the "Usuń wpis" disclosure.
 - [x] 2.6 Input, select and textarea boundaries are clearly visible on the light background, and the page looks otherwise unchanged.
 

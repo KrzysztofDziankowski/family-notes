@@ -9,3 +9,7 @@ Environment: headless Chromium (/usr/bin/chromium-browser) + Playwright (Python)
 - 3.6 PASS — `question_ambiguous_member` at 360 px: „Rozpoznano: wydarzenie „Dentysta”” / „Której osoby dotyczy „Dentysta”?”, the answer textarea spans the width and „Dalej” / „Pomiń” are reachable; nothing clipped. Screenshot `screenshots/3.6-question-ambiguous-member-360.png`.
 - 2.6 DEVICE-ONLY — the seeded test family has no „Hanna”, so the live „Hania” check was not run.
 - 1.3 owner-only (not run). 3.7 DEVICE-ONLY.
+
+## Owner check (2026-10-05)
+
+- 1.3 — Owner reviewed `entries/classification/names.py` and corrected one diminutive (Mateusz: "matik" → "mati").
