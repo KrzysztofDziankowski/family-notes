@@ -23,6 +23,7 @@ from entries.models import Entry
 
 from .test_capture_views import RecordingHandler
 from .test_classification_service import REFERENCE_DATE, WRITE_PREFIXES, FamilyFixtureMixin
+from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_follow_up_views import ScriptedBackend, as_post_data
 
 CAPTURE_URL = reverse('entries:capture')
@@ -438,3 +439,44 @@ class MarkupTests(CorrectionViewMixin, TestCase):
                     'p2-correct-submit',
                 )
                 self.assertNotIn('required', str(form['correction']))
+
+
+class EnterSubmitReviewTests(CorrectionViewMixin, TestCase):
+    """S-05: Enter in „Popraw opis” runs „Popraw” and can never post to confirm."""
+
+    def review_pages(self):
+        proposal = self.run_with_backend(CAPTURE_URL, {'text': INSTRUCTION}, first_output())
+        highlighted = self.correct(
+            self.posted_data(correction='usuń datę'), correction_output({'date'}, date=None)
+        )
+        failed = self.correct(
+            self.posted_data(correction='bla bla'),
+            ClassificationBackendError(UnavailableReason.TIMEOUT),
+        )
+        invalid = self.client.post(CONFIRM_URL, self.posted_data())
+        return {
+            'proposal': proposal,
+            'follow_up_highlight': highlighted,
+            'correction_failed': failed,
+            'invalid': invalid,
+        }
+
+    def test_enter_in_the_correction_box_never_posts_to_confirm(self):
+        for name, page in self.review_pages().items():
+            with self.subTest(page=name):
+                self.assertEqual(page.context['state'], name.replace('_highlight', ''))
+                checked = assert_enter_never_saves(self, page.content.decode())
+                self.assertEqual(checked, 1)
+
+    def test_correction_box_is_opted_in_and_the_title_box_is_not(self):
+        page = self.run_with_backend(CAPTURE_URL, {'text': INSTRUCTION}, first_output())
+        form = page.context['review_form']
+
+        correction = str(form['correction'])
+        self.assertIn('data-enter-submit=""', correction)
+        self.assertIn('enterkeyhint="send"', correction)
+        self.assertIn('data-enter-submitter="correct-submit"', correction)
+        content = str(form['content'])
+        self.assertNotIn('data-enter-submit', content)
+        self.assertNotIn('enterkeyhint', content)
+        assert_enter_assets(self, page, ['id_correction'])

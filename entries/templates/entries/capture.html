@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Dodaj wpis{% endblock %}
 
@@ -20,4 +21,8 @@
 {% else %}
     {% include "entries/_capture_form.html" with form=capture_form %}
 {% endif %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'js/enter-submit.js' %}" defer></script>
 {% endblock %}

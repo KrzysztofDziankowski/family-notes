@@ -6,6 +6,7 @@ from django.urls import reverse
 from entries import views
 from entries.models import Entry
 
+from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_classification_service import FamilyFixtureMixin
 
 STATES_URL = reverse('entries:states')
@@ -97,6 +98,17 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         classify.assert_not_called()
         classify_answer.assert_not_called()
         self.assertFalse(Entry.objects.exists())
+
+    @override_settings(DEBUG=True)
+    def test_gallery_loads_the_enter_script_and_never_saves_on_enter(self):
+        self.client.force_login(self.parent.user)
+
+        response = self.client.get(STATES_URL)
+
+        assert_enter_assets(
+            self, response, ['id_text', 'id_answer', 'id_correction', 'id_e0-correction']
+        )
+        self.assertGreater(assert_enter_never_saves(self, response.content.decode()), 0)
 
     @override_settings(DEBUG=True)
     def test_child_is_forbidden_and_anonymous_is_redirected(self):

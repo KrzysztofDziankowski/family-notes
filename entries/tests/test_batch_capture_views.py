@@ -32,6 +32,7 @@ from entries.forms import BATCH_EMPTY_SELECTION_ERROR, BATCH_STALE_ERROR
 from entries.models import Entry
 from entries.views import SAVE_FAILED_ERROR, TOO_MANY_ENTRIES_NOTICE
 
+from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_capture_views import RecordingHandler
 from .test_classification_service import FamilyFixtureMixin
 from .test_follow_up_views import ScriptedBackend
@@ -642,3 +643,26 @@ class BatchCorrectionTests(BatchCorrectionMixin, TestCase):
         self.assertEqual(refused.status_code, 403)
         self.assertEqual(anonymous.status_code, 302)
         self.assertEqual(self.backend.requests, [])
+
+
+class BatchEnterSubmitTests(BatchCorrectionMixin, TestCase):
+    """S-05: Enter in a „Popraw tekstem” box runs that proposal's „Popraw” only."""
+
+    def test_each_correction_box_names_its_own_popraw_button(self):
+        response, _ = self.meetings_form()
+
+        self.assertEqual(response.context['state'], 'batch')
+        self.assertEqual(assert_enter_never_saves(self, response.content.decode()), 3)
+        assert_enter_assets(self, response, ['id_e0-correction', 'id_e1-correction', 'id_e2-correction'])
+
+    def test_corrected_batch_keeps_the_safe_submitters(self):
+        data = self.three_meetings()
+        data['action'] = 'correct-1'
+        data['e1-correction'] = 'zmień godzinę na 19:00'
+
+        response = self.post_with_backend(
+            data, meeting_output(THURSDAY, changed={'time'}, time=datetime.time(19, 0))
+        )
+
+        self.assertEqual(response.context['state'], 'batch')
+        self.assertEqual(assert_enter_never_saves(self, response.content.decode()), 3)

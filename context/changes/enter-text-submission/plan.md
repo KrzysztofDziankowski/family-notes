@@ -223,12 +223,12 @@ No database or data changes. Rollback: remove the script include and widget attr
 
 #### Automated
 
-- [ ] 1.1 Form/view tests prove the capture `text`, follow-up `answer` and review `correction` textareas render `data-enter-submit` and `enterkeyhint="send"` (the correction box additionally carrying S-03's `data-enter-submitter`), while review, create and edit `content` textareas do not.
-- [ ] 1.2 View tests prove the capture page (empty, question, proposal states) and the DEBUG state gallery include the `js/enter-submit.js` script tag, and each opted-in field renders the hint copy in a `hidden` `data-enter-hint` element with `id="<auto_id>-enter-hint"`.
-- [ ] 1.3 A test proves `js/enter-submit.js` is resolvable through Django's static files finders.
-- [ ] 1.11 Review-form tests (proposal, follow-up-highlight, `correction_failed` and confirm-invalid states, plus the S-04 batch review if present) prove Enter there can never post to `entries:confirm`: every `data-enter-submit` field inside a form whose action is `entries:confirm` carries a `data-enter-submitter` id that resolves to a submit button in the same form with `formaction` equal to `reverse('entries:correct')` (batch: `name="action" value="correct-<i>"`, id `e{i}-correct-submit`); no field points at „Zapisz wpis”.
-- [ ] 1.4 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view entries.tests.test_entry_forms`.
-- [ ] 1.5 Django checks pass: `uv run python manage.py check`.
+- [x] 1.1 Form/view tests prove the capture `text`, follow-up `answer` and review `correction` textareas render `data-enter-submit` and `enterkeyhint="send"` (the correction box additionally carrying S-03's `data-enter-submitter`), while review, create and edit `content` textareas do not.
+- [x] 1.2 View tests prove the capture page (empty, question, proposal states) and the DEBUG state gallery include the `js/enter-submit.js` script tag, and each opted-in field renders the hint copy in a `hidden` `data-enter-hint` element with `id="<auto_id>-enter-hint"`.
+- [x] 1.3 A test proves `js/enter-submit.js` is resolvable through Django's static files finders.
+- [x] 1.11 Review-form tests (proposal, follow-up-highlight, `correction_failed` and confirm-invalid states, plus the S-04 batch review if present) prove Enter there can never post to `entries:confirm`: every `data-enter-submit` field inside a form whose action is `entries:confirm` carries a `data-enter-submitter` id that resolves to a submit button in the same form with `formaction` equal to `reverse('entries:correct')` (batch: `name="action" value="correct-<i>"`, id `e{i}-correct-submit`); no field points at „Zapisz wpis”.
+- [x] 1.4 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view entries.tests.test_entry_forms`.
+- [x] 1.5 Django checks pass: `uv run python manage.py check`.
 
 #### Manual
 

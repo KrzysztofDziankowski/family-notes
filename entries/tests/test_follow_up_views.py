@@ -20,6 +20,7 @@ from entries.classification.types import EntryType, SchoolItemKind, UnavailableR
 from entries.models import Entry
 from family_access.models import FamilyMember
 
+from .enter_submit_markup import assert_enter_assets
 from .test_capture_views import RecordingHandler
 from .test_classification_service import WRITE_PREFIXES, FamilyFixtureMixin
 
@@ -508,3 +509,18 @@ class AnswerPrivacyTests(FollowUpViewMixin, TestCase):
         self.assertEqual(writes, [])
         self.assertFalse(Entry.objects.exists())
 
+
+class EnterSubmitQuestionTests(FollowUpViewMixin, TestCase):
+    """S-05: the re-asked question keeps the Enter opt-in and hint."""
+
+    def test_re_asked_question_keeps_the_enter_markup(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='   ')
+
+        self.assertEqual(response.context['state'], 'question')
+        field = str(response.context['follow_up_form']['answer'])
+        self.assertIn('data-enter-submit=""', field)
+        self.assertIn('enterkeyhint="send"', field)
+        self.assertNotIn('data-enter-submitter', field)
+        assert_enter_assets(self, response, ['id_answer'])

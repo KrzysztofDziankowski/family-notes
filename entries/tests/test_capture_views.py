@@ -4,6 +4,7 @@ import uuid
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.contrib.staticfiles import finders
 from django.test import TestCase
 from django.urls import reverse
 
@@ -21,6 +22,7 @@ from entries.classification.types import (
 from entries.models import Entry
 from family_access.models import FamilyMember
 
+from .enter_submit_markup import assert_enter_assets
 from .test_classification_acceptance import (
     PRD_CONTENT,
     PRD_INSTRUCTION,
@@ -571,3 +573,47 @@ class PrivacyTests(CaptureViewMixin, TestCase):
         for message in handler.messages:
             self.assertNotIn('SENTINEL-INSTRUKCJA', message)
         self.assertEqual(Entry.objects.count(), 1)
+
+
+class EnterSubmitCaptureTests(CaptureViewMixin, TestCase):
+    """S-05: the capture page loads the Enter script and marks its text boxes."""
+
+    def test_script_is_resolvable_through_the_static_finders(self):
+        self.assertIsNotNone(finders.find('js/enter-submit.js'))
+
+    def test_empty_state_opts_the_instruction_box_in(self):
+        response = self.client.get(CAPTURE_URL)
+
+        self.assertEqual(response.context['state'], 'empty')
+        field = str(response.context['capture_form']['text'])
+        self.assertIn('data-enter-submit=""', field)
+        self.assertIn('enterkeyhint="send"', field)
+        self.assertNotIn('data-enter-submitter', field)
+        assert_enter_assets(self, response, ['id_text'])
+
+    def test_question_state_opts_the_answer_box_in(self):
+        response, _ = self.classify_with(
+            ClassificationFollowUp(
+                missing_fields=(MissingField.DATE,),
+                entry_type=EntryType.CALENDAR_EVENT,
+                content=PRD_CONTENT,
+                school_item=SchoolItemKind.TEST,
+                member_name='michał',
+            ),
+            member=self.child,
+        )
+
+        self.assertEqual(response.context['state'], 'question')
+        field = str(response.context['follow_up_form']['answer'])
+        self.assertIn('data-enter-submit=""', field)
+        self.assertIn('enterkeyhint="send"', field)
+        # Enter means „Dalej” (the default action), never „Pomiń”.
+        self.assertNotIn('data-enter-submitter', field)
+        assert_enter_assets(self, response, ['id_answer'])
+
+    def test_proposal_state_loads_the_script_for_the_correction_box(self):
+        response, _ = self.classify_with(self.proposal(), member=self.child)
+
+        self.assertEqual(response.context['state'], 'proposal')
+        assert_enter_assets(self, response, ['id_correction'])
+        self.assertNotIn('data-enter-submit', str(response.context['review_form']['content']))

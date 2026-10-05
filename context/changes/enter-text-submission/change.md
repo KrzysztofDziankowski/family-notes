@@ -1,9 +1,9 @@
 ---
 change_id: enter-text-submission
 title: Parent can submit form text by pressing Enter
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

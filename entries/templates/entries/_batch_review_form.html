@@ -43,6 +43,7 @@
                 <details{% if entry.form.correction.value or entry.form.correction.errors %} open{% endif %}>
                     <summary>Popraw tekstem</summary>
                     {% include "entries/_field.html" with field=entry.form.correction hint="" %}
+                    {% include "entries/_enter_hint.html" with field=entry.form.correction %}
                     <button type="submit" name="action" value="correct-{{ entry.index }}" id="{{ entry.form.correct_submit_id }}" class="secondary" formnovalidate>Popraw</button>
                 </details>
                 {{ entry.form.submission_key }}

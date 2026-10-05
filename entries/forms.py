@@ -39,12 +39,17 @@ PAST_DATE_WARNING = (
 )
 
 
+# Opt-in for Enter-to-submit (S-05, js/enter-submit.js): Enter submits the
+# form, Shift+Enter inserts a newline; phones show a "send" key.
+ENTER_SUBMIT_ATTRS = {'data-enter-submit': '', 'enterkeyhint': 'send'}
+
+
 class CaptureForm(forms.Form):
     text = forms.CharField(
         label='Co trzeba zapisać?',
         max_length=MAX_SUBMITTED_TEXT_LENGTH,
         strip=True,
-        widget=forms.Textarea(attrs={'rows': 3, 'autofocus': True}),
+        widget=forms.Textarea(attrs={'rows': 3, 'autofocus': True, **ENTER_SUBMIT_ATTRS}),
     )
 
 
@@ -180,7 +185,10 @@ def _correction_field(required):
         max_length=MAX_CORRECTION_LENGTH,
         required=required,
         strip=True,
-        widget=CorrectionTextarea(attrs={'rows': 2, 'placeholder': CORRECTION_PLACEHOLDER}),
+        # Enter runs „Popraw” only: the form names that button as the submitter.
+        widget=CorrectionTextarea(
+            attrs={'rows': 2, 'placeholder': CORRECTION_PLACEHOLDER, **ENTER_SUBMIT_ATTRS}
+        ),
         error_messages={
             'required': CORRECTION_REQUIRED_ERROR,
             'max_length': CORRECTION_TOO_LONG_ERROR,
@@ -660,7 +668,7 @@ class FollowUpAnswerForm(forms.Form):
         label=FOLLOW_UP_DEFAULT_QUESTION,
         max_length=MAX_FOLLOW_UP_ANSWER_LENGTH,
         strip=True,
-        widget=forms.Textarea(attrs={'rows': 2, 'autofocus': True}),
+        widget=forms.Textarea(attrs={'rows': 2, 'autofocus': True, **ENTER_SUBMIT_ATTRS}),
         error_messages={'required': FOLLOW_UP_ANSWER_REQUIRED_ERROR},
     )
 

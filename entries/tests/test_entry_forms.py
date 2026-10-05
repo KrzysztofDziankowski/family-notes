@@ -14,10 +14,14 @@ from entries.classification.types import (
     UnavailableReason,
 )
 from entries.forms import (
+    BatchEntryCorrectionForm,
+    BatchEntryForm,
     CaptureForm,
     EntryCreateForm,
     EntryEditForm,
     EntryReviewForm,
+    FollowUpAnswerForm,
+    ProposalCorrectionForm,
     review_form_from_classification,
 )
 from entries.models import Entry
@@ -499,3 +503,39 @@ class SubjectOnEditTests(FamilyFixtureMixin, TestCase):
                 form = self.edit(entry, school_item=kind.value, school_subject='')
                 self.assertFalse(form.is_valid())
                 self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])
+
+
+class EnterSubmitOptInTests(FamilyFixtureMixin, TestCase):
+    """S-05: only the instruction boxes submit on Enter; „Tytuł” stays a newline."""
+
+    def assert_opted_in(self, bound_field, submitter=None):
+        html = str(bound_field)
+        self.assertIn('data-enter-submit=""', html)
+        self.assertIn('enterkeyhint="send"', html)
+        if submitter is None:
+            self.assertNotIn('data-enter-submitter', html)
+        else:
+            self.assertIn(f'data-enter-submitter="{submitter}"', html)
+
+    def test_capture_and_follow_up_boxes_use_the_default_action(self):
+        self.assert_opted_in(CaptureForm()['text'])
+        self.assert_opted_in(FollowUpAnswerForm(self.parent)['answer'])
+
+    def test_correction_boxes_name_their_popraw_button(self):
+        cases = (
+            (EntryReviewForm, None, 'correct-submit'),
+            (ProposalCorrectionForm, None, 'correct-submit'),
+            (BatchEntryForm, 'e3', 'e3-correct-submit'),
+            (BatchEntryCorrectionForm, 'e3', 'e3-correct-submit'),
+        )
+        for form_class, prefix, submitter in cases:
+            with self.subTest(form=form_class.__name__):
+                form = form_class(self.parent, prefix=prefix)
+                self.assert_opted_in(form['correction'], submitter)
+
+    def test_title_boxes_are_not_opted_in(self):
+        for form_class in (EntryReviewForm, EntryCreateForm, EntryEditForm):
+            with self.subTest(form=form_class.__name__):
+                html = str(form_class(self.parent)['content'])
+                self.assertNotIn('data-enter-submit', html)
+                self.assertNotIn('enterkeyhint', html)

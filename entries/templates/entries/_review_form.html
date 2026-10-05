@@ -15,6 +15,7 @@
         {% endif %}
     {% endfor %}
     {% include "entries/_field.html" with field=form.correction hint="" %}
+    {% include "entries/_enter_hint.html" with field=form.correction %}
     {{ form.submission_key }}
     <div class="fn-actions">
         <button type="submit">Zapisz wpis</button>
