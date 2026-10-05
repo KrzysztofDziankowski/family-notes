@@ -399,12 +399,12 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [x] 4.1 EduVulcan rule tests assert the subject for the four calendar categories, a blank subject for over-long values, and unchanged content: `uv run python manage.py test entries.tests.test_eduvulcan_rules entries.tests.test_eduvulcan_acceptance`
-- [x] 4.2 Conversion tests prove that a rule-based school event persists its subject and that a classified school event without a subject persists as a calendar event, not a general note: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_conversion_lifecycle`
-- [x] 4.3 API tests cover `school_subject` for set and blank entries and confirm that the existing keys are unchanged: `uv run python manage.py test entries.tests.test_entries_api`
-- [x] 4.4 Full suite passes: `uv run python manage.py test`
-- [x] 4.5 Django checks pass: `uv run python manage.py check`
-- [x] 4.6 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 4.1 EduVulcan rule tests assert the subject for the four calendar categories, a blank subject for over-long values, and unchanged content: `uv run python manage.py test entries.tests.test_eduvulcan_rules entries.tests.test_eduvulcan_acceptance` — b6a807b
+- [x] 4.2 Conversion tests prove that a rule-based school event persists its subject and that a classified school event without a subject persists as a calendar event, not a general note: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_conversion_lifecycle` — b6a807b
+- [x] 4.3 API tests cover `school_subject` for set and blank entries and confirm that the existing keys are unchanged: `uv run python manage.py test entries.tests.test_entries_api` — b6a807b
+- [x] 4.4 Full suite passes: `uv run python manage.py test` — b6a807b
+- [x] 4.5 Django checks pass: `uv run python manage.py check` — b6a807b
+- [x] 4.6 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run` — b6a807b
 
 #### Manual
 
