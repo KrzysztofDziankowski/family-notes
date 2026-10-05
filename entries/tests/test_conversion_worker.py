@@ -581,3 +581,30 @@ class IntakeWakeupTests(AutomationFixtureMixin, TestCase):
         row = InboundNotification.objects.get()
         self.assertEqual((row.status, row.attempt_count), (Status.PROCESSING, 1))
         self.assertFalse(Entry.objects.exists())
+
+
+class MultiFamilyConversionTests(WorkerTestCase):
+    """S-16: a notification converts into its own family; children match only there."""
+
+    def test_child_is_matched_only_among_the_notification_family(self):
+        # The parent of "Our Family" is also a parent of the other family,
+        # which has its own child with the same name.
+        from family_access.models import FamilyMember
+
+        FamilyMember.objects.create(
+            user=self.parent.user, family=self.other_family,
+            role=FamilyMember.Role.PARENT, display_name='Ewa',
+        )
+        namesake = self._member(
+            'other-michal', FamilyMember.Role.CHILD, 'Michał', family=self.other_family
+        )
+        row = self.notification(1)
+
+        self.worker.run_once()
+
+        self.assertEqual(self.status(row), Status.PROCESSED)
+        entry = Entry.objects.get(source=Entry.Source.EDUVULCAN)
+        self.assertEqual(entry.family, self.family)
+        self.assertEqual(entry.assigned_member, self.child)
+        self.assertNotEqual(entry.assigned_member, namesake)
+        self.assertFalse(Entry.objects.filter(family=self.other_family).exists())

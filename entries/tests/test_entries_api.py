@@ -678,3 +678,68 @@ class TwoParentApiTests(EntriesApiDataMixin, TestCase):
             records[self.theirs.pk]['assigned_member'], {'display_name': 'Second Parent'}
         )
         self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+
+
+class MultiFamilyTokenTests(TestCase):
+    """S-16: a token stays bound to its membership's family, whatever the session says."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+
+        from family_access.context import SESSION_KEY
+
+        self.session_key = SESSION_KEY
+        self.family_a = Family.objects.create(name='Rodzina testowa')
+        self.family_b = Family.objects.create(name='Inna rodzina')
+        self.user = get_user_model().objects.create_user(username='ewa', email='ewa@example.test')
+        self.parent_a = FamilyMember.objects.create(
+            user=self.user, family=self.family_a, role=FamilyMember.Role.PARENT, display_name='Ewa',
+        )
+        self.parent_b = FamilyMember.objects.create(
+            user=self.user, family=self.family_b, role=FamilyMember.Role.PARENT, display_name='Ewa',
+        )
+        self.entry_a = Entry.objects.create(
+            family=self.family_a, entry_type=EntryType.TODO.value, content='Wpis A',
+        )
+        self.entry_b = Entry.objects.create(
+            family=self.family_b, entry_type=EntryType.TODO.value, content=FOREIGN_SENTINEL,
+        )
+        _, self.secret_a = AutomationToken.issue(self.parent_a, 'Telefon A')
+        _, self.secret_b = AutomationToken.issue(self.parent_b, 'Telefon B')
+        self.url = reverse('automation:entries_list')
+
+    def get(self, secret):
+        return self.client.get(self.url, HTTP_AUTHORIZATION=f'Bearer {secret}')
+
+    def ids(self, response):
+        return [record['id'] for record in response.json()['results']]
+
+    def test_token_reads_only_its_family_even_when_the_session_is_on_another(self):
+        self.client.force_login(self.user)
+        session = self.client.session
+        session[self.session_key] = self.family_b.pk
+        session.save()
+
+        response = self.get(self.secret_a)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.ids(response), [self.entry_a.pk])
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+
+    def test_api_ignores_a_client_supplied_family(self):
+        response = self.client.get(
+            self.url, {'family': self.family_b.pk, 'family_id': self.family_b.pk},
+            HTTP_AUTHORIZATION=f'Bearer {self.secret_a}',
+        )
+
+        self.assertNotIn(self.entry_b.pk, self.ids(response) if response.status_code == 200 else [])
+        self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
+
+    def test_deactivating_one_membership_disables_only_its_token(self):
+        self.parent_a.is_active = False
+        self.parent_a.save(update_fields=['is_active'])
+
+        self.assertEqual(self.get(self.secret_a).status_code, 401)
+        response = self.get(self.secret_b)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.ids(response), [self.entry_b.pk])

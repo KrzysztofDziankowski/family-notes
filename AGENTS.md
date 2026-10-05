@@ -6,6 +6,7 @@ FamilyNotes is a Django 5.2 web application managed with `uv`. The repository cu
 
 - Never write to `context/archive/`; archived changes are immutable. If a resolved target is archived, stop and open a new change under `context/changes/`.
 - Enforce family-scoped access in every query and mutation. Parents may manage family entries, children may read only entries assigned to them, and unauthenticated users may not access family data; see `@context/foundation/prd.md`.
+- Resolve family only through the request family context (`family_access/context.py`: `resolve_family_context` / `require_family_context`, or `peek_family_context` in templates); never from the user alone. A person may belong to several families. Services take the context membership, every `method="post"` form to an `entries`/`family_access` view includes `{% family_context_field %}`, and automation requests take the family only from the token.
 - Keep classification input limited to producing and saving the requested family entry. Do not add secondary storage, analytics, or training use for that text.
 - Keep secrets and deployment-specific values out of source control. Replace the scaffolded development values in `@family_notes/settings.py` with environment-backed configuration before deployment.
 
