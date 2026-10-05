@@ -373,8 +373,8 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Automated
 
-- [x] 3.1 States page and acceptance tests pass
-- [x] 3.2 Full suite passes
+- [x] 3.1 States page and acceptance tests pass — 62663a8
+- [x] 3.2 Full suite passes — 62663a8
 
 #### Manual
 
