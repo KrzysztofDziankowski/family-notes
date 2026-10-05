@@ -1,9 +1,9 @@
 ---
 change_id: free-text-proposal-correction
 title: Parent can correct an existing proposal through free text
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

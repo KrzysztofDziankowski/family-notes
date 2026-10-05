@@ -10,9 +10,20 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass, field
-from typing import Optional, Protocol, Tuple, runtime_checkable
+from typing import FrozenSet, Optional, Protocol, Tuple, runtime_checkable
 
-from .types import ClassificationError, EntryType, SchoolItemKind
+from .types import ClassificationError, EntryType, ProposalValues, SchoolItemKind
+
+# Fields a free-text correction may change, as named in ``changed_fields``.
+CORRECTABLE_FIELDS = (
+    'entry_type',
+    'content',
+    'school_item',
+    'school_subject',
+    'date',
+    'time',
+    'member_name',
+)
 
 
 @dataclass(frozen=True)
@@ -22,6 +33,11 @@ class BackendRequest:
     ``follow_up_question`` and ``follow_up_answer`` are set only when the
     parent answers a follow-up question about a draft; the answer supplements
     ``submitted_text``. Both are family text and stay out of ``repr``.
+
+    ``current_proposal`` and ``correction_text`` are set only for a free-text
+    correction of the proposal on screen. ``submitted_text`` then holds the
+    correction too, because it is the text a returned date must be grounded
+    in; the original instruction is never sent.
     """
 
     submitted_text: str = field(repr=False)
@@ -30,6 +46,8 @@ class BackendRequest:
     locale: str
     follow_up_question: Optional[str] = field(default=None, repr=False)
     follow_up_answer: Optional[str] = field(default=None, repr=False)
+    current_proposal: Optional[ProposalValues] = field(default=None, repr=False)
+    correction_text: Optional[str] = field(default=None, repr=False)
 
     def __post_init__(self):
         # Normalize to an immutable tuple so callers cannot mutate it later.
@@ -51,6 +69,10 @@ class BackendOutput:
     among the allow-listed candidates locally; it is never logged or stored.
     ``member_ambiguous`` is set only by the local resolver, never by a
     provider adapter, when the mention fits several candidates.
+
+    ``changed_fields`` is set only for a correction: the names of the fields
+    (from ``CORRECTABLE_FIELDS``) the correction changes. ``None`` means the
+    output is not a correction.
     """
 
     entry_type: Optional[EntryType]
@@ -63,6 +85,7 @@ class BackendOutput:
     school_subject: Optional[str] = field(default=None, repr=False)
     member_mention: Optional[str] = field(default=None, repr=False)
     member_ambiguous: bool = False
+    changed_fields: Optional[FrozenSet[str]] = None
 
 
 class ClassificationBackendError(ClassificationError):

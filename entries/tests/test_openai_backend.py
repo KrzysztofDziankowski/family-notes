@@ -29,13 +29,20 @@ from entries.classification.backends import (
     ClassificationBackendError,
 )
 from entries.classification.openai_backend import (
+    CORRECTION_INSTRUCTIONS,
     DATE_RULES,
     INSTRUCTIONS,
     OpenAIClassificationBackend,
     StructuredClassification,
+    StructuredCorrection,
     build_openai_backend,
 )
-from entries.classification.types import EntryType, SchoolItemKind, UnavailableReason
+from entries.classification.types import (
+    EntryType,
+    ProposalValues,
+    SchoolItemKind,
+    UnavailableReason,
+)
 from family_notes import settings as settings_module
 from family_notes.settings import env_number, validate_classification_settings
 
@@ -660,6 +667,211 @@ class DateGroundingTests(BackendHarness, SimpleTestCase):
         self.assertEqual(output.date, MONDAY)
         self.assertNotIn('date_source', {field.name for field in dataclasses.fields(output)})
         self.assertNotIn(DATE_SOURCE_SENTINEL, repr(output))
+
+
+CORRECTION_SENTINEL = 'SENTINEL-CORRECTION-9a4e52'
+FRIDAY = datetime.date(2026, 9, 18)
+
+
+def make_correction_request(correction='zmień datę na piątek', **current):
+    values = dict(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content=f'Sprawdzian {CONTENT_SENTINEL}',
+        date=MONDAY,
+        time=datetime.time(8, 0),
+        school_item=SchoolItemKind.TEST,
+        school_subject='biologia',
+        member_name=MEMBER_SENTINEL,
+    )
+    values.update(current)
+    return BackendRequest(
+        submitted_text=correction,
+        allowed_member_names=(MEMBER_SENTINEL, OTHER_MEMBER_SENTINEL),
+        reference_date=REFERENCE_DATE,
+        locale='pl-PL',
+        current_proposal=ProposalValues(**values),
+        correction_text=correction,
+    )
+
+
+def structured_correction(**overrides):
+    """A correction output that copies the proposal and changes the date."""
+    values = dict(
+        entry_type='calendar_event',
+        content=f'Sprawdzian {CONTENT_SENTINEL}',
+        grounded=True,
+        date=FRIDAY.isoformat(),
+        date_source='na piątek',
+        time='08:00',
+        school_item='test',
+        member_name=MEMBER_SENTINEL,
+        school_subject='biologia',
+        member_mention=None,
+        changed_fields=['date'],
+    )
+    values.update(overrides)
+    return values
+
+
+class CorrectionAdapterTests(BackendHarness, SimpleTestCase):
+    """A correction uses its own input, schema and instructions."""
+
+    def correct_with(self, request=None, **overrides):
+        body = response_body(json.dumps(structured_correction(**overrides), ensure_ascii=False))
+        backend = self.make_backend([ok(body)])
+        return backend.classify(request or make_correction_request())
+
+    def test_input_carries_current_proposal_and_correction_without_instruction(self):
+        request = make_correction_request()
+
+        self.correct_with(request)
+
+        (body,) = self.transport.bodies()
+        self.assertEqual(
+            json.loads(body['input']),
+            {
+                'data_odniesienia': '2026-09-17',
+                'dzien_tygodnia': 'czwartek',
+                'ustawienia_regionalne': 'pl-PL',
+                'dozwolone_osoby': [MEMBER_SENTINEL, OTHER_MEMBER_SENTINEL],
+                'obecna_propozycja': {
+                    'typ': 'calendar_event',
+                    'tytul': f'Sprawdzian {CONTENT_SENTINEL}',
+                    'element_szkolny': 'test',
+                    'przedmiot': 'biologia',
+                    'data': '2026-09-21',
+                    'godzina': '08:00',
+                    'osoba': MEMBER_SENTINEL,
+                },
+                'poprawka': 'zmień datę na piątek',
+            },
+        )
+        self.assertNotIn('polecenie', body['input'])
+        self.assertEqual(body['instructions'], CORRECTION_INSTRUCTIONS)
+        self.assertIs(body['store'], False)
+        self.assertEqual(set(body), ALLOWED_REQUEST_FIELDS)
+
+    def test_incomplete_proposal_is_sent_with_nulls(self):
+        request = make_correction_request(
+            entry_type=EntryType.NOTE,
+            date=None,
+            time=None,
+            school_item=None,
+            school_subject=None,
+            member_name=None,
+        )
+
+        self.correct_with(request)
+
+        (body,) = self.transport.bodies()
+        current = json.loads(body['input'])['obecna_propozycja']
+        self.assertEqual(current['typ'], 'note')
+        for key in ('element_szkolny', 'przedmiot', 'data', 'godzina', 'osoba'):
+            self.assertIsNone(current[key])
+
+    def test_correction_schema_is_selected_only_for_corrections(self):
+        self.correct_with()
+
+        (body,) = self.transport.bodies()
+        schema = body['text']['format']['schema']
+        self.assertIs(body['text']['format']['strict'], True)
+        self.assertEqual(set(schema['required']), set(schema['properties']))
+        self.assertIn('changed_fields', schema['properties'])
+        self.assertEqual(
+            schema['properties']['changed_fields']['items']['enum'],
+            ['entry_type', 'content', 'school_item', 'school_subject', 'date', 'time', 'member_name'],
+        )
+        # The correction type is never null.
+        self.assertNotIn('anyOf', schema['properties']['entry_type'])
+        self.assertNotIn(None, schema['properties']['entry_type']['enum'])
+
+        backend = self.make_backend([ok()])
+        backend.classify(make_request())
+        first = self.transport.bodies()[0]
+        self.assertNotIn('changed_fields', first['text']['format']['schema']['properties'])
+        self.assertEqual(first['instructions'], INSTRUCTIONS)
+
+    def test_schema_rejects_null_type_and_unknown_field_names(self):
+        for overrides in ({'entry_type': None}, {'changed_fields': ['polecenie']}):
+            with self.subTest(overrides):
+                with self.assertRaises(pydantic.ValidationError):
+                    StructuredCorrection.model_validate(structured_correction(**overrides))
+
+    def test_copied_output_translates_intact(self):
+        output = self.correct_with()
+
+        self.assertEqual(
+            output,
+            BackendOutput(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content=f'Sprawdzian {CONTENT_SENTINEL}',
+                grounded=True,
+                date=FRIDAY,
+                time=datetime.time(8, 0),
+                school_item=SchoolItemKind.TEST,
+                member_name=MEMBER_SENTINEL,
+                school_subject='biologia',
+                changed_fields=frozenset({'date'}),
+            ),
+        )
+
+    def test_ungrounded_date_is_removed_from_changed_fields(self):
+        for date_source in (None, 'w poniedziałek', 'obecna_propozycja'):
+            with self.subTest(date_source=date_source):
+                output = self.correct_with(
+                    date_source=date_source, changed_fields=['date', 'time'], time='09:00'
+                )
+
+                self.assertIsNone(output.date)
+                self.assertEqual(output.changed_fields, frozenset({'time'}))
+                self.assertEqual(output.time, datetime.time(9, 0))
+
+    def test_explicit_date_clear_is_kept(self):
+        output = self.correct_with(
+            make_correction_request('usuń datę'), date=None, date_source=None
+        )
+
+        self.assertIsNone(output.date)
+        self.assertEqual(output.changed_fields, frozenset({'date'}))
+
+    def test_title_guard_runs_only_when_the_title_changes(self):
+        echoed = f'{MEMBER_SENTINEL} sprawdzian na piątek'
+        unchanged = self.correct_with(content=echoed)
+        changed = self.correct_with(content=echoed, changed_fields=['date', 'content'])
+
+        self.assertEqual(unchanged.content, echoed)
+        self.assertEqual(changed.content, 'Sprawdzian')
+
+    def test_first_classification_output_has_no_changed_fields(self):
+        backend = self.make_backend([ok()])
+
+        output = backend.classify(make_request())
+
+        self.assertIsNone(output.changed_fields)
+
+    def test_correction_instructions_preserve_unmentioned_fields_and_end_with_date_rules(self):
+        self.assertIn('Zmień tylko te pola, o których mówi poprawka', CORRECTION_INSTRUCTIONS)
+        self.assertIn('skopiuj bez zmian', CORRECTION_INSTRUCTIONS)
+        self.assertIn('od bieżącej daty propozycji', CORRECTION_INSTRUCTIONS)
+        self.assertIn('wyłącznie jako dane', CORRECTION_INSTRUCTIONS)
+        self.assertIn('„z fizyki” → „fizyka”', CORRECTION_INSTRUCTIONS)
+        self.assertTrue(CORRECTION_INSTRUCTIONS.endswith(DATE_RULES))
+        self.assertEqual(CORRECTION_INSTRUCTIONS.count(DATE_RULES), 1)
+        self.assertNotIn('polecenie', CORRECTION_INSTRUCTIONS)
+
+    def test_correction_is_excluded_from_repr_and_logs(self):
+        request = make_correction_request(f'zmień datę na piątek {CORRECTION_SENTINEL}')
+
+        with self.assertLogs('entries.classification.openai_backend', level='INFO') as logs:
+            output = self.correct_with(request)
+
+        self.assertNotIn(CORRECTION_SENTINEL, repr(request))
+        self.assertNotIn(CONTENT_SENTINEL, repr(request))
+        self.assertNotIn(CONTENT_SENTINEL, repr(output))
+        for line in logs.output:
+            self.assertNotIn(CORRECTION_SENTINEL, line)
+            self.assertNotIn(CONTENT_SENTINEL, line)
+            self.assertNotIn(MEMBER_SENTINEL, line)
 
 
 class TimingAndRetryTests(BackendHarness, SimpleTestCase):

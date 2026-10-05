@@ -27,6 +27,11 @@ creates, updates, or deletes database rows.
 question under the same rules. Only the values the draft was missing are
 taken from the answer's classification; everything else stays as drafted.
 
+``correct_proposal_for_parent`` applies a parent's free-text correction to
+the proposal on screen under the same rules. Only the fields the backend
+lists as changed are taken from its output; everything else, including the
+parent's manual edits, is kept.
+
 ``classify_for_family`` is the automated counterpart used for EduVulcan
 notifications. It impersonates no user: the caller passes a snapshot of the
 family's active children, and only their display names reach the backend.
@@ -40,7 +45,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Optional, Sequence
+from typing import FrozenSet, Optional, Sequence
 
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.debug import sensitive_variables
@@ -50,7 +55,12 @@ from family_access.models import FamilyMember
 
 from ..eduvulcan.children import match_child
 from ..eduvulcan.types import ChildSnapshot
-from .backends import BackendOutput, BackendRequest, ClassificationBackend
+from .backends import (
+    CORRECTABLE_FIELDS,
+    BackendOutput,
+    BackendRequest,
+    ClassificationBackend,
+)
 from .follow_up import follow_up_question
 from .names import match_mention
 from .types import (
@@ -61,6 +71,9 @@ from .types import (
     ClassificationUnavailable,
     EntryType,
     MissingField,
+    ProposalValues,
+    SCHOOL_SUBJECT_MAX_LENGTH,
+    SchoolItemKind,
     UnavailableReason,
 )
 from .validation import classify_output, normalize_member_name
@@ -70,6 +83,8 @@ DEFAULT_LOCALE = 'pl-PL'
 MAX_SUBMITTED_TEXT_LENGTH = 2000
 # Upper bound on a parent's answer to a follow-up question.
 MAX_FOLLOW_UP_ANSWER_LENGTH = 500
+# Upper bound on a free-text correction of the proposal on screen.
+MAX_CORRECTION_LENGTH = 500
 _MEMBER_FIELDS = frozenset(
     {MissingField.AFFECTED_MEMBER, MissingField.AMBIGUOUS_MEMBER}
 )
@@ -131,6 +146,149 @@ def classify_for_parent(
     output = _apply_member_mention(output, candidates)
     result = classify_output(request, output, require_school_subject=True)
     return _resolve_member(result, candidates)
+
+
+class CorrectionRejection(str, Enum):
+    """Why a free-text correction was not applied; safe to log."""
+
+    TOO_LONG = 'too_long'
+    NOT_APPLIED = 'not_applied'
+    SCHOOL_ITEM_MISMATCH = 'school_item_mismatch'
+
+
+@dataclass(frozen=True)
+class ProposalCorrection:
+    """The outcome of a free-text correction of the proposal on screen.
+
+    When ``applied`` is true, ``outcome`` is the corrected proposal or a
+    follow-up with highlighted fields, and ``changed`` names the corrected
+    fields. Otherwise ``outcome`` is ``None``, ``rejection`` says why, and the
+    caller re-renders the values the parent already has. ``school_item`` is
+    the merged school item that did not fit the merged entry type, set only
+    for ``SCHOOL_ITEM_MISMATCH``.
+    """
+
+    outcome: Optional[ParentClassification]
+    changed: FrozenSet[str] = frozenset()
+    applied: bool = False
+    rejection: Optional[CorrectionRejection] = None
+    school_item: Optional[SchoolItemKind] = None
+
+
+def _not_applied(
+    rejection: CorrectionRejection, school_item: Optional[SchoolItemKind] = None
+) -> ProposalCorrection:
+    return ProposalCorrection(outcome=None, rejection=rejection, school_item=school_item)
+
+
+@sensitive_variables('correction', 'current')
+def correct_proposal_for_parent(
+    user,
+    current: ProposalValues,
+    correction: str,
+    *,
+    reference_date: datetime.date,
+    current_member: Optional[FamilyMember] = None,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ProposalCorrection:
+    """Apply a free-text ``correction`` to the proposal on screen.
+
+    Authorization, candidates, and privacy match ``classify_for_parent``. The
+    backend is called once with the current values and the correction, never
+    the original instruction. Only the fields it lists in ``changed_fields``
+    are taken from its output; every other value stays exactly as ``current``
+    (including the parent's manual edits). The merged values are validated
+    once. A provider failure, ungrounded or empty output, an unknown person,
+    or a school item that does not fit the merged entry type leaves the
+    proposal unchanged (``applied=False``). ``current_member`` is trusted only
+    when it is an active member of the parent's family. No rows are written.
+    """
+    membership = get_active_membership(user)
+    if not is_parent(membership):
+        raise PermissionDenied('An active parent membership is required.')
+    if (
+        len(correction) > MAX_CORRECTION_LENGTH
+        or len(current.content) > MAX_SUBMITTED_TEXT_LENGTH
+    ):
+        return _not_applied(CorrectionRejection.TOO_LONG)
+
+    candidates = _active_family_members(membership)
+    if isinstance(reference_date, datetime.datetime):
+        reference_date = reference_date.date()
+    member_name = _trusted_member_name(current.member_name, current_member, candidates)
+    current = replace(current, member_name=member_name)
+    request = BackendRequest(
+        submitted_text=correction,
+        allowed_member_names=tuple(member.display_name for member in candidates),
+        reference_date=reference_date,
+        locale=locale,
+        current_proposal=current,
+        correction_text=correction,
+    )
+
+    try:
+        output = _invoke_backend(request, backend)
+    except ClassificationError:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+
+    changed = frozenset(output.changed_fields or ()) & frozenset(CORRECTABLE_FIELDS)
+    if not output.grounded or not changed:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    if 'entry_type' in changed and output.entry_type is None:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+
+    merged = _merge_correction(current, output, changed)
+    if merged.school_subject is not None and len(merged.school_subject) > SCHOOL_SUBJECT_MAX_LENGTH:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    if merged.school_item is not None and merged.school_item.entry_type != merged.entry_type:
+        # Never drop a school item silently: the parent decides.
+        return _not_applied(CorrectionRejection.SCHOOL_ITEM_MISMATCH, merged.school_item)
+    if 'member_name' in changed:
+        merged = _apply_member_mention(merged, candidates)
+        if merged.member_mention and merged.member_name is None and not merged.member_ambiguous:
+            # The parent named someone who is not in the family.
+            return _not_applied(CorrectionRejection.NOT_APPLIED)
+
+    result = classify_output(request, merged, require_school_subject=True)
+    if isinstance(result, ClassificationUnavailable):
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    outcome = _resolve_member(result, candidates)
+    if isinstance(outcome.result, ClassificationUnavailable):
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    return ProposalCorrection(outcome=outcome, changed=changed, applied=True)
+
+
+def _merge_correction(
+    current: ProposalValues, output: BackendOutput, changed: FrozenSet[str]
+) -> BackendOutput:
+    """Current values, with only the ``changed`` fields taken from ``output``.
+
+    The person (and the parent's mention of them) comes from the output only
+    when the correction changes it, so a stray mention cannot reassign the
+    current member.
+    """
+
+    def pick(name):
+        return getattr(output, name) if name in changed else getattr(current, name)
+
+    member_changed = 'member_name' in changed
+    member_name = output.member_name if member_changed else current.member_name
+    school_subject = pick('school_subject')
+    if 'school_subject' in changed:
+        school_subject = (school_subject or '').strip() or None
+    return BackendOutput(
+        entry_type=pick('entry_type'),
+        content=pick('content'),
+        grounded=output.grounded,
+        date=pick('date'),
+        time=pick('time'),
+        school_item=pick('school_item'),
+        member_name=normalize_member_name(member_name or '') or None,
+        school_subject=school_subject,
+        member_mention=output.member_mention if member_changed else None,
+        member_ambiguous=False,
+    )
 
 
 @sensitive_variables('submitted_text', 'answer')
@@ -201,12 +359,25 @@ def _known_member_name(
     candidates: Sequence[FamilyMember],
 ) -> Optional[str]:
     """The draft's member name, trusted only for a current family candidate."""
-    if draft_member is None:
-        return draft.member_name
+    return _trusted_member_name(draft.member_name, draft_member, candidates)
+
+
+def _trusted_member_name(
+    member_name: Optional[str],
+    member: Optional[FamilyMember],
+    candidates: Sequence[FamilyMember],
+) -> Optional[str]:
+    """``member``'s current display name if it is a family candidate.
+
+    Without a resolved member the given name is kept (validation still checks
+    it against the allow-list).
+    """
+    if member is None:
+        return member_name
     for candidate in candidates:
-        if candidate.pk == draft_member.pk:
+        if candidate.pk == member.pk:
             return candidate.display_name
-    # A stale or foreign member is dropped, never replaced by the draft name.
+    # A stale or foreign member is dropped, never replaced by the given name.
     return None
 
 

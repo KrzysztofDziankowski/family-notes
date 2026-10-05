@@ -119,6 +119,23 @@ class ClassificationFollowUp:
 
 
 @dataclass(frozen=True)
+class ProposalValues:
+    """The proposal currently on the review screen, possibly incomplete.
+
+    It carries the parent's manual edits into a free-text correction. It
+    holds no database IDs; the member is identified by display name only.
+    """
+
+    entry_type: EntryType
+    content: str = field(repr=False)
+    date: Optional[datetime.date] = None
+    time: Optional[datetime.time] = None
+    school_item: Optional[SchoolItemKind] = None
+    school_subject: Optional[str] = field(default=None, repr=False)
+    member_name: Optional[str] = field(default=None, repr=False)
+
+
+@dataclass(frozen=True)
 class ClassificationUnavailable:
     """A safe failure outcome carrying only a category code."""
 

@@ -281,10 +281,14 @@ class CandidateAndResolutionTests(FamilyFixtureMixin, TestCase):
                 'locale',
                 'follow_up_question',
                 'follow_up_answer',
+                'current_proposal',
+                'correction_text',
             },
         )
         self.assertIsNone(request.follow_up_question)
         self.assertIsNone(request.follow_up_answer)
+        self.assertIsNone(request.current_proposal)
+        self.assertIsNone(request.correction_text)
         for name in request.allowed_member_names:
             self.assertNotIn(name, ids)
 
