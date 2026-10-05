@@ -18,6 +18,7 @@ from .classification.types import (
     SchoolItemKind,
 )
 from .models import Entry
+from .services import subject_required_on_edit
 
 MISSING_FIELD_HINTS = {
     MissingField.DATE: ('date', 'Podaj datę.'),
@@ -53,11 +54,15 @@ class FamilyMemberChoiceField(forms.ModelChoiceField):
 SCHOOL_ITEM_TYPE_MISMATCH_ERROR = 'Ten element szkolny wymaga rodzaju „{label}”.'
 
 
+SCHOOL_SUBJECT_REQUIRED_ERROR = 'Podaj przedmiot.'
+
+
 class EntryFieldsForm(forms.Form):
     """Editable entry fields shared by capture review, structured create and edit.
 
-    Assignee choices are limited to active members of the parent's family.
-    Subclasses decide how an incompatible school item is handled.
+    Assignee choices are limited to active members of the parent's family. The
+    school item is a visible choice: a mismatch with the entry type is an
+    error, never discarded silently.
     """
 
     entry_type = forms.ChoiceField(label='Rodzaj', choices=Entry.ENTRY_TYPE_CHOICES)
@@ -82,6 +87,11 @@ class EntryFieldsForm(forms.Form):
         required=False,
         empty_label='Cała rodzina',
     )
+    school_item = forms.ChoiceField(
+        label='Element szkolny',
+        choices=[('', 'Brak')] + Entry.SCHOOL_ITEM_CHOICES,
+        required=False,
+    )
     school_subject = forms.CharField(
         label='Przedmiot',
         max_length=SCHOOL_SUBJECT_MAX_LENGTH,
@@ -99,6 +109,23 @@ class EntryFieldsForm(forms.Form):
         value = cleaned.get('school_item')
         return SchoolItemKind(value) if value else None
 
+    def clean(self):
+        cleaned = super().clean()
+        entry_type = cleaned.get('entry_type')
+        school_item = self._cleaned_school_item(cleaned)
+
+        if school_item is not None and entry_type and school_item.entry_type.value != entry_type:
+            label = dict(Entry.ENTRY_TYPE_CHOICES)[school_item.entry_type.value]
+            self.add_error('school_item', SCHOOL_ITEM_TYPE_MISMATCH_ERROR.format(label=label))
+            school_item = None
+
+        self._require_schedule_fields(cleaned, entry_type, school_item)
+        return cleaned
+
+    def _subject_required(self, school_item):
+        """Whether a school event kind must carry a subject; edit relaxes this."""
+        return True
+
     def _require_schedule_fields(self, cleaned, entry_type, school_item):
         """Enforce the calendar date and the school item's required fields."""
         date = cleaned.get('date')
@@ -114,16 +141,18 @@ class EntryFieldsForm(forms.Form):
                 and 'assigned_member' not in self.errors
             ):
                 self.add_error('assigned_member', 'Wybierz osobę, której dotyczy wpis.')
+            if (
+                MissingField.SCHOOL_SUBJECT in required
+                and not cleaned.get('school_subject')
+                and 'school_subject' not in self.errors
+                and self._subject_required(school_item)
+            ):
+                self.add_error('school_subject', SCHOOL_SUBJECT_REQUIRED_ERROR)
 
 
 class EntryReviewForm(EntryFieldsForm):
     """The classified proposal as an editable form; every posted value is untrusted."""
 
-    school_item = forms.ChoiceField(
-        choices=[('', '')] + Entry.SCHOOL_ITEM_CHOICES,
-        required=False,
-        widget=forms.HiddenInput,
-    )
     submission_key = forms.UUIDField(widget=forms.HiddenInput)
 
     def __init__(self, membership, *args, missing=None, today=None, **kwargs):
@@ -145,7 +174,8 @@ class EntryReviewForm(EntryFieldsForm):
         return [
             {'field': self[name], 'hint': self.missing.get(name, '')}
             for name in (
-                'entry_type', 'content', 'school_subject', 'date', 'time', 'assigned_member',
+                'entry_type', 'content', 'school_item', 'school_subject',
+                'date', 'time', 'assigned_member',
             )
         ]
 
@@ -158,43 +188,9 @@ class EntryReviewForm(EntryFieldsForm):
                 return None
         return value
 
-    def clean(self):
-        cleaned = super().clean()
-        entry_type = cleaned.get('entry_type')
-        school_item = self._cleaned_school_item(cleaned)
-
-        # The school item is hidden classifier metadata: the parent's type
-        # correction wins and silently drops a stale school item.
-        if school_item is not None and entry_type and school_item.entry_type.value != entry_type:
-            school_item = None
-            cleaned['school_item'] = ''
-
-        self._require_schedule_fields(cleaned, entry_type, school_item)
-        return cleaned
-
 
 class ManagedEntryForm(EntryFieldsForm):
-    """Parent-managed entry fields with a visible, validated school item."""
-
-    school_item = forms.ChoiceField(
-        label='Element szkolny',
-        choices=[('', 'Brak')] + Entry.SCHOOL_ITEM_CHOICES,
-        required=False,
-    )
-
-    def clean(self):
-        cleaned = super().clean()
-        entry_type = cleaned.get('entry_type')
-        school_item = self._cleaned_school_item(cleaned)
-
-        # A visible choice is never discarded silently: a mismatch is an error.
-        if school_item is not None and entry_type and school_item.entry_type.value != entry_type:
-            label = dict(Entry.ENTRY_TYPE_CHOICES)[school_item.entry_type.value]
-            self.add_error('school_item', SCHOOL_ITEM_TYPE_MISMATCH_ERROR.format(label=label))
-            school_item = None
-
-        self._require_schedule_fields(cleaned, entry_type, school_item)
-        return cleaned
+    """Parent-managed entry fields for structured create and edit."""
 
 
 class EntryCreateForm(ManagedEntryForm):
@@ -207,6 +203,7 @@ class EntryEditForm(ManagedEntryForm):
     """Editing an existing entry; provenance fields are never exposed."""
 
     def __init__(self, membership, *args, entry=None, **kwargs):
+        self.entry = entry
         if entry is not None:
             initial = {
                 'entry_type': entry.entry_type,
@@ -215,6 +212,7 @@ class EntryEditForm(ManagedEntryForm):
                 'time': entry.time,
                 'assigned_member': entry.assigned_member_id,
                 'school_item': entry.school_item,
+                'school_subject': entry.school_subject,
             }
             initial.update(kwargs.pop('initial', None) or {})
             kwargs['initial'] = initial
@@ -228,6 +226,13 @@ class EntryEditForm(ManagedEntryForm):
                 ),
                 membership,
             ).order_by('pk')
+
+    def _subject_required(self, school_item):
+        if self.entry is None:
+            return True
+        return subject_required_on_edit(
+            self.entry.school_item, self.entry.school_subject, school_item
+        )
 
 
 def review_form_from_classification(membership, outcome, submitted_text, *, today=None):

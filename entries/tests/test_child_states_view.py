@@ -122,3 +122,7 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.assertIn('Brak dostępu', error)
         self.assertIn('Ta strona nie jest dostępna dla Twojego konta.', error)
         self.assertIn('href="/"', error)
+        eduvulcan = _state_html(html, 'detail_eduvulcan')
+        self.assertIn('<dt>Przedmiot</dt>', eduvulcan)
+        self.assertIn('przyroda', eduvulcan)
+        self.assertNotIn('Przedmiot', _state_html(html, 'detail_manual'))

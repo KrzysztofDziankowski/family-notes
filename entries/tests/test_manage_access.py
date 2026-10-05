@@ -241,11 +241,13 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
                 'time': '',
                 'assigned_member': str(self.child.pk),
                 'school_item': 'quiz',
+                'school_subject': 'biologia',
             },
         )
         entry.refresh_from_db()
         self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
         self.assertEqual(entry.school_item, 'quiz')
+        self.assertEqual(entry.school_subject, 'biologia')
         self.assertContains(
             self.client.get(reverse('entries:detail', args=[entry.pk])), 'EduVulcan'
         )

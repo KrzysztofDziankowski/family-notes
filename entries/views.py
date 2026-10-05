@@ -216,6 +216,7 @@ def confirm(request):
             time=data['time'],
             assigned_member=data['assigned_member'],
             school_item=data['school_item'],
+            school_subject=data['school_subject'],
             submission_key=data['submission_key'],
         )
     except ValidationError as error:
@@ -268,6 +269,7 @@ def states(request):
         date=STATES_DATE,
         time=datetime.time(8, 0),
         school_item=SchoolItemKind.TEST,
+        school_subject='historia',
     )
     past_proposal = ClassificationProposal(
         entry_type=EntryType.TODO,
@@ -283,6 +285,7 @@ def states(request):
             'time': '',
             'assigned_member': '',
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': '',
             'submission_key': str(uuid.uuid4()),
         },
     )
@@ -311,6 +314,14 @@ def states(request):
         entry_type=EntryType.CALENDAR_EVENT,
         content='Sprawdzian z angielskiego',
         school_item=SchoolItemKind.TEST,
+        school_subject='angielski',
+    )
+    subject_draft = ClassificationFollowUp(
+        missing_fields=(MissingField.SCHOOL_SUBJECT,),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Sprawdzian',
+        date=STATES_DATE,
+        school_item=SchoolItemKind.TEST,
     )
     skipped_form = skip_review_form(membership, combined_draft, None, today=STATES_DATE)
     _use_synthetic_members(skipped_form)
@@ -336,9 +347,15 @@ def states(request):
                     entry_type=EntryType.CALENDAR_EVENT,
                     content='Kartkówka z matematyki',
                     school_item=SchoolItemKind.QUIZ,
+                    school_subject='matematyka',
                 ),
                 member_value='s2',
             ),
+        },
+        {
+            'name': 'follow_up_subject',
+            'label': 'Brakujący przedmiot',
+            'review_form': synthetic_review(subject_draft, member_value='s1'),
         },
         {
             'name': 'follow_up_member',
@@ -350,6 +367,7 @@ def states(request):
                     content='Zadanie domowe z polskiego',
                     date=STATES_DATE,
                     school_item=SchoolItemKind.HOMEWORK,
+                    school_subject='polski',
                 )
             ),
         },
@@ -373,6 +391,11 @@ def states(request):
             'follow_up_form': synthetic_question(
                 combined_draft, 'Sprawdzian z angielskiego, trzeba się przygotować'
             ),
+        },
+        {
+            'name': 'question_subject',
+            'label': 'Pytanie: brakujący przedmiot',
+            'follow_up_form': synthetic_question(subject_draft, 'Kasia ma dziś sprawdzian'),
         },
         {
             'name': 'answer_unavailable',
@@ -512,6 +535,7 @@ def create(request):
                 time=data['time'],
                 assigned_member=data['assigned_member'],
                 school_item=data['school_item'],
+                school_subject=data['school_subject'],
                 submission_key=data['submission_key'],
             )
         except ValidationError as error:
@@ -551,6 +575,7 @@ def edit(request, pk):
                 time=data['time'],
                 assigned_member=data['assigned_member'],
                 school_item=data['school_item'],
+                school_subject=data['school_subject'],
             )
         except Entry.DoesNotExist:
             raise Http404 from None
@@ -613,6 +638,7 @@ def _manage_state_sections(membership):
         date=STATES_DATE,
         time=datetime.time(8, 0),
         school_item=SchoolItemKind.TEST.value,
+        school_subject='historia',
         member='Kasia',
     )
     trip = _synthetic_entry(
@@ -645,6 +671,7 @@ def _manage_state_sections(membership):
         date=STATES_DATE + datetime.timedelta(days=1),
         time=datetime.time(9, 50),
         school_item=SchoolItemKind.QUIZ.value,
+        school_subject='matematyka',
         source=Entry.Source.EDUVULCAN,
         member='Tymek',
     )
@@ -777,7 +804,7 @@ def child_detail(request, pk):
 
 
 def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school_item='',
-                        source=Entry.Source.MANUAL, effective_date=None):
+                        school_subject='', source=Entry.Source.MANUAL, effective_date=None):
     """Unsaved fictional entry for the child gallery; never written."""
     entry = Entry(
         pk=pk,
@@ -786,6 +813,7 @@ def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school
         date=date,
         time=time,
         school_item=school_item,
+        school_subject=school_subject,
         source=source,
         assigned_member=FamilyMember(display_name=STATES_MEMBER_CHOICES[1][1]),
         updated_at=timezone.make_aware(datetime.datetime.combine(STATES_DATE, datetime.time(7, 0))),
@@ -824,7 +852,8 @@ def child_states(request):
     quiz = _child_states_entry(
         9005, 'Kartkówka z przyrody', EntryType.CALENDAR_EVENT,
         date=STATES_DATE - 3 * day, time=datetime.time(10, 15),
-        school_item=SchoolItemKind.QUIZ.value, source=Entry.Source.EDUVULCAN,
+        school_item=SchoolItemKind.QUIZ.value, school_subject='przyroda',
+        source=Entry.Source.EDUVULCAN,
     )
     returned = _child_states_entry(
         9006, 'Oddać książkę do biblioteki', EntryType.TODO, date=STATES_DATE - 5 * day,

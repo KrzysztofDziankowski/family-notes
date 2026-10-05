@@ -18,6 +18,10 @@ Parameters: entry, list_mode, delete_open (optional; renders the disclosure open
             <dt>Element szkolny</dt>
             <dd>{{ entry.get_school_item_display }}</dd>
         {% endif %}
+        {% if entry.school_subject %}
+            <dt>Przedmiot</dt>
+            <dd>{{ entry.school_subject }}</dd>
+        {% endif %}
     </dl>
     <h2 class="fn-manage-section-title">Pochodzenie</h2>
     <dl class="fn-details" data-state-part="provenance">

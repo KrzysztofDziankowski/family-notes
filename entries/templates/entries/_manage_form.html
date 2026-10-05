@@ -18,6 +18,7 @@ Structured create/edit form. Parameters: form, entry (None when creating).
     {% include "entries/_field.html" with field=form.time hint="" %}
     {% include "entries/_field.html" with field=form.assigned_member hint="" %}
     {% include "entries/_field.html" with field=form.school_item hint="" %}
+    {% include "entries/_field.html" with field=form.school_subject hint="" %}
     {% if form.submission_key %}{{ form.submission_key }}{% endif %}
     <div class="fn-actions">
         <button type="submit">{% if entry %}Zapisz zmiany{% else %}Dodaj wpis{% endif %}</button>

@@ -19,6 +19,10 @@ back_mode ("upcoming"/"past", already normalized).
             <dt>Szkoła</dt>
             <dd>{{ entry.get_school_item_display }}</dd>
         {% endif %}
+        {% if entry.school_subject %}
+            <dt>Przedmiot</dt>
+            <dd>{{ entry.school_subject }}</dd>
+        {% endif %}
         <dt>Źródło</dt>
         <dd>{{ entry.get_source_display }}</dd>
     </dl>

@@ -61,12 +61,14 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
                               'aria-current="page">Nadchodzące<', 'Bez daty</span>'],
             'list_past': ['data-list-section="past"', 'aria-current="page">Minione<'],
             'list_empty': ['Nie ma nadchodzących wpisów.'],
-            'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian'],
-            'detail_eduvulcan': ['EduVulcan', 'kartkówka'],
+            'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
+                              '<dt>Przedmiot</dt>', 'historia'],
+            'detail_eduvulcan': ['EduVulcan', 'kartkówka', '<dt>Przedmiot</dt>', 'matematyka'],
             'create': ['data-state-part="create-form"', 'name="submission_key"', 'Kasia'],
             'invalid': ['aria-invalid="true"', 'Popraw zaznaczone pola.',
                         'Ten element szkolny wymaga rodzaju'],
-            'edit': ['data-state-part="edit-form"', 'Zapisz zmiany', 'value="s1" selected'],
+            'edit': ['data-state-part="edit-form"', 'Zapisz zmiany', 'value="s1" selected',
+                     'name="school_subject"', 'value="historia"'],
             'delete_open': ['data-state-part="delete" open', 'Usuń na stałe'],
         }
         for name, markers in expectations.items():

@@ -169,6 +169,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
             time=None,
             assigned_member=self.child,
             school_item='',
+            school_subject='',
             submission_key='00000000-0000-4000-8000-000000000001',
         )
 
@@ -284,6 +285,18 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
             self.assertNotContains(response, hidden)
         self.assertContains(response, f'href="{LIST_URL}" data-back-link')
         self.assertNoExcludedContent(response)
+        self.assertReadOnly(response)
+
+    def test_detail_shows_subject_read_only_only_when_set(self):
+        without = self.client.get(detail_url(self.own_upcoming.pk))
+        self.assertNotContains(without, 'Przedmiot')
+
+        self.own_upcoming.school_subject = 'Matematyka'
+        self.own_upcoming.save(update_fields=('school_subject',))
+        response = self.client.get(detail_url(self.own_upcoming.pk))
+
+        self.assertContains(response, '<dt>Przedmiot</dt>', html=True)
+        self.assertContains(response, '<dd>Matematyka</dd>', html=True)
         self.assertReadOnly(response)
 
     def test_eduvulcan_source_and_past_back_link(self):

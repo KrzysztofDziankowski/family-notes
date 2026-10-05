@@ -25,6 +25,12 @@ from entries.models import Entry
 from .test_classification_service import FamilyFixtureMixin
 
 MONDAY = datetime.date(2026, 9, 21)
+SCHOOL_EVENT_KINDS = (
+    SchoolItemKind.HOMEWORK,
+    SchoolItemKind.CLASS_TEST,
+    SchoolItemKind.TEST,
+    SchoolItemKind.QUIZ,
+)
 
 
 class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
@@ -36,6 +42,7 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
             'time': '',
             'assigned_member': str(self.child.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'biologia',
             'submission_key': str(uuid.uuid4()),
         }
         data.update(overrides)
@@ -68,11 +75,63 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('assigned_member', form.errors)
 
-    def test_changed_type_drops_school_item(self):
+    def test_changed_type_with_stale_school_item_is_an_error(self):
         form = self.bound(entry_type=EntryType.NOTE.value, assigned_member='', date='')
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['school_item'], ['Ten element szkolny wymaga rodzaju „Wydarzenie”.']
+        )
+
+    def test_changed_type_with_cleared_school_item_is_valid(self):
+        form = self.bound(
+            entry_type=EntryType.NOTE.value,
+            assigned_member='',
+            date='',
+            school_item='',
+            school_subject='',
+        )
 
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['school_item'], '')
+
+    def test_school_event_kinds_require_a_subject(self):
+        for kind in SCHOOL_EVENT_KINDS:
+            with self.subTest(kind=kind.value):
+                form = self.bound(school_item=kind.value, school_subject='   ')
+
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])
+
+    def test_subject_is_optional_for_other_entries(self):
+        form = self.bound(school_item='', school_subject='')
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['school_subject'], '')
+
+    def test_subject_is_stripped_and_bounded(self):
+        form = self.bound(school_subject='  Matematyka ')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['school_subject'], 'Matematyka')
+
+        too_long = self.bound(school_subject='x' * 101)
+        self.assertFalse(too_long.is_valid())
+        self.assertIn('school_subject', too_long.errors)
+
+    def test_school_item_and_subject_are_visible_rows(self):
+        form = EntryReviewForm(self.parent)
+
+        self.assertEqual(
+            [row['field'].name for row in form.rows()],
+            [
+                'entry_type', 'content', 'school_item', 'school_subject',
+                'date', 'time', 'assigned_member',
+            ],
+        )
+        self.assertEqual(form['school_item'].label, 'Element szkolny')
+        self.assertEqual(form['school_subject'].label, 'Przedmiot')
+        self.assertIn('Brak', str(form['school_item']))
+        self.assertEqual([f.name for f in form.hidden_fields()], ['submission_key'])
 
     def test_errors_are_polish(self):
         form = self.bound(content='')
@@ -170,6 +229,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
             'time': '08:30',
             'assigned_member': str(self.child.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'biologia',
             'submission_key': str(uuid.uuid4()),
         }
         values.update(overrides)
@@ -342,8 +402,8 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('eduvulcan', html.lower())
 
 
-class ReviewFormKeepsSilentClearingTests(FamilyFixtureMixin, TestCase):
-    def test_hidden_school_item_is_cleared_not_rejected(self):
+class ReviewFormStrictSchoolItemTests(FamilyFixtureMixin, TestCase):
+    def test_visible_school_item_mismatch_is_rejected_not_cleared(self):
         form = EntryReviewForm(
             self.parent,
             {
@@ -353,13 +413,89 @@ class ReviewFormKeepsSilentClearingTests(FamilyFixtureMixin, TestCase):
                 'time': '',
                 'assigned_member': '',
                 'school_item': SchoolItemKind.TEST.value,
+                'school_subject': '',
                 'submission_key': str(uuid.uuid4()),
             },
         )
 
-        self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data['school_item'], '')
-        self.assertNotIn('school_item', form.errors)
-        self.assertEqual([f.name for f in form.visible_fields()],
-                         ['entry_type', 'content', 'date', 'time', 'assigned_member',
-                          'school_subject'])
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['school_item'], ['Ten element szkolny wymaga rodzaju „Wydarzenie”.']
+        )
+        self.assertNotIn('school_subject', form.errors)
+        self.assertEqual(
+            {f.name for f in form.visible_fields()},
+            {
+                'entry_type', 'content', 'date', 'time', 'assigned_member',
+                'school_item', 'school_subject',
+            },
+        )
+
+
+class SubjectOnEditTests(FamilyFixtureMixin, TestCase):
+    def entry(self, **fields):
+        values = dict(
+            family=self.family,
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Sprawdzian: Biologia',
+            date=MONDAY,
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+        )
+        values.update(fields)
+        return Entry.objects.create(**values)
+
+    def edit(self, entry, **overrides):
+        data = {
+            'entry_type': entry.entry_type,
+            'content': entry.content,
+            'date': entry.date.isoformat() if entry.date else '',
+            'time': '',
+            'assigned_member': str(entry.assigned_member_id or ''),
+            'school_item': entry.school_item,
+            'school_subject': entry.school_subject,
+        }
+        data.update(overrides)
+        return EntryEditForm(self.parent, data, entry=entry)
+
+    def test_prefills_the_stored_subject(self):
+        entry = self.entry(school_subject='Biologia')
+
+        form = EntryEditForm(self.parent, entry=entry)
+
+        self.assertEqual(form['school_subject'].value(), 'Biologia')
+
+    def test_unrelated_edit_of_subjectless_school_event_is_valid(self):
+        entry = self.entry()
+        cases = {
+            'reassign': {'assigned_member': str(self.other_child.pk)},
+            'move date': {'date': '2026-09-28'},
+            'retitle': {'content': 'Sprawdzian z działu 3'},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(name):
+                form = self.edit(entry, **overrides)
+                self.assertTrue(form.is_valid(), form.errors)
+
+    def test_clearing_a_stored_subject_is_an_error(self):
+        entry = self.entry(school_subject='Biologia')
+
+        form = self.edit(entry, school_subject='  ')
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])
+
+    def test_setting_or_changing_a_school_event_kind_requires_a_subject(self):
+        plain = self.entry(school_item='', content='Wywiadówka')
+        subjectless_test = self.entry()
+        for entry, kind in (
+            (plain, SchoolItemKind.TEST),
+            (plain, SchoolItemKind.HOMEWORK),
+            (subjectless_test, SchoolItemKind.QUIZ),
+            (subjectless_test, SchoolItemKind.CLASS_TEST),
+        ):
+            with self.subTest(entry=entry.content, kind=kind.value):
+                form = self.edit(entry, school_item=kind.value, school_subject='')
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])

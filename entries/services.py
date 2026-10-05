@@ -33,7 +33,7 @@ def save_confirmed_entry(
     assigned_member,
     school_item,
     submission_key,
-    school_subject=None,
+    school_subject,
 ):
     """Save one entry confirmed by an active parent; return ``(entry, created)``.
 
@@ -45,9 +45,6 @@ def save_confirmed_entry(
 
     entry_type = EntryType(entry_type)
     school_item = SchoolItemKind(school_item) if school_item else None
-    # Transitional: callers that do not send a subject yet (None) are not held
-    # to the subject rule; the parent views pass it from the review form.
-    require_subject = school_subject is not None
     school_subject = _clean_subject(school_subject)
 
     # A repeat returns the saved entry even if its values no longer validate.
@@ -57,7 +54,7 @@ def save_confirmed_entry(
 
     _validate(
         membership, entry_type, date, assigned_member, school_item,
-        school_subject=school_subject, require_subject=require_subject,
+        school_subject=school_subject, require_subject=True,
     )
 
     try:
@@ -233,7 +230,7 @@ def create_family_entry(
     assigned_member,
     school_item,
     submission_key,
-    school_subject=None,
+    school_subject,
 ):
     """Create one manual entry from the structured form; return ``(entry, created)``.
 
@@ -247,7 +244,6 @@ def create_family_entry(
         _validate_managed(
             membership, entry_type, content, date, assigned_member, school_item_kind,
             school_subject=_clean_subject(school_subject),
-            require_subject=school_subject is not None,
         )
     return save_confirmed_entry(
         user,
@@ -273,7 +269,7 @@ def update_family_entry(
     time,
     assigned_member,
     school_item,
-    school_subject=None,
+    school_subject,
 ):
     """Change only the editable fields of an entry in the parent's family.
 
@@ -287,21 +283,14 @@ def update_family_entry(
 
     with transaction.atomic():
         entry = _locked_family_entry(membership, entry_id)
-        # Transitional: a caller that does not send a subject yet (None) keeps
-        # the stored one and is not held to the subject rule.
-        if school_subject is None:
-            school_subject = entry.school_subject
-            require_subject = False
-        else:
-            school_subject = _clean_subject(school_subject)
-            require_subject = subject_required_on_edit(
-                entry.school_item, entry.school_subject, school_item_kind
-            )
+        school_subject = _clean_subject(school_subject)
         _validate_managed(
             membership, entry_type, content, date, assigned_member, school_item_kind,
             kept_assignee_id=entry.assigned_member_id,
             school_subject=school_subject,
-            require_subject=require_subject,
+            require_subject=subject_required_on_edit(
+                entry.school_item, entry.school_subject, school_item_kind
+            ),
         )
         entry.entry_type = entry_type.value
         entry.content = content

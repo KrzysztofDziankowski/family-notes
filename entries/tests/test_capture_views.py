@@ -53,6 +53,7 @@ class CaptureViewMixin(FamilyFixtureMixin):
             date=PRD_MONDAY,
             school_item=SchoolItemKind.TEST,
             member_name='michał',
+            school_subject='biologia',
         )
         values.update(overrides)
         return ClassificationProposal(**values)
@@ -65,6 +66,7 @@ class CaptureViewMixin(FamilyFixtureMixin):
             'time': '',
             'assigned_member': str(self.child.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'biologia',
             'submission_key': str(uuid.uuid4()),
         }
         data.update(overrides)
@@ -195,6 +197,8 @@ class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
                 content='Poprawiony tytuł',
                 date='2026-09-22',
                 assigned_member=str(self.other_child.pk),
+                school_item='',
+                school_subject='',
             ),
         )
 
@@ -229,15 +233,55 @@ class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
         self.assertIn('assigned_member', response.context['review_form'].errors)
         self.assertFalse(Entry.objects.exists())
 
-    def test_school_item_is_cleared_when_type_changes(self):
-        self.client.post(
+    def test_school_item_type_mismatch_is_an_error_not_cleared(self):
+        response = self.client.post(
             CONFIRM_URL,
             self.confirm_data(entry_type=EntryType.NOTE.value, assigned_member='', date=''),
         )
 
+        self.assertEqual(response.context['state'], 'invalid')
+        self.assertContains(response, 'Ten element szkolny wymaga rodzaju „Wydarzenie”.')
+        self.assertFalse(Entry.objects.exists())
+
+    def test_clearing_the_school_item_saves_without_a_subject(self):
+        self.client.post(
+            CONFIRM_URL,
+            self.confirm_data(school_item='', school_subject=''),
+        )
+
         entry = Entry.objects.get()
-        self.assertEqual(entry.entry_type, 'note')
+        self.assertEqual(entry.entry_type, 'calendar_event')
         self.assertEqual(entry.school_item, '')
+        self.assertEqual(entry.school_subject, '')
+
+    def test_school_event_without_subject_is_an_error(self):
+        for kind in ('homework', 'class_test', 'test', 'quiz'):
+            with self.subTest(kind=kind):
+                response = self.client.post(
+                    CONFIRM_URL, self.confirm_data(school_item=kind, school_subject='  ')
+                )
+
+                self.assertEqual(response.context['state'], 'invalid')
+                self.assertContains(response, 'Podaj przedmiot.')
+                self.assertIn('school_subject', response.context['review_form'].errors)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_confirm_saves_the_stripped_subject(self):
+        self.client.post(CONFIRM_URL, self.confirm_data(school_subject='  Biologia  '))
+
+        entry = Entry.objects.get()
+        self.assertEqual(entry.school_subject, 'Biologia')
+
+    def test_review_shows_visible_school_item_and_subject(self):
+        response, _ = self.classify_with(
+            self.proposal(school_subject='biologia'), member=self.child
+        )
+
+        self.assertContains(response, '<label for="id_school_item">Element szkolny</label>', html=True)
+        self.assertContains(response, '<option value="test" selected>sprawdzian</option>', html=True)
+        self.assertContains(response, '<label for="id_school_subject">Przedmiot</label>', html=True)
+        self.assertContains(response, 'value="biologia"')
+        self.assertNotContains(response, 'type="hidden" name="school_item"')
 
     def test_invalid_review_keeps_submission_key(self):
         data = self.confirm_data(date='', school_item='')

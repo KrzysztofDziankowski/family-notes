@@ -70,6 +70,7 @@ class ManageViewMixin(FamilyFixtureMixin):
             'time': '17:30',
             'assigned_member': str(self.child.pk),
             'school_item': '',
+            'school_subject': '',
         }
         data.update(overrides)
         return data
@@ -238,6 +239,33 @@ class DetailTests(ManageViewMixin, TestCase):
         self.assertNotContains(response, str(entry.submission_key))
         self.assertNotContains(response, 'Ewa')
 
+    def test_detail_shows_subject_only_when_set(self):
+        with_subject = self.entry(
+            'Kartkówka',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(2),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.QUIZ.value,
+            school_subject='Geografia',
+        )
+        legacy = self.entry(
+            'Sprawdzian',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(2),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+        )
+
+        shown = self.client.get(detail_url(with_subject.pk))
+        hidden = self.client.get(detail_url(legacy.pk))
+
+        self.assertContains(shown, '<dt>Przedmiot</dt>', html=True)
+        self.assertContains(shown, '<dd>Geografia</dd>', html=True)
+        self.assertEqual(hidden.status_code, 200)
+        self.assertContains(hidden, 'Element szkolny')
+        self.assertNotContains(hidden, 'Przedmiot')
+
     def test_detail_hides_creator_and_submission_key_of_a_manual_entry(self):
         creator = self._member('parent2', FamilyMember.Role.PARENT, 'Tomasz')
         key = uuid.uuid4()
@@ -294,6 +322,31 @@ class CreateTests(ManageViewMixin, TestCase):
         self.assertEqual(entry.assigned_member, self.child)
         self.assertContains(self.client.get(detail_url(entry.pk)), 'Dodano wpis.')
 
+    def test_create_persists_the_subject_of_a_school_event(self):
+        data = self.form_data(
+            school_item=SchoolItemKind.HOMEWORK.value,
+            school_subject='  Chemia ',
+            submission_key=str(uuid.uuid4()),
+        )
+
+        response = self.client.post(CREATE_URL, data)
+
+        entry = Entry.objects.get()
+        self.assertRedirects(response, detail_url(entry.pk), fetch_redirect_response=False)
+        self.assertEqual(entry.school_subject, 'Chemia')
+
+    def test_create_school_event_without_subject_is_an_error(self):
+        data = self.form_data(
+            school_item=SchoolItemKind.QUIZ.value, submission_key=str(uuid.uuid4())
+        )
+
+        response = self.client.post(CREATE_URL, data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Podaj przedmiot.')
+        self.assertContains(response, 'id="id_school_subject-error"')
+        self.assertFalse(Entry.objects.exists())
+
     def test_resubmitted_create_form_saves_one_entry(self):
         data = self.form_data(submission_key=str(uuid.uuid4()))
 
@@ -327,7 +380,7 @@ class CreateTests(ManageViewMixin, TestCase):
         response = self.client.get(CREATE_URL)
 
         for name in ('entry_type', 'content', 'date', 'time', 'assigned_member',
-                     'school_item', 'submission_key'):
+                     'school_item', 'school_subject', 'submission_key'):
             with self.subTest(field=name):
                 self.assertContains(response, f'name="{name}"')
         self.assertContains(response, f'href="{reverse("entries:capture")}"')
@@ -342,13 +395,18 @@ class EditTests(ManageViewMixin, TestCase):
 
         response = self.client.post(
             edit_url(entry.pk),
-            self.form_data(school_item=SchoolItemKind.TEST.value, content='Poprawiony'),
+            self.form_data(
+                school_item=SchoolItemKind.TEST.value,
+                school_subject=' Fizyka ',
+                content='Poprawiony',
+            ),
         )
 
         self.assertRedirects(response, detail_url(entry.pk))
         entry.refresh_from_db()
         self.assertEqual(entry.content, 'Poprawiony')
         self.assertEqual(entry.school_item, SchoolItemKind.TEST.value)
+        self.assertEqual(entry.school_subject, 'Fizyka')
         self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
         self.assertIsNone(entry.created_by)
         self.assertEqual(entry.submission_key, key)
@@ -365,6 +423,64 @@ class EditTests(ManageViewMixin, TestCase):
         self.assertNotContains(response, 'name="submission_key"')
         self.assertContains(response, f'action="{edit_url(entry.pk)}"')
         self.assertContains(response, f'href="{detail_url(entry.pk)}"')
+
+    def test_edit_form_shows_the_stored_subject(self):
+        entry = self.entry(
+            'Kartkówka',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(1),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.QUIZ.value,
+            school_subject='Historia',
+        )
+
+        response = self.client.get(edit_url(entry.pk))
+
+        self.assertContains(response, '<label for="id_school_subject">Przedmiot</label>', html=True)
+        self.assertContains(response, 'value="Historia"')
+
+    def test_unrelated_edit_of_subjectless_eduvulcan_school_event_saves(self):
+        entry = self.entry(
+            'Sprawdzian: Biologia',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(4),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+            created_by=None,
+        )
+
+        response = self.client.post(
+            edit_url(entry.pk),
+            self.form_data(
+                content='Sprawdzian: Biologia',
+                date=self.days(5).isoformat(),
+                assigned_member=str(self.other_child.pk),
+                school_item=SchoolItemKind.TEST.value,
+            ),
+        )
+
+        self.assertRedirects(response, detail_url(entry.pk))
+        entry.refresh_from_db()
+        self.assertEqual(entry.assigned_member, self.other_child)
+        self.assertEqual(entry.school_subject, '')
+
+    def test_setting_a_school_event_kind_without_subject_is_an_error(self):
+        entry = self.entry(
+            'Wywiadówka',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(4),
+            assigned_member=self.child,
+        )
+
+        response = self.client.post(
+            edit_url(entry.pk), self.form_data(school_item=SchoolItemKind.TEST.value)
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Podaj przedmiot.')
+        entry.refresh_from_db()
+        self.assertEqual(entry.school_item, '')
 
     def test_editing_title_keeps_deactivated_assignee(self):
         entry = self.entry('Oddać książkę', assigned_member=self.inactive_child)

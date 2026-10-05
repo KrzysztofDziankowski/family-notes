@@ -373,10 +373,10 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [x] 2.1 Validation tests prove that the four kinds without a subject produce a `SCHOOL_SUBJECT` follow-up only when required, that the subject is trimmed and passed through, and that a subject in an automated proposal never adds a missing field: `uv run python manage.py test entries.tests.test_classification_contract`
-- [x] 2.2 Service tests cover parent classification, answer merge filling only a missing subject, and `classify_for_family` returning `CLASSIFIED` (not a general note) for a school event without a subject: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_family_classification entries.tests.test_follow_up_answer`
-- [x] 2.3 Adapter tests cover the new schema field and translation, and that the input payload is unchanged: `uv run python manage.py test entries.tests.test_openai_backend entries.tests.test_classification_acceptance`
-- [x] 2.5 Every `classify_output` caller, including the smoke command and the skipped live-wire tests, passes `require_school_subject` (no `TypeError`): `grep -rn "classify_output(" entries`
+- [x] 2.1 Validation tests prove that the four kinds without a subject produce a `SCHOOL_SUBJECT` follow-up only when required, that the subject is trimmed and passed through, and that a subject in an automated proposal never adds a missing field: `uv run python manage.py test entries.tests.test_classification_contract` — 65d57b8
+- [x] 2.2 Service tests cover parent classification, answer merge filling only a missing subject, and `classify_for_family` returning `CLASSIFIED` (not a general note) for a school event without a subject: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_family_classification entries.tests.test_follow_up_answer` — 65d57b8
+- [x] 2.3 Adapter tests cover the new schema field and translation, and that the input payload is unchanged: `uv run python manage.py test entries.tests.test_openai_backend entries.tests.test_classification_acceptance` — 65d57b8
+- [x] 2.5 Every `classify_output` caller, including the smoke command and the skipped live-wire tests, passes `require_school_subject` (no `TypeError`): `grep -rn "classify_output(" entries` — 65d57b8
 
 #### Manual
 
@@ -386,9 +386,9 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [ ] 3.1 Form tests cover a visible school item in review, the strict mismatch error in review, the required subject for the four kinds in review/create/edit, the follow-up hidden subject round-trip and tamper handling, editing a subject-less school entry without changing its school item saving successfully, and setting a school event kind or clearing a stored subject on edit failing with `Podaj przedmiot.`: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_follow_up_views`
-- [ ] 3.2 View tests cover confirm/create/edit persisting the subject, the capture follow-up asking for the subject, and detail pages rendering `Przedmiot` only when set: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_manage_views entries.tests.test_child_views`
-- [ ] 3.3 State gallery tests cover the new states, DEBUG gating and zero database writes: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states entries.tests.test_child_states_view`
+- [x] 3.1 Form tests cover a visible school item in review, the strict mismatch error in review, the required subject for the four kinds in review/create/edit, the follow-up hidden subject round-trip and tamper handling, editing a subject-less school entry without changing its school item saving successfully, and setting a school event kind or clearing a stored subject on edit failing with `Podaj przedmiot.`: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_follow_up_views`
+- [x] 3.2 View tests cover confirm/create/edit persisting the subject, the capture follow-up asking for the subject, and detail pages rendering `Przedmiot` only when set: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_manage_views entries.tests.test_child_views`
+- [x] 3.3 State gallery tests cover the new states, DEBUG gating and zero database writes: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states entries.tests.test_child_states_view`
 
 #### Manual
 
