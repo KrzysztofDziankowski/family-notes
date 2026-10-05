@@ -28,10 +28,13 @@ EXPECTED_FIELDS = {
     'time',
     'assigned_member',
     'school_item',
+    'school_subject',
     'source',
     'created_at',
     'updated_at',
 }
+# The response shape before S-01; every one of these keys must stay unchanged.
+PRE_SUBJECT_FIELDS = EXPECTED_FIELDS - {'school_subject'}
 
 
 def query(**params):
@@ -234,6 +237,7 @@ class SerializeEntryTests(EntriesApiDataMixin, TestCase):
             time=datetime.time(8, 30),
             assigned_member=self.child,
             school_item=SchoolItemKind.TEST.value,
+            school_subject='Biologia',
             source=Entry.Source.EDUVULCAN,
         )
         entry = automation_family_entries(self.parent).get(pk=entry.pk)
@@ -241,6 +245,8 @@ class SerializeEntryTests(EntriesApiDataMixin, TestCase):
         data = serialize_entry(entry)
 
         self.assertEqual(set(data), EXPECTED_FIELDS)
+        self.assertTrue(PRE_SUBJECT_FIELDS < set(data))
+        self.assertEqual(data['school_subject'], 'Biologia')
         self.assertEqual(data['id'], entry.pk)
         self.assertEqual(data['entry_type'], 'calendar_event')
         self.assertEqual(data['content'], 'Sprawdzian z biologii')
@@ -263,6 +269,8 @@ class SerializeEntryTests(EntriesApiDataMixin, TestCase):
         self.assertIsNone(data['assigned_member'])
         self.assertEqual(entry.school_item, '')
         self.assertIsNone(data['school_item'])
+        self.assertEqual(entry.school_subject, '')
+        self.assertIsNone(data['school_subject'])
         self.assertEqual(data['source'], 'manual')
 
     def test_inactive_historical_member_keeps_display_name(self):
@@ -446,6 +454,7 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
                 'time': '08:30:00',
                 'assigned_member': {'display_name': 'Child'},
                 'school_item': SchoolItemKind.TEST.value,
+                'school_subject': None,
                 'source': 'eduvulcan',
                 'created_at': records[self.dated.pk]['created_at'],
                 'updated_at': records[self.dated.pk]['updated_at'],

@@ -185,6 +185,8 @@ class StartupAndPeriodicSweepTests(WorkerTestCase):
 
         self.assertEqual(self.status(row), Status.PROCESSED)
         self.assertEqual(Entry.objects.count(), 1)
+        # The rule-based school event keeps the subject the notification names.
+        self.assertEqual(Entry.objects.get().school_subject, 'Biologia')
 
 
 class HeartbeatScheduleTests(WorkerTestCase):

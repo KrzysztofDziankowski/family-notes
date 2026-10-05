@@ -235,6 +235,7 @@ class AtomicPersistenceTests(ConversionTestCase):
         self.assertEqual(entry.school_item, SchoolItemKind.TEST.value)
         self.assertEqual(entry.date, datetime.date(2026, 10, 2))
         self.assertEqual(entry.content, 'Sprawdzian: Biologia')
+        self.assertEqual(entry.school_subject, 'Biologia')
         output = entry.conversion_output
         self.assertEqual((output.output_index, output.kind), (0, OutputKind.RULE.value))
         self.assertEqual(result.outputs, (output,))
@@ -392,6 +393,45 @@ class ClassificationFallbackTests(ConversionTestCase):
         self.assertEqual(entry.content, 'Wycieczka klasowa')
         self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
         self.assertEqual(entry.conversion_output.kind, OutputKind.CLASSIFICATION.value)
+
+    def test_classified_school_event_without_subject_is_a_calendar_event(self):
+        backend = ScriptedBackend(
+            BackendOutput(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Kartkówka',
+                grounded=True,
+                date=datetime.date(2026, 9, 30),
+                school_item=SchoolItemKind.QUIZ,
+                member_name='Michał',
+            )
+        )
+
+        result = convert_notification(self.row.pk, backend=backend, now=T0)
+
+        self.assertEqual(result.outcome, ConversionOutcome.PROCESSED)
+        entry = Entry.objects.get()
+        self.assertEqual(entry.entry_type, EntryType.CALENDAR_EVENT.value)
+        self.assertEqual(entry.school_item, SchoolItemKind.QUIZ.value)
+        self.assertEqual(entry.school_subject, '')
+        self.assertEqual(entry.assigned_member, self.child)
+        self.assertEqual(entry.conversion_output.kind, OutputKind.CLASSIFICATION.value)
+
+    def test_classified_school_event_keeps_a_returned_subject(self):
+        backend = ScriptedBackend(
+            BackendOutput(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Kartkówka',
+                grounded=True,
+                date=datetime.date(2026, 9, 30),
+                school_item=SchoolItemKind.QUIZ,
+                member_name='Michał',
+                school_subject='Geografia',
+            )
+        )
+
+        convert_notification(self.row.pk, backend=backend, now=T0)
+
+        self.assertEqual(Entry.objects.get().school_subject, 'Geografia')
 
     def test_automated_classification_disables_the_backend_retry(self):
         with mock.patch.object(

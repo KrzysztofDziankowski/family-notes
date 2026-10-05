@@ -316,6 +316,7 @@ def _convert(claim: Claim, *, backend, now) -> ConversionResult:
             time=proposal.time,
             school_item=proposal.school_item,
             member=classification.member,
+            school_subject=proposal.school_subject or '',
         )
         result = _try_persist(claim, row, (classified,), now=now)
         if result is not None:
@@ -388,6 +389,7 @@ def _persist(
                 time=proposal.time,
                 assigned_member_id=proposal.assigned_member_id,
                 school_item=proposal.school_item,
+                school_subject=proposal.school_subject,
             )
             NotificationConversionOutput.objects.create(
                 notification_id=row.pk,

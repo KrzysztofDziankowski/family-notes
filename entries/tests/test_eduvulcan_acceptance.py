@@ -189,6 +189,7 @@ class ConvertedEntryAccessTests(EduVulcanAcceptanceTestCase):
             'time': '',
             'assigned_member': str(self.mateusz.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'Język angielski',
             'view': '',
         }
         data.update(overrides)
@@ -208,6 +209,8 @@ class ConvertedEntryAccessTests(EduVulcanAcceptanceTestCase):
         self.assertContains(detail, 'Sprawdzian: Język angielski')
         self.assertContains(detail, 'EduVulcan')
         self.assertContains(detail, 'Mateusz')
+        self.assertEqual(self.entry.school_subject, 'Język angielski')
+        self.assertContains(detail, '<dd>Język angielski</dd>', html=True)
 
         edit = self.client.post(reverse('entries:edit', args=[self.entry.pk]), self.edit_data())
         self.assertRedirects(edit, reverse('entries:detail', args=[self.entry.pk]))

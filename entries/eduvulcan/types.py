@@ -55,6 +55,7 @@ class EntryProposal:
     time: Optional[datetime.time] = None
     school_item: Optional[SchoolItemKind] = None
     member: Optional[ChildSnapshot] = None
+    school_subject: str = field(default='', repr=False)
 
     @property
     def assigned_member_id(self) -> Optional[int]:

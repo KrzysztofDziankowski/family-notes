@@ -386,9 +386,9 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [x] 3.1 Form tests cover a visible school item in review, the strict mismatch error in review, the required subject for the four kinds in review/create/edit, the follow-up hidden subject round-trip and tamper handling, editing a subject-less school entry without changing its school item saving successfully, and setting a school event kind or clearing a stored subject on edit failing with `Podaj przedmiot.`: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_follow_up_views`
-- [x] 3.2 View tests cover confirm/create/edit persisting the subject, the capture follow-up asking for the subject, and detail pages rendering `Przedmiot` only when set: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_manage_views entries.tests.test_child_views`
-- [x] 3.3 State gallery tests cover the new states, DEBUG gating and zero database writes: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states entries.tests.test_child_states_view`
+- [x] 3.1 Form tests cover a visible school item in review, the strict mismatch error in review, the required subject for the four kinds in review/create/edit, the follow-up hidden subject round-trip and tamper handling, editing a subject-less school entry without changing its school item saving successfully, and setting a school event kind or clearing a stored subject on edit failing with `Podaj przedmiot.`: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_follow_up_views` — 31d9a41
+- [x] 3.2 View tests cover confirm/create/edit persisting the subject, the capture follow-up asking for the subject, and detail pages rendering `Przedmiot` only when set: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_manage_views entries.tests.test_child_views` — 31d9a41
+- [x] 3.3 State gallery tests cover the new states, DEBUG gating and zero database writes: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states entries.tests.test_child_states_view` — 31d9a41
 
 #### Manual
 
@@ -399,12 +399,12 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [ ] 4.1 EduVulcan rule tests assert the subject for the four calendar categories, a blank subject for over-long values, and unchanged content: `uv run python manage.py test entries.tests.test_eduvulcan_rules entries.tests.test_eduvulcan_acceptance`
-- [ ] 4.2 Conversion tests prove that a rule-based school event persists its subject and that a classified school event without a subject persists as a calendar event, not a general note: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_conversion_lifecycle`
-- [ ] 4.3 API tests cover `school_subject` for set and blank entries and confirm that the existing keys are unchanged: `uv run python manage.py test entries.tests.test_entries_api`
-- [ ] 4.4 Full suite passes: `uv run python manage.py test`
-- [ ] 4.5 Django checks pass: `uv run python manage.py check`
-- [ ] 4.6 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 4.1 EduVulcan rule tests assert the subject for the four calendar categories, a blank subject for over-long values, and unchanged content: `uv run python manage.py test entries.tests.test_eduvulcan_rules entries.tests.test_eduvulcan_acceptance`
+- [x] 4.2 Conversion tests prove that a rule-based school event persists its subject and that a classified school event without a subject persists as a calendar event, not a general note: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_conversion_lifecycle`
+- [x] 4.3 API tests cover `school_subject` for set and blank entries and confirm that the existing keys are unchanged: `uv run python manage.py test entries.tests.test_entries_api`
+- [x] 4.4 Full suite passes: `uv run python manage.py test`
+- [x] 4.5 Django checks pass: `uv run python manage.py check`
+- [x] 4.6 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`
 
 #### Manual
 
