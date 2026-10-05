@@ -9,14 +9,17 @@
 <section data-kitchen-state="{{ section.name }}">
     <hr>
     <p class="fn-muted"><small>Stan: {{ section.label }} ({{ section.name }})</small></p>
-    {% if section.saved_entry %}
-        {% include "entries/_saved_panel.html" with entry=section.saved_entry %}
+    {% if section.saved_entries %}
+        {% include "entries/_saved_panel.html" with saved_entries=section.saved_entries %}
     {% endif %}
     {% if section.notice %}
         {% include "entries/_notice.html" with message=section.notice %}
     {% endif %}
     {% if section.follow_up_form %}
         {% include "entries/_follow_up_form.html" with form=section.follow_up_form %}
+    {% endif %}
+    {% if section.batch_form %}
+        {% include "entries/_batch_review_form.html" with form=section.batch_form %}
     {% endif %}
     {% if section.review_form %}
         {% include "entries/_review_form.html" with form=section.review_form %}

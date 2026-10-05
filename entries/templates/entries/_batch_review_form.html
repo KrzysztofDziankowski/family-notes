@@ -1,0 +1,47 @@
+<form method="post" action="{% url 'entries:confirm_batch' %}" data-state-part="batch">
+    {% csrf_token %}
+    <h2>Sprawdź wpisy ({{ form.count|default:0 }})</h2>
+    {% if form.non_field_errors %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+    {% endif %}
+    {% if form.stale %}
+        <div class="fn-actions">
+            <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+        </div>
+    {% else %}
+        <input type="hidden" name="count" value="{{ form.count }}">
+        {% for entry in form.entries %}
+            <fieldset data-batch-entry="{{ entry.number }}">
+                <legend>Wpis {{ entry.number }}</legend>
+                {% if entry.notice %}
+                    {% include "entries/_notice.html" with message=entry.notice %}
+                {% endif %}
+                {% if entry.form.non_field_errors %}
+                    <div class="fn-panel fn-panel--danger" role="alert">
+                        {% for error in entry.form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+                    </div>
+                {% endif %}
+                <label for="{{ entry.form.include.id_for_label }}">
+                    {{ entry.form.include }}
+                    {{ entry.form.include.label }}
+                </label>
+                {% if entry.hint %}<p class="fn-muted" data-duplicate-hint>{{ entry.hint }}</p>{% endif %}
+                {% for row in entry.form.rows %}
+                    {% include "entries/_field.html" with field=row.field hint=row.hint %}
+                    {% if row.field.name == "date" %}
+                        {% with shown_date=entry.form.display_date %}
+                            {% if shown_date %}<p class="fn-muted" data-human-date>{{ shown_date|date:"l, j E Y"|lower }}</p>{% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endfor %}
+                {{ entry.form.submission_key }}
+            </fieldset>
+        {% endfor %}
+        <div class="fn-actions">
+            <button type="submit" name="action" value="save">Zapisz wpisy</button>
+            <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+        </div>
+    {% endif %}
+</form>

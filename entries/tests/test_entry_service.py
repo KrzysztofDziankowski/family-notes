@@ -18,6 +18,7 @@ from entries.services import (
     delete_family_entry,
     get_parent_family_entry,
     parent_family_entries,
+    save_confirmed_entries,
     save_confirmed_entry,
     update_family_entry,
 )
@@ -279,6 +280,89 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(entry.pk, winner.pk)
         self.assertEqual(len(calls), 2)
         self.assertEqual(Entry.objects.count(), 1)
+
+
+class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
+    def item(self, **overrides):
+        values = dict(
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Spotkanie z wychowawczynią',
+            date=EVENT_DATE,
+            time=datetime.time(18, 0),
+            assigned_member=None,
+            school_item='',
+            school_subject='',
+            submission_key=uuid.uuid4(),
+        )
+        values.update(overrides)
+        return values
+
+    def test_saves_every_item_in_order(self):
+        items = [self.item(date=EVENT_DATE + datetime.timedelta(days=day)) for day in range(3)]
+
+        entries = save_confirmed_entries(self.parent.user, items)
+
+        self.assertEqual([entry.date for entry in entries], [item['date'] for item in items])
+        self.assertEqual(Entry.objects.count(), 3)
+        self.assertEqual({entry.created_by for entry in entries}, {self.parent})
+
+    def test_school_event_keeps_its_subject(self):
+        (entry,) = save_confirmed_entries(
+            self.parent.user,
+            [self.item(
+                school_item=SchoolItemKind.TEST.value,
+                school_subject='biologia',
+                assigned_member=self.child,
+            )],
+        )
+
+        self.assertEqual(entry.school_subject, 'biologia')
+
+    def test_a_rejected_item_rolls_back_the_earlier_ones(self):
+        cases = {
+            'foreign key': lambda: self.item(submission_key=self._foreign_key()),
+            'foreign member': lambda: self.item(assigned_member=self.other_family_child),
+            'school event without subject': lambda: self.item(
+                school_item=SchoolItemKind.TEST.value, assigned_member=self.child
+            ),
+        }
+        for name, bad in cases.items():
+            with self.subTest(name):
+                with self.assertRaises(ValidationError):
+                    save_confirmed_entries(self.parent.user, [self.item(), bad()])
+
+                self.assertFalse(Entry.objects.filter(family=self.family).exists())
+
+    def _foreign_key(self):
+        key = uuid.uuid4()
+        Entry.objects.create(
+            family=self.other_family, entry_type=EntryType.NOTE.value, content='x',
+            submission_key=key,
+        )
+        return key
+
+    def test_replay_returns_the_saved_entries_and_creates_none(self):
+        items = [self.item(), self.item(date=EVENT_DATE + datetime.timedelta(days=1))]
+        first = save_confirmed_entries(self.parent.user, items)
+
+        second = save_confirmed_entries(self.parent.user, items)
+
+        self.assertEqual(first, second)
+        self.assertEqual(Entry.objects.count(), 2)
+
+    def test_empty_or_oversized_batches_are_refused(self):
+        for count in (0, 11):
+            with self.subTest(count=count):
+                with self.assertRaises(ValueError):
+                    save_confirmed_entries(self.parent.user, [self.item() for _ in range(count)])
+        self.assertFalse(Entry.objects.exists())
+
+    def test_non_parents_are_refused(self):
+        for user in (AnonymousUser(), self.child.user):
+            with self.subTest(user=user):
+                with self.assertRaises(PermissionDenied):
+                    save_confirmed_entries(user, [self.item()])
+        self.assertFalse(Entry.objects.exists())
 
 
 class ManagementFixtureMixin(FamilyFixtureMixin):

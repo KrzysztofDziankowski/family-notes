@@ -6,13 +6,15 @@
 <h1>Dodaj wpis</h1>
 <p class="fn-muted"><a href="{% url 'entries:index' %}">Wpisy rodziny</a> · <a href="{% url 'entries:create' %}">Nowy wpis bez rozpoznawania</a></p>
 {% if state == "saved" %}
-    {% include "entries/_saved_panel.html" with entry=saved_entry %}
+    {% include "entries/_saved_panel.html" with saved_entries=saved_entries %}
 {% endif %}
 {% if notice %}
     {% include "entries/_notice.html" with message=notice %}
 {% endif %}
 {% if follow_up_form %}
     {% include "entries/_follow_up_form.html" with form=follow_up_form %}
+{% elif batch_form %}
+    {% include "entries/_batch_review_form.html" with form=batch_form %}
 {% elif review_form %}
     {% include "entries/_review_form.html" with form=review_form %}
 {% else %}

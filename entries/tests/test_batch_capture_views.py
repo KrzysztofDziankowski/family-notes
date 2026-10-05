@@ -1,0 +1,415 @@
+"""Batch review and all-or-nothing save on the capture page.
+
+The batch service is mocked with ``ParentBatchClassification`` results, so
+these tests pin the view, form, template and save behaviour.
+"""
+
+import datetime
+import logging
+import uuid
+from unittest import mock
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from django.urls import reverse
+
+from entries.classification.service import (
+    MAX_PROPOSALS_PER_INSTRUCTION,
+    ParentBatchClassification,
+    ParentClassification,
+)
+from entries.classification.types import (
+    ClassificationFollowUp,
+    ClassificationProposal,
+    ClassificationUnavailable,
+    EntryType,
+    MissingField,
+    SchoolItemKind,
+    UnavailableReason,
+)
+from entries.forms import BATCH_EMPTY_SELECTION_ERROR, BATCH_STALE_ERROR
+from entries.models import Entry
+from entries.views import SAVE_FAILED_ERROR, TOO_MANY_ENTRIES_NOTICE
+
+from .test_capture_views import RecordingHandler
+from .test_classification_service import FamilyFixtureMixin
+
+CAPTURE_URL = reverse('entries:capture')
+BATCH_URL = reverse('entries:confirm_batch')
+WEDNESDAY = datetime.date(2026, 10, 7)
+THURSDAY = datetime.date(2026, 10, 8)
+NEXT_MONDAY = datetime.date(2026, 10, 12)
+SIX_PM = datetime.time(18, 0)
+MEETINGS_TEXT = 'Spotkanie z wychowawczynią dziś, jutro i w przyszłym tygodniu w poniedziałek o 18:00'
+SENTINEL = 'SENTINEL-BATCH-4d1a'
+
+
+def meeting(date, **overrides):
+    values = dict(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Spotkanie z wychowawczynią',
+        date=date,
+        time=SIX_PM,
+    )
+    values.update(overrides)
+    return ClassificationProposal(**values)
+
+
+def batch_of(*results, member=None):
+    return ParentBatchClassification(
+        items=tuple(ParentClassification(result=result, member=member) for result in results)
+    )
+
+
+def posted_from(batch_form, *, exclude=()):
+    """The POST data a browser would send for the rendered batch form."""
+    data = {'count': str(batch_form.count), 'action': 'save'}
+    for index, form in enumerate(batch_form.forms):
+        for name, value in form.initial.items():
+            if name == 'include':
+                continue
+            data[f'{form.prefix}-{name}'] = '' if value is None else str(value)
+        if index not in exclude:
+            data[f'{form.prefix}-include'] = 'on'
+    return data
+
+
+class BatchViewMixin(FamilyFixtureMixin):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.parent.user)
+
+    def capture(self, batch, text=MEETINGS_TEXT):
+        with mock.patch(
+            'entries.views.classify_entries_for_parent', return_value=batch
+        ) as classify, mock.patch('entries.views.timezone.localdate', return_value=WEDNESDAY):
+            response = self.client.post(CAPTURE_URL, {'text': text})
+        self.classify_mock = classify
+        return response
+
+    def meetings_form(self):
+        response = self.capture(batch_of(*(meeting(d) for d in (WEDNESDAY, THURSDAY, NEXT_MONDAY))))
+        return response, response.context['batch_form']
+
+    def entry_data(self, index, **overrides):
+        values = {
+            'entry_type': EntryType.CALENDAR_EVENT.value,
+            'content': 'Spotkanie z wychowawczynią',
+            'date': WEDNESDAY.isoformat(),
+            'time': '18:00',
+            'assigned_member': '',
+            'school_item': '',
+            'school_subject': '',
+            'submission_key': str(uuid.uuid4()),
+            'include': 'on',
+        }
+        values.update(overrides)
+        return {f'e{index}-{name}': value for name, value in values.items() if value is not None}
+
+    def batch_data(self, *entries):
+        data = {'count': str(len(entries)), 'action': 'save'}
+        for index, overrides in enumerate(entries):
+            data.update(self.entry_data(index, **overrides))
+        return data
+
+
+class BatchReviewRenderTests(BatchViewMixin, TestCase):
+    def test_three_proposals_render_three_ticked_fieldsets_with_dates_and_time(self):
+        response, form = self.meetings_form()
+
+        self.assertEqual(response.context['state'], 'batch')
+        self.assertContains(response, 'Sprawdź wpisy (3)')
+        self.assertContains(response, 'data-batch-entry=', count=3)
+        self.assertContains(response, '<legend>Wpis 2</legend>', html=True)
+        self.assertContains(response, 'Uwzględnij', count=3)
+        self.assertContains(response, 'checked', count=3)
+        self.assertContains(response, 'value="18:00"', count=3)
+        for text in ('środa, 7 października 2026', 'czwartek, 8 października 2026',
+                     'poniedziałek, 12 października 2026'):
+            self.assertContains(response, text)
+        self.assertContains(response, f'action="{BATCH_URL}"')
+        self.assertContains(response, 'Zapisz wpisy')
+        self.assertContains(response, 'name="count" value="3"')
+        keys = {sub.initial['submission_key'] for sub in form.forms}
+        self.assertEqual(len(keys), 3)
+        self.assertEqual(self.classify_mock.call_args.kwargs['reference_date'], WEDNESDAY)
+
+    def test_missing_date_is_highlighted_in_its_proposal(self):
+        response = self.capture(
+            batch_of(
+                meeting(WEDNESDAY),
+                ClassificationFollowUp(
+                    missing_fields=(MissingField.DATE,),
+                    entry_type=EntryType.CALENDAR_EVENT,
+                    content='Spotkanie z wychowawczynią',
+                    time=SIX_PM,
+                ),
+            )
+        )
+
+        form = response.context['batch_form']
+        self.assertEqual(form.forms[0].missing, {})
+        self.assertEqual(form.forms[1].missing, {'date': 'Podaj datę.'})
+        self.assertContains(response, 'id="id_e1-date-hint"')
+
+    def test_duplicate_hint_appears_for_identical_proposals(self):
+        response = self.capture(batch_of(meeting(THURSDAY), meeting(WEDNESDAY), meeting(THURSDAY)))
+
+        self.assertContains(response, 'Taki sam jak wpis 1.', count=1)
+        self.assertEqual(response.context['batch_form'].duplicate_hints(), {2: 'Taki sam jak wpis 1.'})
+
+    def test_one_item_batch_keeps_the_single_review(self):
+        response = self.capture(batch_of(meeting(WEDNESDAY)))
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertNotIn('batch_form', response.context)
+
+    def test_too_many_entries_renders_the_note_fallback_with_the_notice(self):
+        response = self.capture(
+            batch_of(ClassificationUnavailable(reason=UnavailableReason.TOO_MANY_ENTRIES))
+        )
+
+        self.assertEqual(response.context['state'], 'unavailable')
+        self.assertContains(response, TOO_MANY_ENTRIES_NOTICE)
+        self.assertEqual(TOO_MANY_ENTRIES_NOTICE, 'Za dużo wpisów w jednym poleceniu (maks. 10). Podziel polecenie.')
+        review = response.context['review_form']
+        self.assertEqual(review.initial['entry_type'], EntryType.NOTE.value)
+        self.assertEqual(review.initial['content'], MEETINGS_TEXT)
+
+
+class BatchSaveTests(BatchViewMixin, TestCase):
+    def test_confirming_saves_every_proposal_and_lists_them(self):
+        _, form = self.meetings_form()
+
+        response = self.client.post(BATCH_URL, posted_from(form))
+
+        entries = list(Entry.objects.order_by('pk'))
+        self.assertEqual([entry.date for entry in entries], [WEDNESDAY, THURSDAY, NEXT_MONDAY])
+        self.assertEqual({entry.time for entry in entries}, {SIX_PM})
+        self.assertEqual({entry.source for entry in entries}, {Entry.Source.MANUAL})
+        ids = ','.join(str(entry.pk) for entry in entries)
+        self.assertRedirects(response, f'{CAPTURE_URL}?saved={ids}')
+
+        saved = self.client.get(response['Location'])
+        self.assertEqual(saved.context['state'], 'saved')
+        self.assertContains(saved, 'Dodano wpisy (3)')
+        self.assertContains(saved, 'data-saved-entry', count=3)
+        self.assertContains(saved, 'poniedziałek, 12 października 2026')
+
+    def test_unticking_one_proposal_saves_two(self):
+        _, form = self.meetings_form()
+
+        self.client.post(BATCH_URL, posted_from(form, exclude={1}))
+
+        self.assertEqual(
+            sorted(Entry.objects.values_list('date', flat=True)), [WEDNESDAY, NEXT_MONDAY]
+        )
+
+    def test_unticked_invalid_proposal_does_not_block_the_save(self):
+        data = self.batch_data({}, {'date': '', 'content': '', 'include': None})
+
+        response = self.client.post(BATCH_URL, data)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Entry.objects.count(), 1)
+
+    def test_school_event_is_saved_with_its_subject(self):
+        data = self.batch_data(
+            {},
+            {
+                'content': 'Sprawdzian z biologii',
+                'school_item': SchoolItemKind.TEST.value,
+                'school_subject': 'biologia',
+                'assigned_member': str(self.child.pk),
+                'time': '',
+            },
+        )
+
+        self.client.post(BATCH_URL, data)
+
+        school = Entry.objects.get(school_item=SchoolItemKind.TEST.value)
+        self.assertEqual(school.school_subject, 'biologia')
+        self.assertEqual(school.assigned_member, self.child)
+        self.assertEqual(Entry.objects.count(), 2)
+
+    def test_replayed_post_creates_no_new_rows(self):
+        _, form = self.meetings_form()
+        data = posted_from(form)
+
+        first = self.client.post(BATCH_URL, data)
+        second = self.client.post(BATCH_URL, data)
+
+        self.assertEqual(Entry.objects.count(), 3)
+        self.assertEqual(first['Location'], second['Location'])
+
+
+class BatchRejectionTests(BatchViewMixin, TestCase):
+    def assert_rerendered(self, response, message=None):
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['state'], 'batch')
+        if message is not None:
+            self.assertContains(response, message)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_duplicate_submission_keys_are_a_stale_form(self):
+        key = str(uuid.uuid4())
+        data = self.batch_data({'submission_key': key}, {'submission_key': key, 'date': THURSDAY.isoformat()})
+
+        response = self.client.post(BATCH_URL, data)
+
+        self.assert_rerendered(response, BATCH_STALE_ERROR)
+        self.assertTrue(response.context['batch_form'].stale)
+
+    def test_unticking_every_proposal_is_an_error(self):
+        data = self.batch_data({'include': None}, {'include': None})
+
+        response = self.client.post(BATCH_URL, data)
+
+        self.assert_rerendered(response, BATCH_EMPTY_SELECTION_ERROR)
+
+    def test_included_proposal_with_missing_date_saves_nothing(self):
+        data = self.batch_data({}, {'date': ''})
+
+        response = self.client.post(BATCH_URL, data)
+
+        self.assert_rerendered(response, 'Wydarzenie musi mieć datę.')
+        form = response.context['batch_form']
+        self.assertEqual(form.forms[1].fields['date'].widget.attrs['aria-invalid'], 'true')
+        # The parent's keys are kept for the retry.
+        self.assertEqual(
+            str(form.forms[0]['submission_key'].value()), data['e0-submission_key']
+        )
+
+    def test_service_rejection_of_the_second_proposal_rolls_back_the_first(self):
+        foreign_key = uuid.uuid4()
+        Entry.objects.create(
+            family=self.other_family,
+            entry_type=EntryType.NOTE.value,
+            content='SENTINEL-OBCY-WPIS',
+            submission_key=foreign_key,
+        )
+        data = self.batch_data({}, {'submission_key': str(foreign_key)})
+
+        response = self.client.post(BATCH_URL, data)
+
+        self.assertEqual(response.context['state'], 'batch')
+        self.assertContains(response, SAVE_FAILED_ERROR)
+        self.assertNotContains(response, 'SENTINEL-OBCY-WPIS')
+        self.assertEqual(Entry.objects.filter(family=self.family).count(), 0)
+        form = response.context['batch_form']
+        new_keys = {str(sub['submission_key'].value()) for sub in form.forms}
+        self.assertNotIn(str(foreign_key), new_keys)
+        self.assertNotIn(data['e0-submission_key'], new_keys)
+
+    def test_tampered_count_is_a_stale_form(self):
+        for count in ('0', str(MAX_PROPOSALS_PER_INSTRUCTION + 1), 'abc', '', None):
+            with self.subTest(count=count):
+                data = self.batch_data({})
+                if count is None:
+                    del data['count']
+                else:
+                    data['count'] = count
+
+                response = self.client.post(BATCH_URL, data)
+
+                self.assert_rerendered(response, BATCH_STALE_ERROR)
+                self.assertContains(response, 'Zacznij od nowa')
+                self.assertNotContains(response, 'Zapisz wpisy')
+
+    def test_foreign_member_is_a_field_error(self):
+        data = self.batch_data({}, {'assigned_member': str(self.other_family_child.pk)})
+
+        response = self.client.post(BATCH_URL, data)
+
+        self.assert_rerendered(response)
+        self.assertIn('assigned_member', response.context['batch_form'].forms[1].errors)
+
+
+class BatchAccessTests(BatchViewMixin, TestCase):
+    def test_get_is_not_allowed(self):
+        self.assertEqual(self.client.get(BATCH_URL).status_code, 405)
+
+    def test_anonymous_is_redirected_to_login(self):
+        self.client.logout()
+
+        response = self.client.post(BATCH_URL, self.batch_data({}))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse('account_login'), response['Location'])
+        self.assertFalse(Entry.objects.exists())
+
+    def test_non_parents_get_403(self):
+        unconfigured = get_user_model().objects.create_user(username='unconfigured')
+        for user in (self.child.user, self.other_family_child.user, unconfigured):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+
+                response = self.client.post(BATCH_URL, self.batch_data({}))
+
+                self.assertEqual(response.status_code, 403)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_other_family_parent_cannot_use_our_members_or_keys(self):
+        _, form = self.meetings_form()
+        self.client.post(BATCH_URL, posted_from(form))
+        ours = Entry.objects.first()
+        self.client.force_login(self.other_family_parent.user)
+
+        member = self.client.post(BATCH_URL, self.batch_data({'assigned_member': str(self.child.pk)}))
+        replay = self.client.post(BATCH_URL, self.batch_data({'submission_key': str(ours.submission_key)}))
+
+        self.assertIn('assigned_member', member.context['batch_form'].forms[0].errors)
+        self.assertContains(replay, SAVE_FAILED_ERROR)
+        self.assertFalse(Entry.objects.filter(family=self.other_family).exists())
+
+    def test_saved_panel_ignores_foreign_and_invalid_ids(self):
+        foreign = Entry.objects.create(
+            family=self.other_family, entry_type=EntryType.NOTE.value, content='SENTINEL-OBCY-WPIS'
+        )
+        ours = Entry.objects.create(
+            family=self.family, entry_type=EntryType.NOTE.value, content='Nasz wpis'
+        )
+        too_many = ','.join([str(ours.pk)] * (MAX_PROPOSALS_PER_INSTRUCTION + 1))
+
+        for value in (str(foreign.pk), 'abc', '1²', too_many, f'{foreign.pk},x'):
+            with self.subTest(saved=value):
+                response = self.client.get(CAPTURE_URL, {'saved': value})
+                self.assertEqual(response.context['state'], 'empty')
+                self.assertNotContains(response, 'SENTINEL-OBCY-WPIS')
+
+        mixed = self.client.get(CAPTURE_URL, {'saved': f'{foreign.pk},{ours.pk},abc'})
+        self.assertEqual(mixed.context['saved_entries'], [ours])
+        self.assertContains(mixed, 'Dodano wpis')
+        self.assertNotContains(mixed, 'SENTINEL-OBCY-WPIS')
+
+
+class BatchPrivacyTests(BatchViewMixin, TestCase):
+    def test_posted_text_never_reaches_logs(self):
+        foreign_key = uuid.uuid4()
+        Entry.objects.create(
+            family=self.other_family, entry_type=EntryType.NOTE.value, content='x',
+            submission_key=foreign_key,
+        )
+        handler = RecordingHandler()
+        root = logging.getLogger()
+        previous_level = root.level
+        root.addHandler(handler)
+        root.setLevel(logging.DEBUG)
+        try:
+            self.client.post(
+                BATCH_URL,
+                self.batch_data(
+                    {'content': SENTINEL},
+                    {'content': SENTINEL, 'submission_key': str(foreign_key)},
+                ),
+            )
+            self.client.post(BATCH_URL, self.batch_data({'content': SENTINEL, 'date': ''}))
+            self.client.post(BATCH_URL, self.batch_data({'content': SENTINEL}))
+        finally:
+            root.removeHandler(handler)
+            root.setLevel(previous_level)
+
+        self.assertTrue(handler.messages)
+        for message in handler.messages:
+            self.assertNotIn(SENTINEL, message)
+        self.assertEqual(Entry.objects.filter(family=self.family).count(), 1)

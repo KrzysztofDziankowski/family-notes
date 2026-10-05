@@ -11,6 +11,7 @@ from .classification.follow_up import follow_up_question
 from .classification.service import (
     MAX_CORRECTION_LENGTH,
     MAX_FOLLOW_UP_ANSWER_LENGTH,
+    MAX_PROPOSALS_PER_INSTRUCTION,
     MAX_SUBMITTED_TEXT_LENGTH,
 )
 from .classification.types import (
@@ -333,6 +334,13 @@ def review_form_from_classification(membership, outcome, submitted_text, *, toda
     before ``today`` (the classification reference date) is flagged with a
     warning hint; it is not counted as missing.
     """
+    initial, missing = _review_initial(outcome, submitted_text)
+    form = EntryReviewForm(membership, initial=initial, missing=missing, today=today)
+    return form, list(missing)
+
+
+def _review_initial(outcome, submitted_text):
+    """``(initial, missing)`` for a review form built from ``outcome``."""
     result = outcome.result
     initial = {'submission_key': uuid.uuid4()}
     missing = {}
@@ -352,8 +360,163 @@ def review_form_from_classification(membership, outcome, submitted_text, *, toda
                 missing.setdefault(name, hint)
     else:
         initial.update(entry_type=EntryType.NOTE.value, content=submitted_text, school_item='')
-    form = EntryReviewForm(membership, initial=initial, missing=missing, today=today)
-    return form, list(missing)
+    return initial, missing
+
+
+BATCH_STALE_ERROR = 'Nie udało się odczytać wpisów. Zacznij od nowa.'
+BATCH_EMPTY_SELECTION_ERROR = 'Wybierz co najmniej jeden wpis.'
+BATCH_DUPLICATE_HINT = 'Taki sam jak wpis {number}.'
+INCLUDE_LABEL = 'Uwzględnij'
+# The values that make two proposals look identical to the parent.
+_DUPLICATE_FIELDS = (
+    'entry_type', 'content', 'school_item', 'school_subject', 'date', 'time',
+)
+
+
+class BatchEntryForm(EntryReviewForm):
+    """One proposal of a batch: a review form with an „Uwzględnij” checkbox."""
+
+    include = forms.BooleanField(label=INCLUDE_LABEL, required=False, initial=True)
+
+    def is_included(self):
+        return bool(self['include'].value())
+
+
+def _batch_count(value):
+    """The posted proposal count, or ``None`` when it is missing or out of range."""
+    if not isinstance(value, str) or not value.isdigit():
+        return None
+    count = int(value)
+    return count if 1 <= count <= MAX_PROPOSALS_PER_INSTRUCTION else None
+
+
+class BatchReviewForm:
+    """Several proposals reviewed together; every posted value is untrusted.
+
+    Each proposal is a ``BatchEntryForm`` prefixed ``e0`` … ``e9``. The hidden
+    ``count`` decides how many are bound; a missing or out-of-range count
+    makes the whole form stale. Only included proposals are validated, at
+    least one must be included, and two included proposals may not share a
+    ``submission_key``.
+    """
+
+    def __init__(self, membership, data=None, *, items=None, today=None):
+        self.membership = membership
+        self.data = data
+        self.is_bound = data is not None
+        self.stale = False
+        self._non_field_errors = []
+        if data is None:
+            items = list(items or ())
+            self.count = len(items)
+            self.forms = [
+                BatchEntryForm(
+                    membership, prefix=self.prefix(index), initial=initial,
+                    missing=missing, today=today,
+                )
+                for index, (initial, missing) in enumerate(items)
+            ]
+        else:
+            self.count = _batch_count(data.get('count'))
+            if self.count is None:
+                self._mark_stale()
+                self.forms = []
+            else:
+                self.forms = [
+                    BatchEntryForm(membership, data, prefix=self.prefix(index), today=today)
+                    for index in range(self.count)
+                ]
+
+    @staticmethod
+    def prefix(index):
+        return f'e{index}'
+
+    def _mark_stale(self):
+        self.stale = True
+        self._non_field_errors = [BATCH_STALE_ERROR]
+
+    def add_error(self, message):
+        self._non_field_errors.append(message)
+
+    def non_field_errors(self):
+        return list(self._non_field_errors)
+
+    def included_forms(self):
+        return [form for form in self.forms if form.is_included()]
+
+    def is_valid(self):
+        if not self.is_bound or self.stale:
+            return False
+        included = self.included_forms()
+        if not included:
+            self.add_error(BATCH_EMPTY_SELECTION_ERROR)
+            return False
+        valid = all([form.is_valid() for form in included])
+        if not valid:
+            return False
+        keys = [form.cleaned_data['submission_key'] for form in included]
+        if len(set(keys)) != len(keys):
+            self._mark_stale()
+            return False
+        return not self._non_field_errors
+
+    def duplicate_hints(self):
+        """``{index: hint}`` for included proposals identical to an earlier one."""
+        hints = {}
+        seen = {}
+        for index, form in enumerate(self.forms):
+            if not form.is_included():
+                continue
+            key = tuple(_comparable(form[name].value()) for name in _DUPLICATE_FIELDS)
+            if key in seen:
+                hints[index] = BATCH_DUPLICATE_HINT.format(number=seen[key] + 1)
+            else:
+                seen[key] = index
+        return hints
+
+    def entries(self):
+        """What the template renders per proposal, in order."""
+        hints = self.duplicate_hints()
+        return [
+            {'number': index + 1, 'index': index, 'form': form, 'hint': hints.get(index, '')}
+            for index, form in enumerate(self.forms)
+        ]
+
+    def save_items(self):
+        """``save_confirmed_entries`` items from the valid included proposals."""
+        return [_save_item(form.cleaned_data) for form in self.included_forms()]
+
+
+def _comparable(value):
+    """A posted or initial value in one comparable text form."""
+    if isinstance(value, datetime.time):
+        return value.strftime('%H:%M')
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+    return '' if value is None else str(value).strip()
+
+
+def _save_item(cleaned):
+    return {
+        'entry_type': cleaned['entry_type'],
+        'content': cleaned['content'],
+        'date': cleaned['date'],
+        'time': cleaned['time'],
+        'assigned_member': cleaned['assigned_member'],
+        'school_item': cleaned['school_item'],
+        'school_subject': cleaned['school_subject'],
+        'submission_key': cleaned['submission_key'],
+    }
+
+
+def batch_review_form_from_classification(membership, batch, *, today=None):
+    """The batch review form prefilled from a ``ParentBatchClassification``.
+
+    Every proposal gets its own fresh ``submission_key`` and the same missing
+    highlights as a single review form.
+    """
+    items = [_review_initial(outcome, '') for outcome in batch.items]
+    return BatchReviewForm(membership, items=items, today=today)
 
 
 class HiddenDateInput(forms.DateInput):

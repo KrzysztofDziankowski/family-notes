@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from entries.classification.openai_backend import OpenAIClassificationBackend
-from entries.classification.service import ParentClassification
+from entries.classification.service import ParentBatchClassification, ParentClassification
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
@@ -26,7 +26,7 @@ from .test_classification_acceptance import (
     PRD_INSTRUCTION,
     PRD_MONDAY,
     PRD_REFERENCE_DATE,
-    model_output,
+    model_entry_output,
 )
 from .test_classification_service import FamilyFixtureMixin
 from .test_openai_backend import MODEL, FakeClock, ScriptedTransport, make_client
@@ -43,7 +43,8 @@ class CaptureViewMixin(FamilyFixtureMixin):
 
     def classify_with(self, result, member=None, text='Michał ma sprawdzian'):
         outcome = ParentClassification(result=result, member=member)
-        with mock.patch('entries.views.classify_for_parent', return_value=outcome) as classify:
+        batch = ParentBatchClassification(items=(outcome,))
+        with mock.patch('entries.views.classify_entries_for_parent', return_value=batch) as classify:
             response = self.client.post(CAPTURE_URL, {'text': text})
         return response, classify
 
@@ -77,7 +78,7 @@ class CaptureViewMixin(FamilyFixtureMixin):
 class AccessMatrixTests(CaptureViewMixin, TestCase):
     def test_anonymous_is_redirected_to_login(self):
         self.client.logout()
-        with mock.patch('entries.views.classify_for_parent') as classify:
+        with mock.patch('entries.views.classify_entries_for_parent') as classify:
             for method, url in (('get', CAPTURE_URL), ('post', CAPTURE_URL), ('post', CONFIRM_URL)):
                 with self.subTest(method=method, url=url):
                     response = getattr(self.client, method)(url, {'text': 'x'})
@@ -99,7 +100,7 @@ class AccessMatrixTests(CaptureViewMixin, TestCase):
             'no membership': lambda: unconfigured,
             'inactive parent': inactive_parent,
         }
-        with mock.patch('entries.views.classify_for_parent') as classify:
+        with mock.patch('entries.views.classify_entries_for_parent') as classify:
             for name, get_user in cases.items():
                 self.client.force_login(get_user())
                 for method, url, data in (
@@ -134,7 +135,7 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
         transport = ScriptedTransport(
             clock,
             [
-                model_output(
+                model_entry_output(
                     entry_type='calendar_event',
                     content=PRD_CONTENT,
                     date=PRD_MONDAY.isoformat(),
@@ -207,7 +208,7 @@ class ShortNameCaptureTests(CaptureViewMixin, TestCase):
         transport = ScriptedTransport(
             clock,
             [
-                model_output(
+                model_entry_output(
                     entry_type='calendar_event',
                     content='Dentysta',
                     date=self.TOMORROW.isoformat(),

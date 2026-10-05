@@ -41,7 +41,7 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.client.force_login(self.parent.user)
 
         with (
-            mock.patch('entries.views.classify_for_parent') as classify,
+            mock.patch('entries.views.classify_entries_for_parent') as classify,
             mock.patch('entries.views.classify_follow_up_answer') as classify_answer,
         ):
             response = self.client.get(STATES_URL)

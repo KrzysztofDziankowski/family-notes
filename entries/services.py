@@ -13,7 +13,7 @@ from family_access.access import (
 )
 from family_access.models import FamilyMember
 
-from .classification.service import MAX_SUBMITTED_TEXT_LENGTH
+from .classification.service import MAX_PROPOSALS_PER_INSTRUCTION, MAX_SUBMITTED_TEXT_LENGTH
 from .classification.types import EntryType, MissingField, SchoolItemKind
 from .models import SCHOOL_SUBJECT_MAX_LENGTH, Entry
 
@@ -78,6 +78,23 @@ def save_confirmed_entry(
             raise
         return existing, False
     return entry, True
+
+
+@sensitive_variables('items')
+def save_confirmed_entries(user, items):
+    """Save several parent-confirmed entries all-or-nothing; return them in order.
+
+    Each item holds ``save_confirmed_entry``'s keyword arguments. Every item
+    is saved inside one transaction, so a ``ValidationError`` on any of them
+    rolls back the rest. Each ``submission_key`` keeps its item idempotent:
+    a replay returns the saved entries and creates none. Raises
+    ``ValueError`` for no items or more than ``MAX_PROPOSALS_PER_INSTRUCTION``.
+    """
+    items = list(items)
+    if not items or len(items) > MAX_PROPOSALS_PER_INSTRUCTION:
+        raise ValueError('A batch holds 1 to %d entries.' % MAX_PROPOSALS_PER_INSTRUCTION)
+    with transaction.atomic():
+        return [save_confirmed_entry(user, **item)[0] for item in items]
 
 
 def _existing_for_key(membership, submission_key):

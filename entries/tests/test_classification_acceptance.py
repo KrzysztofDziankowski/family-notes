@@ -81,6 +81,21 @@ MEETING = ProposalValues(
 
 def model_output(**fields):
     """A scripted structured-output answer, as the model would return it."""
+    return ok(response_body(json.dumps(model_values(**fields), ensure_ascii=False)))
+
+
+def model_list_output(*entries):
+    """A scripted list answer (``classify_many``); each entry is a ``model_values`` dict."""
+    body = {'entries': [model_values(**entry) for entry in entries]}
+    return ok(response_body(json.dumps(body, ensure_ascii=False)))
+
+
+def model_entry_output(**fields):
+    """``model_output`` wrapped as a one-entry list, as capture now asks for it."""
+    return model_list_output(fields)
+
+
+def model_values(**fields):
     values = dict(
         entry_type=None,
         content='',
@@ -94,7 +109,7 @@ def model_output(**fields):
         member_mention=None,
     )
     values.update(fields)
-    return ok(response_body(json.dumps(values, ensure_ascii=False)))
+    return values
 
 
 class AdapterPathMixin(FamilyFixtureMixin):

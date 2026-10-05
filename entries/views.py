@@ -20,10 +20,11 @@ from family_access.models import FamilyMember
 from family_notes.log_safety import exception_summary
 
 from .classification.service import (
+    MAX_PROPOSALS_PER_INSTRUCTION,
     CorrectionRejection,
     ParentClassification,
+    classify_entries_for_parent,
     classify_follow_up_answer,
-    classify_for_parent,
     correct_proposal_for_parent,
 )
 from .classification.types import (
@@ -37,12 +38,14 @@ from .classification.types import (
 )
 from .forms import (
     CORRECTION_TOO_LONG_ERROR,
+    BatchReviewForm,
     CaptureForm,
     EntryCreateForm,
     EntryEditForm,
     EntryReviewForm,
     FollowUpAnswerForm,
     ProposalCorrectionForm,
+    batch_review_form_from_classification,
     draft_from_form,
     follow_up_form_from_classification,
     proposal_from_draft,
@@ -70,12 +73,17 @@ from .services import (
     delete_family_entry,
     parent_family_entries,
     require_parent_membership,
+    save_confirmed_entries,
     save_confirmed_entry,
     update_family_entry,
 )
 
 UNAVAILABLE_NOTICE = (
     'Nie udało się teraz rozpoznać wpisu. Możesz zapisać go jako notatkę lub poprawić.'
+)
+TOO_MANY_ENTRIES_NOTICE = (
+    f'Za dużo wpisów w jednym poleceniu (maks. {MAX_PROPOSALS_PER_INSTRUCTION}). '
+    'Podziel polecenie.'
 )
 INPUT_TOO_LONG_ERROR = 'Tekst jest za długi. Skróć go i spróbuj ponownie.'
 SAVE_FAILED_ERROR = 'Nie udało się zapisać wpisu. Sprawdź dane i spróbuj ponownie.'
@@ -124,12 +132,12 @@ def capture(request):
     membership = _require_parent(request)
 
     if request.method == 'GET':
-        saved_entry = _saved_entry(membership, request.GET.get('saved', ''))
+        saved_entries = _saved_entries(membership, request.GET.get('saved', ''))
         return _render(
             request,
-            'saved' if saved_entry else 'empty',
+            'saved' if saved_entries else 'empty',
             capture_form=CaptureForm(),
-            saved_entry=saved_entry,
+            saved_entries=saved_entries,
         )
 
     capture_form = CaptureForm(request.POST)
@@ -138,7 +146,15 @@ def capture(request):
 
     text = capture_form.cleaned_data['text']
     today = timezone.localdate()
-    outcome = classify_for_parent(request.user, text, reference_date=today)
+    batch = classify_entries_for_parent(request.user, text, reference_date=today)
+    if not batch.is_single:
+        return _render(
+            request,
+            'batch',
+            batch_form=batch_review_form_from_classification(membership, batch, today=today),
+        )
+
+    outcome = batch.single
     result = outcome.result
 
     if isinstance(result, ClassificationUnavailable) and (
@@ -156,12 +172,11 @@ def capture(request):
 
     review_form, _ = review_form_from_classification(membership, outcome, text, today=today)
     state = 'proposal' if isinstance(result, ClassificationProposal) else 'unavailable'
-    return _render(
-        request,
-        state,
-        review_form=review_form,
-        notice=UNAVAILABLE_NOTICE if state == 'unavailable' else '',
-    )
+    notice = ''
+    if state == 'unavailable':
+        too_many = result.reason == UnavailableReason.TOO_MANY_ENTRIES
+        notice = TOO_MANY_ENTRIES_NOTICE if too_many else UNAVAILABLE_NOTICE
+    return _render(request, state, review_form=review_form, notice=notice)
 
 
 @sensitive_post_parameters('text', 'content', 'answer')
@@ -332,14 +347,69 @@ def confirm(request):
     return redirect(f"{reverse('entries:capture')}?saved={entry.pk}")
 
 
-def _saved_entry(membership, saved):
-    if not saved.isdigit():
-        return None
-    return (
-        scope_queryset_to_family(Entry.objects.select_related('assigned_member'), membership)
-        .filter(pk=int(saved))
-        .first()
-    )
+def _with_fresh_batch_keys(data, count):
+    """The posted batch with a new submission key for every proposal."""
+    retry_data = data.copy()
+    for index in range(count):
+        retry_data[f'{BatchReviewForm.prefix(index)}-submission_key'] = str(uuid.uuid4())
+    return retry_data
+
+
+def _render_batch(request, form):
+    for entry_form in form.forms:
+        _mark_invalid_fields(entry_form)
+    return _render(request, 'batch', batch_form=form)
+
+
+# Every posted value may be family text (several prefixed ``content`` and
+# ``correction`` fields), so all parameters are hidden from error reports.
+@sensitive_post_parameters()
+@require_POST
+@login_required
+def confirm_batch(request):
+    """Save the included proposals of a batch all-or-nothing."""
+    membership = _require_parent(request)
+    form = BatchReviewForm(membership, request.POST)
+    if not form.is_valid():
+        return _render_batch(request, form)
+
+    try:
+        entries = save_confirmed_entries(request.user, form.save_items())
+    except ValidationError as error:
+        _log_rejected_save(error)
+        retry_form = BatchReviewForm(membership, _with_fresh_batch_keys(request.POST, form.count))
+        retry_form.is_valid()
+        retry_form.add_error(SAVE_FAILED_ERROR)
+        return _render_batch(request, retry_form)
+
+    saved = ','.join(str(entry.pk) for entry in entries)
+    return redirect(f"{reverse('entries:capture')}?saved={saved}")
+
+
+# Keeps a posted ID inside the database integer range.
+_MAX_ID_DIGITS = 18
+
+
+def _saved_entries(membership, saved):
+    """Up to ``MAX_PROPOSALS_PER_INSTRUCTION`` family entries named in ``saved``.
+
+    ``saved`` is a comma-separated list of IDs, kept in the posted order.
+    Anything else (non-digit parts, too many IDs, other families' entries)
+    is ignored.
+    """
+    parts = saved.split(',') if saved else []
+    if len(parts) > MAX_PROPOSALS_PER_INSTRUCTION:
+        return []
+    ids = list(dict.fromkeys(
+        int(part) for part in parts
+        if part.isascii() and part.isdigit() and len(part) <= _MAX_ID_DIGITS
+    ))
+    if not ids:
+        return []
+    found = scope_queryset_to_family(
+        Entry.objects.select_related('assigned_member'), membership
+    ).in_bulk(ids)
+    return [found[pk] for pk in ids if pk in found]
 
 
 # Fictional kitchen-sink data: never real family members or saved rows.
@@ -551,7 +621,7 @@ def states(request):
         {
             'name': 'saved',
             'label': 'Zapisano',
-            'saved_entry': saved_entry,
+            'saved_entries': [saved_entry],
             'capture_form': CaptureForm(),
         },
     ]
