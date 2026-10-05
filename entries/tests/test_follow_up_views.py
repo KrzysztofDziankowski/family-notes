@@ -524,3 +524,21 @@ class EnterSubmitQuestionTests(FollowUpViewMixin, TestCase):
         self.assertIn('enterkeyhint="send"', field)
         self.assertNotIn('data-enter-submitter', field)
         assert_enter_assets(self, response, ['id_answer'])
+
+    def test_post_without_an_action_is_an_answer_and_skip_stays_a_skip(self):
+        """``requestSubmit()`` posts no button value: that must mean „Dalej”."""
+        _, data = self.ask()
+        self.assertNotIn('action', data)
+        calls = len(self.backend.requests)
+
+        answered = self.answer(data, output(date=NEXT_FRIDAY), answer='w piątek')
+
+        self.assertEqual(len(self.backend.requests), calls + 1)
+        self.assertEqual(self.backend.requests[-1].follow_up_answer, 'w piątek')
+        self.assertEqual(answered.context['state'], 'proposal')
+
+        skipped = self.answer(data, answer='w piątek', action='skip')
+
+        self.assertEqual(len(self.backend.requests), calls + 1)
+        self.assertEqual(skipped.context['state'], 'skipped')
+        self.assertFalse(Entry.objects.exists())
