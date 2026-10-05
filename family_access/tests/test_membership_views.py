@@ -11,7 +11,7 @@ from entries.forms import EntryCreateForm
 from entries.models import Entry
 from family_access import membership
 from family_access.membership import (
-    ACTIVE_ELSEWHERE_ERROR,
+    DUPLICATE_MEMBERSHIP_ERROR,
     DUPLICATE_NAME_ERROR,
     LAST_PARENT_ERROR,
     SELF_DEACTIVATION_ERROR,
@@ -234,17 +234,30 @@ class MutationViewTests(MembershipFixtureMixin, TestCase):
         self.assertContains(response, LAST_PARENT_ERROR)
         self.assertEqual(self.snapshot(), before)
 
-    def test_reactivation_error_when_active_in_another_family(self):
+    def test_reactivation_succeeds_when_active_in_another_family(self):
         FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
         FamilyMember.objects.create(
             user=self.child.user, family=self.foreign_family,
             role=FamilyMember.Role.CHILD, display_name='Kasia',
         )
+
+        response = self.client.post(reactivate_url(self.child.pk))
+
+        self.assertRedirects(response, reverse('family_members'))
+        self.child.refresh_from_db()
+        self.assertTrue(self.child.is_active)
+
+    def test_reactivation_error_when_already_active_in_this_family(self):
+        FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
+        FamilyMember.objects.create(
+            user=self.child.user, family=self.family,
+            role=FamilyMember.Role.CHILD, display_name='Katarzyna',
+        )
         before = self.snapshot()
 
         response = self.client.post(reactivate_url(self.child.pk))
 
-        self.assertContains(response, ACTIVE_ELSEWHERE_ERROR)
+        self.assertContains(response, DUPLICATE_MEMBERSHIP_ERROR)
         self.assertEqual(self.snapshot(), before)
 
     def test_mutations_require_post(self):
@@ -303,7 +316,7 @@ class StateGalleryTests(MembershipFixtureMixin, TestCase):
             'guard_error', 'reactivate_error', 'edit', 'edit_invalid', 'edit_duplicate',
         ):
             self.assertContains(response, f'data-member-state="{state}"')
-        for copy in (PARENT_REACTIVATION_COPY, LAST_PARENT_ERROR, ACTIVE_ELSEWHERE_ERROR,
+        for copy in (PARENT_REACTIVATION_COPY, LAST_PARENT_ERROR, DUPLICATE_MEMBERSHIP_ERROR,
                      DUPLICATE_NAME_ERROR, 'Podaj imię.'):
             self.assertContains(response, copy)
         # Two S-14 list confirmations plus five S-15 role confirmations

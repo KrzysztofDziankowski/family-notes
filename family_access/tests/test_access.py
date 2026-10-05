@@ -71,7 +71,8 @@ class FamilyMemberModelTests(TestCase):
         self.assertFalse(self.user.is_staff)
         self.assertFalse(self.user.is_superuser)
 
-    def test_user_cannot_have_two_active_memberships(self):
+    def test_user_can_be_active_in_two_families(self):
+        # S-16: one active membership per (user, family), not per user.
         FamilyMember.objects.create(
             user=self.user,
             family=self.family,
@@ -80,11 +81,28 @@ class FamilyMemberModelTests(TestCase):
         )
         another_family = Family.objects.create(name='Another Family')
 
+        FamilyMember.objects.create(
+            user=self.user,
+            family=another_family,
+            role=FamilyMember.Role.CHILD,
+            display_name='Alex',
+        )
+
+        self.assertEqual(self.user.family_memberships.filter(is_active=True).count(), 2)
+
+    def test_user_cannot_have_two_active_memberships_in_one_family(self):
+        FamilyMember.objects.create(
+            user=self.user,
+            family=self.family,
+            role=FamilyMember.Role.PARENT,
+            display_name='Alex',
+        )
+
         with self.assertRaises(IntegrityError), transaction.atomic():
             FamilyMember.objects.create(
                 user=self.user,
-                family=another_family,
-                role=FamilyMember.Role.PARENT,
+                family=self.family,
+                role=FamilyMember.Role.CHILD,
                 display_name='Alex',
             )
 

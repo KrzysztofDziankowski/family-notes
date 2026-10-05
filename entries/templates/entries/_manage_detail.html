@@ -1,3 +1,4 @@
+{% load family_context %}
 {% comment %}
 Entry details with provenance and the no-JavaScript delete disclosure.
 Parameters: entry, list_mode, delete_open (optional; renders the disclosure open).
@@ -41,6 +42,7 @@ Parameters: entry, list_mode, delete_open (optional; renders the disclosure open
         <p>Wpis zostanie usunięty na stałe. Tej operacji nie można cofnąć.</p>
         <form method="post" action="{% url 'entries:delete' entry.pk %}">
             {% csrf_token %}
+            {% family_context_field %}
             <input type="hidden" name="view" value="{{ list_mode }}">
             <button type="submit" class="fn-manage-danger">Usuń na stałe</button>
         </form>

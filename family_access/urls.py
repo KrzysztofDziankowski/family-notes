@@ -8,10 +8,12 @@ from .views import (
     family_member_role,
     family_member_states,
     family_members,
+    select_family,
 )
 
 urlpatterns = [
     path('', account_status, name='account_status'),
+    path('family/select/', select_family, name='select_family'),
     path('family/', family_members, name='family_members'),
     path('family/_states/', family_member_states, name='family_member_states'),
     path('family/members/<int:pk>/edit/', family_member_edit, name='family_member_edit'),

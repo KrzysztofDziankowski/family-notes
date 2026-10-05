@@ -43,10 +43,15 @@ class FamilyMember(models.Model):
 
     class Meta:
         constraints = [
+            # S-16: a person may belong to several families, at most once
+            # actively in each. Django admin validates it as a form error.
             models.UniqueConstraint(
-                fields=('user',),
+                fields=('user', 'family'),
                 condition=Q(is_active=True),
-                name='unique_active_family_membership_per_user',
+                name='unique_active_membership_per_user_family',
+                violation_error_message=(
+                    'This user already has an active membership in this family.'
+                ),
             ),
         ]
 

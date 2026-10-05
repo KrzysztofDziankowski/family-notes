@@ -1,3 +1,4 @@
+{% load family_context %}
 {% comment %}
 Family member list (S-14). Parameters: rows (each {member, is_self, can_deactivate,
 confirm_open}), error (optional guard error). Confirmations are no-JavaScript <details>.
@@ -26,6 +27,7 @@ confirm_open}), error (optional guard error). Confirmations are no-JavaScript <d
                 {% if member.role == "parent" %}<p>Tokeny automatyzacji tej osoby zostaną unieważnione. Po przywróceniu dostępu nowe tokeny wyda administrator rodziny.</p>{% endif %}
                 <form method="post" action="{% url 'family_member_deactivate' member.pk %}">
                     {% csrf_token %}
+                    {% family_context_field %}
                     <button type="submit" class="fn-manage-danger">Wyłącz dostęp<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
                 </form>
             </details>
@@ -40,12 +42,14 @@ confirm_open}), error (optional guard error). Confirmations are no-JavaScript <d
                 <p>Ta osoba odzyska uprawnienia rodzica. Jej dawne tokeny automatyzacji pozostaną unieważnione.</p>
                 <form method="post" action="{% url 'family_member_reactivate' member.pk %}">
                     {% csrf_token %}
+                    {% family_context_field %}
                     <button type="submit">Przywróć dostęp rodzica<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
                 </form>
             </details>
         {% else %}
             <form method="post" action="{% url 'family_member_reactivate' member.pk %}" class="fn-member-form" data-state-part="reactivate-child">
                 {% csrf_token %}
+                {% family_context_field %}
                 <button type="submit" class="secondary">Przywróć dostęp<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
             </form>
         {% endif %}

@@ -20,6 +20,10 @@
             </ul>
             <ul>
                 {% if user.is_authenticated %}
+                {% if family_count > 1 %}
+                {% if current_family %}<li data-state-part="current-family"><span class="fn-muted">Rodzina: <strong>{{ current_family.name }}</strong></span></li>{% endif %}
+                <li><a href="{% url 'select_family' %}">{% if current_family %}Zmień rodzinę{% else %}Wybierz rodzinę{% endif %}</a></li>
+                {% endif %}
                 {% block nav %}
                 <li><a href="{% url 'account_status' %}">Konto</a></li>
                 <li>

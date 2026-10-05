@@ -41,8 +41,8 @@ INACTIVE_ROLE_TARGET_ERROR = (
 SELF_DEMOTION_CONFIRM_ERROR = (
     'Potwierdź, że chcesz zrezygnować z uprawnień rodzica.'
 )
-ACTIVE_ELSEWHERE_ERROR = (
-    'Nie można przywrócić tej osoby, bo jej konto należy już do innej rodziny. '
+DUPLICATE_MEMBERSHIP_ERROR = (
+    'Nie można przywrócić tej osoby, bo jej konto ma już aktywny dostęp w tej rodzinie. '
     'Skontaktuj się z administratorem rodziny.'
 )
 
@@ -215,10 +215,10 @@ def deactivate_member(actor, member_id):
 def reactivate_member(actor, member_id):
     """Reactivate a child or a parent; revoked automation tokens stay revoked.
 
-    Refuses when an active member already carries the same normalized name,
-    or when the database's active-membership constraint rejects the row (the
-    member's user is already active elsewhere; one active membership per user
-    until S-16). The constraint, not a user lookup, is the authority.
+    A user may be active in other families (S-16). Refuses when an active
+    member already carries the same normalized name, or when the database's
+    constraint rejects a second active membership of the same user in this
+    family. The constraint, not a user lookup, is the authority.
     """
     _require_parent_actor(actor)
     with transaction.atomic():
@@ -232,7 +232,7 @@ def reactivate_member(actor, member_id):
             with transaction.atomic():
                 target.save(update_fields=['is_active', 'updated_at'])
         except IntegrityError:
-            raise ValidationError(ACTIVE_ELSEWHERE_ERROR) from None
+            raise ValidationError(DUPLICATE_MEMBERSHIP_ERROR) from None
     _log_event('member_reactivated', target, fresh_actor)
     return target
 

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Inna rodzina{% endblock %}
+
+{% comment %}
+Stale-tab guard (S-16): the form was rendered for a family that is no longer the
+current one, so nothing was saved.
+{% endcomment %}
+{% block content %}
+{% include "_error.html" with heading="Inna rodzina" message="Ta strona dotyczyła innej rodziny. Odśwież ją i spróbuj ponownie." %}
+{% endblock %}

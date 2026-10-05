@@ -14,15 +14,30 @@ non-raising ``peek_family_context``. Token-authenticated automation requests
 never use this module: their family comes from the token's membership.
 """
 
+import logging
+
 from django.contrib.auth.signals import user_logged_in
 from django.core.exceptions import PermissionDenied
 from django.dispatch import receiver
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 
 from .models import FamilyMember
 
+logger = logging.getLogger(__name__)
+
 SESSION_KEY = 'family_access.current_family_id'
+# The hidden form field carrying the family a page was rendered for.
+FORM_FIELD = 'family_context'
 _CACHE_ATTR = '_family_context_cache'
+
+SAFE_METHODS = frozenset({'GET', 'HEAD', 'OPTIONS', 'TRACE'})
+# Views of these apps act on the family context; their unsafe requests must
+# carry the family they were rendered for.
+GUARDED_APPS = frozenset({'entries', 'family_access'})
+# Token-authenticated API (family from the token) and the operator admin.
+EXEMPT_NAMESPACES = frozenset({'automation', 'admin'})
+# The chooser itself changes the context, so it cannot be checked against it.
+EXEMPT_URL_NAMES = frozenset({'select_family'})
 
 
 class FamilyContextRequired(Exception):
@@ -147,11 +162,32 @@ def require_family_context(request):
     return membership
 
 
-class FamilyContextMiddleware:
-    """Send a user who must pick a family to the chooser.
+def is_guarded_view(match):
+    """Whether the resolved view acts on the session family context."""
+    if match is None or EXEMPT_NAMESPACES.intersection(match.namespaces):
+        return False
+    if not match.namespaces and match.url_name in EXEMPT_URL_NAMES:
+        return False
+    module = getattr(match.func, '__module__', '') or ''
+    return module.split('.', 1)[0] in GUARDED_APPS
 
-    Place after ``AuthenticationMiddleware`` and ``MessageMiddleware``, and
-    before ``MembershipNoticeMiddleware``.
+
+class FamilyContextMiddleware:
+    """Guard the family context of every web request.
+
+    * A product view that raises ``FamilyContextRequired`` sends the user to
+      the family chooser.
+    * Every unsafe request (POST, PUT, PATCH, DELETE) from a signed-in user to
+      an ``entries`` or ``family_access`` view must carry the family the form
+      was rendered for (``{% family_context_field %}``). A form from another
+      family (a stale tab after switching elsewhere) gets the Polish 409 page
+      and the view never runs. Like ``CsrfViewMiddleware`` and
+      ``{% csrf_token %}``, new forms are covered without a route list. A
+      missing field is accepted only from a single-family user, so forms
+      opened before the field existed still work for them.
+
+    Place after ``AuthenticationMiddleware``, ``CsrfViewMiddleware`` and
+    ``MessageMiddleware``, and before ``MembershipNoticeMiddleware``.
     """
 
     def __init__(self, get_response):
@@ -159,6 +195,25 @@ class FamilyContextMiddleware:
 
     def __call__(self, request):
         return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        if request.method in SAFE_METHODS or not request.user.is_authenticated:
+            return None
+        match = getattr(request, 'resolver_match', None)
+        if not is_guarded_view(match):
+            return None
+        membership, count = peek_family_context(request)
+        if membership is None:
+            # No usable context: several families need a choice first; with
+            # none the view itself denies access.
+            return redirect('select_family') if count > 1 else None
+        posted = request.POST.get(FORM_FIELD)
+        if posted is None and count == 1:
+            return None
+        if posted == str(membership.family_id):
+            return None
+        logger.info('family_context_mismatch view=%s', match.view_name)
+        return render(request, '409.html', status=409)
 
     def process_exception(self, request, exception):
         if isinstance(exception, FamilyContextRequired):

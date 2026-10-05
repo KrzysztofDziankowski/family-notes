@@ -1,5 +1,7 @@
+{% load family_context %}
 <form method="post" action="{% url 'entries:confirm' %}" data-state-part="review" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
+    {% family_context_field %}
     <h2>Sprawdź wpis</h2>
     {% if form.non_field_errors %}
         <div class="fn-panel fn-panel--danger" role="alert">

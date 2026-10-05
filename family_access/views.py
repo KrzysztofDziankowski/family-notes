@@ -10,10 +10,15 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from entries.forms import describe_fields
 
 from .access import is_parent
-from .context import resolve_family_context
+from .context import (
+    active_memberships,
+    peek_family_context,
+    remember_family,
+    resolve_family_context,
+)
 from .forms import MemberRenameForm, MemberRoleForm
 from .membership import (
-    ACTIVE_ELSEWHERE_ERROR,
+    DUPLICATE_MEMBERSHIP_ERROR,
     DUPLICATE_NAME_ERROR,
     LAST_PARENT_ERROR,
     can_change_role,
@@ -49,6 +54,50 @@ def account_status(request):
         'family_access/account_status.html',
         {'membership': resolve_family_context(request)},
     )
+
+
+# --- Family chooser (S-16) ----------------------------------------------------
+
+CHOOSE_FAMILY_ERROR = 'Wybierz rodzinę.'
+FAMILY_SELECTED_MESSAGE = 'Wybrana rodzina: {name}.'
+
+
+def _render_chooser(request, memberships, error=''):
+    current, _count = peek_family_context(request)
+    return render(
+        request,
+        'family_access/select_family.html',
+        {
+            'memberships': memberships,
+            'current_family_id': current.family_id if current is not None else None,
+            'error': error,
+        },
+    )
+
+
+@require_http_methods(['GET', 'POST'])
+@login_required
+def select_family(request):
+    """List the user's active families and switch the session to the chosen one.
+
+    Only one of the user's own active memberships can be chosen: any other
+    ``family_id`` is a plain 404 and leaves the session unchanged. A switch
+    always lands on the home page of the role in the chosen family, never on
+    the previous page, whose ids belong to the other family.
+    """
+    memberships = list(active_memberships(request.user))
+    if request.method == 'GET':
+        return _render_chooser(request, memberships)
+
+    raw = request.POST.get('family_id', '')
+    if not (raw.isascii() and raw.isdigit() and len(raw) <= 18):
+        return _render_chooser(request, memberships, error=CHOOSE_FAMILY_ERROR)
+    chosen = next((m for m in memberships if m.family_id == int(raw)), None)
+    if chosen is None:
+        raise Http404
+    remember_family(request, chosen)
+    messages.success(request, FAMILY_SELECTED_MESSAGE.format(name=chosen.family.name))
+    return redirect('home')
 
 
 # --- Family member management (S-14) -----------------------------------------
@@ -306,8 +355,8 @@ def family_member_states(request):
              other_parent, [parent, other_parent, child], last_parent_pk=parent.pk)}},
         {'name': 'guard_error', 'label': 'Błąd: ostatni rodzic',
          'list': {'rows': _states_rows(parent, everyone), 'error': LAST_PARENT_ERROR}},
-        {'name': 'reactivate_error', 'label': 'Błąd: konto w innej rodzinie',
-         'list': {'rows': _states_rows(parent, everyone), 'error': ACTIVE_ELSEWHERE_ERROR}},
+        {'name': 'reactivate_error', 'label': 'Błąd: konto już aktywne w tej rodzinie',
+         'list': {'rows': _states_rows(parent, everyone), 'error': DUPLICATE_MEMBERSHIP_ERROR}},
         {'name': 'edit', 'label': 'Zmiana imienia dziecka', 'form': _states_form('edit', child)},
         {'name': 'edit_parent', 'label': 'Zmiana imienia rodzica',
          'form': _states_form('edit_parent', other_parent)},

@@ -1,9 +1,11 @@
+{% load family_context %}
 {% comment %}
 Display-name form (S-14). Parameters: form, member. A child's name also matches school
 notifications, so its field is described by the "<auto_id>-note" paragraph.
 {% endcomment %}
 <form method="post" action="{% url 'family_member_edit' member.pk %}" data-state-part="edit-form" novalidate>
     {% csrf_token %}
+    {% family_context_field %}
     {% if form.errors %}
         <div class="fn-panel fn-panel--danger" role="alert">
             <p>Popraw zaznaczone pola.</p>

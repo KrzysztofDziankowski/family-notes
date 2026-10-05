@@ -1,3 +1,4 @@
+{% load family_context %}
 {% comment %}
 Role change (S-15). Parameter: role = {member, form, can_change, open, error}. The change sits
 in a no-JavaScript <details> confirmation and posts to its own route, separate from renaming.
@@ -27,6 +28,7 @@ explanation instead of the form.
             {% endif %}
             <form method="post" action="{% url 'family_member_role' member.pk %}" novalidate>
                 {% csrf_token %}
+                {% family_context_field %}
                 {% if form.errors %}
                 <div class="fn-panel fn-panel--danger" role="alert">
                     <p>Popraw zaznaczone pola.</p>

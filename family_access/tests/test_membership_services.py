@@ -6,7 +6,7 @@ from unittest import mock
 
 from family_access import membership
 from family_access.membership import (
-    ACTIVE_ELSEWHERE_ERROR,
+    DUPLICATE_MEMBERSHIP_ERROR,
     ALREADY_ACTIVE_ERROR,
     ALREADY_INACTIVE_ERROR,
     BLANK_NAME_ERROR,
@@ -263,20 +263,37 @@ class ReactivationTests(MembershipFixtureMixin, TestCase):
         self.assertTrue(self.child.is_active)
         self.assertTrue(self.other_parent.is_active)
 
-    def test_reactivation_refused_when_user_active_in_another_family(self):
+    def test_reactivation_succeeds_when_user_active_in_another_family(self):
+        # S-16: one person may be active in several families.
         FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
-        FamilyMember.objects.create(
+        elsewhere = FamilyMember.objects.create(
             user=self.child.user,
             family=self.foreign_family,
             role=FamilyMember.Role.CHILD,
             display_name='Kasia',
+        )
+
+        reactivate_member(self.parent, self.child.pk)
+
+        self.child.refresh_from_db()
+        elsewhere.refresh_from_db()
+        self.assertTrue(self.child.is_active)
+        self.assertTrue(elsewhere.is_active)
+
+    def test_reactivation_refused_when_user_already_active_in_this_family(self):
+        FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
+        FamilyMember.objects.create(
+            user=self.child.user,
+            family=self.family,
+            role=FamilyMember.Role.CHILD,
+            display_name='Katarzyna',
         )
         before = self.snapshot()
 
         with self.assertRaises(ValidationError) as caught:
             reactivate_member(self.parent, self.child.pk)
 
-        self.assertEqual(caught.exception.messages, [ACTIVE_ELSEWHERE_ERROR])
+        self.assertEqual(caught.exception.messages, [DUPLICATE_MEMBERSHIP_ERROR])
         self.assertEqual(self.snapshot(), before)
 
     def test_uniqueness_violation_maps_to_polish_error(self):
@@ -286,7 +303,7 @@ class ReactivationTests(MembershipFixtureMixin, TestCase):
         ), self.assertRaises(ValidationError) as caught:
             reactivate_member(self.parent, self.child.pk)
 
-        self.assertEqual(caught.exception.messages, [ACTIVE_ELSEWHERE_ERROR])
+        self.assertEqual(caught.exception.messages, [DUPLICATE_MEMBERSHIP_ERROR])
         self.child.refresh_from_db()
         self.assertFalse(self.child.is_active)
 
