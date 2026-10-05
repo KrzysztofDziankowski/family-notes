@@ -433,9 +433,9 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Automated
 
-- [x] 2.1 Batch and capture view tests pass
-- [x] 2.2 Entry service tests pass
-- [x] 2.3 Full suite, Django checks and migration check pass
+- [x] 2.1 Batch and capture view tests pass — ae44e36
+- [x] 2.2 Entry service tests pass — ae44e36
+- [x] 2.3 Full suite, Django checks and migration check pass — ae44e36
 
 #### Manual
 
@@ -445,8 +445,8 @@ No schema change. Rollback is a code revert. Single-entry capture, follow-up, Ed
 
 #### Automated
 
-- [ ] 3.1 Batch view tests including correction pass
-- [ ] 3.2 Full suite passes
+- [x] 3.1 Batch view tests including correction pass
+- [x] 3.2 Full suite passes
 
 #### Manual
 

@@ -12,6 +12,10 @@
         </div>
     {% else %}
         <input type="hidden" name="count" value="{{ form.count }}">
+        {# The first submit is the default for Enter in a field: it saves. #}
+        <div class="fn-actions">
+            <button type="submit" name="action" value="save">Zapisz wpisy</button>
+        </div>
         {% for entry in form.entries %}
             <fieldset data-batch-entry="{{ entry.number }}">
                 <legend>Wpis {{ entry.number }}</legend>
@@ -36,6 +40,11 @@
                         {% endwith %}
                     {% endif %}
                 {% endfor %}
+                <details{% if entry.form.correction.value or entry.form.correction.errors %} open{% endif %}>
+                    <summary>Popraw tekstem</summary>
+                    {% include "entries/_field.html" with field=entry.form.correction hint="" %}
+                    <button type="submit" name="action" value="correct-{{ entry.index }}" id="{{ entry.form.correct_submit_id }}" class="secondary" formnovalidate>Popraw</button>
+                </details>
                 {{ entry.form.submission_key }}
             </fieldset>
         {% endfor %}

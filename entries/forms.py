@@ -2,6 +2,7 @@ import datetime
 import uuid
 
 from django import forms
+from django.forms.utils import ErrorDict
 from django.db.models import Q
 
 from family_access.access import scope_queryset_to_family
@@ -334,12 +335,12 @@ def review_form_from_classification(membership, outcome, submitted_text, *, toda
     before ``today`` (the classification reference date) is flagged with a
     warning hint; it is not counted as missing.
     """
-    initial, missing = _review_initial(outcome, submitted_text)
+    initial, missing = review_initial_from_classification(outcome, submitted_text)
     form = EntryReviewForm(membership, initial=initial, missing=missing, today=today)
     return form, list(missing)
 
 
-def _review_initial(outcome, submitted_text):
+def review_initial_from_classification(outcome, submitted_text):
     """``(initial, missing)`` for a review form built from ``outcome``."""
     result = outcome.result
     initial = {'submission_key': uuid.uuid4()}
@@ -381,6 +382,24 @@ class BatchEntryForm(EntryReviewForm):
     def is_included(self):
         return bool(self['include'].value())
 
+    def has_pending_correction(self):
+        return bool((self['correction'].value() or '').strip())
+
+
+class BatchEntryCorrectionForm(BatchEntryForm, ProposalCorrectionForm):
+    """The proposal a batch correction targets: S-03's correction rules.
+
+    Formats, family scope and the strict school-type mismatch are checked;
+    the schedule rules are skipped; the correction is required.
+    """
+
+    # Redeclared: ``BatchEntryForm`` re-carries the optional review field.
+    correction = _correction_field(required=True)
+
+
+SAVE_ACTION = 'save'
+CORRECT_ACTION_PREFIX = 'correct-'
+
 
 def _batch_count(value):
     """The posted proposal count, or ``None`` when it is missing or out of range."""
@@ -405,6 +424,9 @@ class BatchReviewForm:
         self.data = data
         self.is_bound = data is not None
         self.stale = False
+        self.correcting = False
+        self.target = None
+        self.notices = {}
         self._non_field_errors = []
         if data is None:
             items = list(items or ())
@@ -418,18 +440,60 @@ class BatchReviewForm:
             ]
         else:
             self.count = _batch_count(data.get('count'))
-            if self.count is None:
+            self.correcting = (data.get('action') or SAVE_ACTION) != SAVE_ACTION
+            if self.count is not None and self.correcting:
+                self.target = self.correction_target(data)
+            if self.count is None or (self.correcting and self.target is None):
                 self._mark_stale()
                 self.forms = []
             else:
                 self.forms = [
-                    BatchEntryForm(membership, data, prefix=self.prefix(index), today=today)
+                    self._entry_form_class(index)(
+                        membership, data, prefix=self.prefix(index), today=today
+                    )
                     for index in range(self.count)
                 ]
 
     @staticmethod
     def prefix(index):
         return f'e{index}'
+
+    def _entry_form_class(self, index):
+        return BatchEntryCorrectionForm if index == self.target else BatchEntryForm
+
+    def correction_target(self, data):
+        """The 0-based proposal a posted ``correct-<i>`` action targets, if valid."""
+        action = data.get('action') or ''
+        if not action.startswith(CORRECT_ACTION_PREFIX):
+            return None
+        index = action[len(CORRECT_ACTION_PREFIX):]
+        if not (index.isascii() and index.isdigit()) or self.count is None:
+            return None
+        index = int(index)
+        return index if index < self.count else None
+
+    @property
+    def target_form(self):
+        return None if self.target is None else self.forms[self.target]
+
+    def is_target_valid(self):
+        """Validate only the correction target; the others are carried through."""
+        if not self.is_bound or self.stale or self.target is None:
+            return False
+        for index, form in enumerate(self.forms):
+            if index != self.target:
+                self._carry(form)
+        return self.target_form.is_valid()
+
+    def replace_form(self, index, form):
+        self.forms[index] = form
+
+    def _carry(self, form):
+        """Show an unchecked proposal as posted: errors only for included ones."""
+        if form.is_included():
+            form.is_valid()
+        else:
+            _without_validation(form)
 
     def _mark_stale(self):
         self.stale = True
@@ -445,14 +509,25 @@ class BatchReviewForm:
         return [form for form in self.forms if form.is_included()]
 
     def is_valid(self):
-        if not self.is_bound or self.stale:
+        if not self.is_bound or self.stale or self.correcting:
             return False
+        # An excluded proposal is neither validated nor saved, but a typed and
+        # unapplied correction on it still refuses the save.
+        pending = False
+        for form in self.forms:
+            if form.is_included():
+                continue
+            if form.has_pending_correction():
+                form.is_valid()
+                pending = True
+            else:
+                _without_validation(form)
         included = self.included_forms()
         if not included:
             self.add_error(BATCH_EMPTY_SELECTION_ERROR)
             return False
         valid = all([form.is_valid() for form in included])
-        if not valid:
+        if not valid or pending:
             return False
         keys = [form.cleaned_data['submission_key'] for form in included]
         if len(set(keys)) != len(keys):
@@ -478,13 +553,25 @@ class BatchReviewForm:
         """What the template renders per proposal, in order."""
         hints = self.duplicate_hints()
         return [
-            {'number': index + 1, 'index': index, 'form': form, 'hint': hints.get(index, '')}
+            {
+                'number': index + 1,
+                'index': index,
+                'form': form,
+                'hint': hints.get(index, ''),
+                'notice': self.notices.get(index, ''),
+            }
             for index, form in enumerate(self.forms)
         ]
 
     def save_items(self):
         """``save_confirmed_entries`` items from the valid included proposals."""
         return [_save_item(form.cleaned_data) for form in self.included_forms()]
+
+
+def _without_validation(form):
+    """Render a bound form as posted, without running or showing validation."""
+    form._errors = ErrorDict()
+    form.cleaned_data = {}
 
 
 def _comparable(value):
@@ -515,7 +602,7 @@ def batch_review_form_from_classification(membership, batch, *, today=None):
     Every proposal gets its own fresh ``submission_key`` and the same missing
     highlights as a single review form.
     """
-    items = [_review_initial(outcome, '') for outcome in batch.items]
+    items = [review_initial_from_classification(outcome, '') for outcome in batch.items]
     return BatchReviewForm(membership, items=items, today=today)
 
 

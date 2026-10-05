@@ -13,6 +13,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from entries.classification.backends import BackendOutput, ClassificationBackendError
 from entries.classification.service import (
     MAX_PROPOSALS_PER_INSTRUCTION,
     ParentBatchClassification,
@@ -33,6 +34,7 @@ from entries.views import SAVE_FAILED_ERROR, TOO_MANY_ENTRIES_NOTICE
 
 from .test_capture_views import RecordingHandler
 from .test_classification_service import FamilyFixtureMixin
+from .test_follow_up_views import ScriptedBackend
 
 CAPTURE_URL = reverse('entries:capture')
 BATCH_URL = reverse('entries:confirm_batch')
@@ -413,3 +415,230 @@ class BatchPrivacyTests(BatchViewMixin, TestCase):
         for message in handler.messages:
             self.assertNotIn(SENTINEL, message)
         self.assertEqual(Entry.objects.filter(family=self.family).count(), 1)
+
+
+# --- Phase 3: per-proposal free-text correction ------------------------------
+
+UNAPPLIED_ERROR = 'Masz niezastosowaną poprawkę — naciśnij „Popraw” albo wyczyść pole.'
+CORRECTION_SENTINEL = 'SENTINEL-POPRAWKA-BATCH-77e1'
+_BATCH_FIELDS = (
+    'entry_type', 'content', 'date', 'time', 'assigned_member', 'school_item',
+    'school_subject', 'submission_key', 'correction',
+)
+
+
+def browser_post(batch_form, action='save', **overrides):
+    """What a browser posts back from the rendered batch form (bound or not)."""
+    data = {'count': str(batch_form.count), 'action': action}
+    for form in batch_form.forms:
+        for name in _BATCH_FIELDS:
+            value = form[name].value()
+            if isinstance(value, datetime.time):
+                value = value.strftime('%H:%M')
+            data[f'{form.prefix}-{name}'] = '' if value is None else str(value)
+        if form['include'].value():
+            data[f'{form.prefix}-include'] = 'on'
+    data.update(overrides)
+    return data
+
+
+def meeting_output(date, changed=None, **overrides):
+    values = dict(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Spotkanie z wychowawczynią',
+        grounded=True,
+        date=date,
+        time=SIX_PM,
+    )
+    values.update(overrides)
+    return BackendOutput(
+        changed_fields=frozenset(changed) if changed is not None else None, **values
+    )
+
+
+class BatchCorrectionMixin(BatchViewMixin):
+    def setUp(self):
+        super().setUp()
+        self.backend = ScriptedBackend()
+
+    def post_with_backend(self, data, *script):
+        self.backend.script.extend(script)
+        with mock.patch('entries.views.timezone.localdate', return_value=WEDNESDAY), mock.patch(
+            'entries.classification.openai_backend.build_openai_backend',
+            return_value=self.backend,
+        ):
+            return self.client.post(BATCH_URL, data)
+
+    def three_meetings(self):
+        return self.batch_data(
+            {'date': WEDNESDAY.isoformat(), 'content': 'Spotkanie z dyrekcją'},
+            {'date': THURSDAY.isoformat()},
+            {'date': NEXT_MONDAY.isoformat(), 'include': None},
+        )
+
+
+class BatchCorrectionTests(BatchCorrectionMixin, TestCase):
+    def test_correcting_proposal_two_changes_only_proposal_two(self):
+        data = self.three_meetings()
+        data['action'] = 'correct-1'
+        data['e1-correction'] = 'zmień godzinę na 19:00'
+
+        response = self.post_with_backend(
+            data, meeting_output(THURSDAY, changed={'time'}, time=datetime.time(19, 0))
+        )
+
+        self.assertEqual(response.context['state'], 'batch')
+        (request,) = self.backend.requests
+        self.assertEqual(request.current_proposal.date, THURSDAY)
+        self.assertEqual(request.correction_text, 'zmień godzinę na 19:00')
+        form = response.context['batch_form']
+        first, second, third = form.forms
+        self.assertEqual(second['time'].value(), datetime.time(19, 0))
+        self.assertEqual(second['date'].value(), THURSDAY)
+        self.assertTrue(second['include'].value())
+        self.assertEqual(first['content'].value(), 'Spotkanie z dyrekcją')
+        self.assertEqual(first['time'].value(), '18:00')
+        self.assertTrue(first['include'].value())
+        self.assertFalse(third['include'].value())
+        self.assertEqual(third['date'].value(), NEXT_MONDAY.isoformat())
+        self.assertContains(response, 'Wpis 2: zaktualizowano: godzina.')
+        old_keys = {data[f'e{index}-submission_key'] for index in range(3)}
+        new_keys = {str(sub['submission_key'].value()) for sub in form.forms}
+        self.assertEqual(len(new_keys), 3)
+        self.assertFalse(old_keys & new_keys)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_broken_unticked_proposal_does_not_block_correcting_another(self):
+        data = self.three_meetings()
+        data.update({'e2-date': 'nie-data', 'action': 'correct-0', 'e0-correction': 'na czwartek'})
+
+        response = self.post_with_backend(
+            data, meeting_output(THURSDAY, changed={'date'}, content='Spotkanie z dyrekcją')
+        )
+
+        form = response.context['batch_form']
+        self.assertEqual(form.forms[0]['date'].value(), THURSDAY)
+        self.assertEqual(form.forms[2].errors, {})
+        self.assertEqual(form.forms[2]['date'].value(), 'nie-data')
+        self.assertContains(response, 'Wpis 1: zaktualizowano: data.')
+
+    def test_after_a_correction_saving_saves_the_corrected_values(self):
+        data = self.three_meetings()
+        data['action'] = 'correct-1'
+        data['e1-correction'] = 'zmień godzinę na 19:00'
+        corrected = self.post_with_backend(
+            data, meeting_output(THURSDAY, changed={'time'}, time=datetime.time(19, 0))
+        )
+
+        saved = self.client.post(BATCH_URL, browser_post(corrected.context['batch_form']))
+
+        self.assertEqual(saved.status_code, 302)
+        entries = list(Entry.objects.order_by('date'))
+        self.assertEqual([entry.date for entry in entries], [WEDNESDAY, THURSDAY])
+        self.assertEqual([entry.time for entry in entries], [SIX_PM, datetime.time(19, 0)])
+        self.assertEqual(entries[0].content, 'Spotkanie z dyrekcją')
+
+    def test_failed_correction_keeps_every_proposal_and_the_text(self):
+        data = self.three_meetings()
+        data['action'] = 'correct-1'
+        data['e1-correction'] = 'bla bla'
+
+        response = self.post_with_backend(
+            data, ClassificationBackendError(UnavailableReason.TIMEOUT)
+        )
+
+        form = response.context['batch_form']
+        self.assertEqual(len(form.forms), 3)
+        self.assertEqual(form.forms[1]['correction'].value(), 'bla bla')
+        self.assertEqual(form.forms[1]['date'].value(), THURSDAY.isoformat())
+        self.assertEqual(form.forms[0]['content'].value(), 'Spotkanie z dyrekcją')
+        self.assertContains(
+            response,
+            'Wpis 2: Nie udało się zastosować poprawki. Napisz ją inaczej albo popraw pola ręcznie.',
+        )
+        self.assertNotIn(data['e1-submission_key'], {str(f['submission_key'].value()) for f in form.forms})
+
+    def test_invalid_target_is_a_stale_form_without_backend_call(self):
+        for action in ('correct-3', 'correct-x', 'correct-', 'correct--1', 'correct', 'correct-²'):
+            with self.subTest(action=action):
+                data = self.three_meetings()
+                data['action'] = action
+                data['e0-correction'] = 'na czwartek'
+
+                response = self.post_with_backend(data)
+
+                self.assertContains(response, BATCH_STALE_ERROR)
+                self.assertEqual(self.backend.requests, [])
+
+    def test_empty_correction_is_a_field_error_without_backend_call(self):
+        data = self.three_meetings()
+        data['action'] = 'correct-1'
+
+        response = self.post_with_backend(data)
+
+        self.assertContains(response, 'Wpisz, co zmienić.')
+        self.assertEqual(self.backend.requests, [])
+        self.assertIn('correction', response.context['batch_form'].forms[1].errors)
+
+    def test_save_with_a_pending_correction_saves_nothing(self):
+        for index in (0, 2):
+            with self.subTest(proposal=index + 1):
+                data = self.three_meetings()
+                data[f'e{index}-correction'] = 'zmień godzinę'
+
+                response = self.client.post(BATCH_URL, data)
+
+                self.assertEqual(response.context['state'], 'batch')
+                self.assertIn(
+                    UNAPPLIED_ERROR,
+                    response.context['batch_form'].forms[index].errors['correction'],
+                )
+                self.assertFalse(Entry.objects.exists())
+
+    def test_each_popraw_button_has_a_stable_id_named_by_its_textarea(self):
+        response, _ = self.meetings_form()
+
+        for index in range(3):
+            self.assertContains(
+                response,
+                f'<button type="submit" name="action" value="correct-{index}" '
+                f'id="e{index}-correct-submit" class="secondary" formnovalidate>Popraw</button>',
+                html=True,
+            )
+            self.assertContains(response, f'data-enter-submitter="e{index}-correct-submit"')
+        self.assertContains(response, 'Popraw tekstem', count=3)
+        body = response.content.decode()
+        self.assertLess(body.index('value="save"'), body.index('value="correct-0"'))
+
+    def test_correction_text_never_reaches_logs(self):
+        handler = RecordingHandler()
+        root = logging.getLogger()
+        previous_level = root.level
+        root.addHandler(handler)
+        root.setLevel(logging.DEBUG)
+        try:
+            data = self.three_meetings()
+            data.update({'action': 'correct-1', 'e1-correction': CORRECTION_SENTINEL})
+            self.post_with_backend(data, ClassificationBackendError(UnavailableReason.TIMEOUT))
+            self.post_with_backend(
+                data, meeting_output(THURSDAY, changed={'time'}, time=datetime.time(19, 0))
+            )
+        finally:
+            root.removeHandler(handler)
+            root.setLevel(previous_level)
+
+        for message in handler.messages:
+            self.assertNotIn(CORRECTION_SENTINEL, message)
+
+    def test_correction_is_refused_for_non_parents(self):
+        data = self.three_meetings()
+        data.update({'action': 'correct-1', 'e1-correction': 'na piątek'})
+        self.client.force_login(self.child.user)
+
+        refused = self.post_with_backend(data)
+        self.client.logout()
+        anonymous = self.post_with_backend(data)
+
+        self.assertEqual(refused.status_code, 403)
+        self.assertEqual(anonymous.status_code, 302)
+        self.assertEqual(self.backend.requests, [])

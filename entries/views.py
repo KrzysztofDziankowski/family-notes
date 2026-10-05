@@ -38,6 +38,7 @@ from .classification.types import (
 )
 from .forms import (
     CORRECTION_TOO_LONG_ERROR,
+    BatchEntryForm,
     BatchReviewForm,
     CaptureForm,
     EntryCreateForm,
@@ -45,6 +46,7 @@ from .forms import (
     EntryReviewForm,
     FollowUpAnswerForm,
     ProposalCorrectionForm,
+    review_initial_from_classification,
     batch_review_form_from_classification,
     draft_from_form,
     follow_up_form_from_classification,
@@ -93,6 +95,7 @@ CORRECTION_APPLIED_NOTICE = 'Zaktualizowano: {fields}.'
 CORRECTION_FAILED_NOTICE = (
     'Nie udało się zastosować poprawki. Napisz ją inaczej albo popraw pola ręcznie.'
 )
+BATCH_CORRECTION_NOTICE = 'Wpis {number}: {notice}'
 CORRECTION_SCHOOL_ITEM_NOTICE = (
     'Ten element szkolny wymaga rodzaju „{label}”. Poprawka nie została zastosowana.'
 )
@@ -367,9 +370,15 @@ def _render_batch(request, form):
 @require_POST
 @login_required
 def confirm_batch(request):
-    """Save the included proposals of a batch all-or-nothing."""
+    """Save the included proposals of a batch all-or-nothing, or correct one.
+
+    ``action=save`` (the default) saves; ``action=correct-<i>`` applies the
+    free-text correction of proposal ``i`` and re-renders the batch.
+    """
     membership = _require_parent(request)
     form = BatchReviewForm(membership, request.POST)
+    if form.correcting or form.stale:
+        return _correct_batch_entry(request, membership, form)
     if not form.is_valid():
         return _render_batch(request, form)
 
@@ -388,6 +397,61 @@ def confirm_batch(request):
 
 # Keeps a posted ID inside the database integer range.
 _MAX_ID_DIGITS = 18
+
+
+def _correct_batch_entry(request, membership, form):
+    """Correct only the targeted proposal; every other one is carried through.
+
+    Nothing is saved. Every proposal gets a new submission key, so the next
+    save is a fresh one.
+    """
+    if form.stale or not form.is_target_valid():
+        return _render_batch(request, form)
+
+    index = form.target
+    target = form.target_form
+    today = timezone.localdate()
+    current, member = proposal_values_from_form(target)
+    correction = correct_proposal_for_parent(
+        request.user,
+        current,
+        target.cleaned_data['correction'],
+        reference_date=today,
+        current_member=member,
+    )
+
+    retry_form = BatchReviewForm(
+        membership, _with_fresh_batch_keys(request.POST, form.count), today=today
+    )
+    retry_form.is_target_valid()
+    number = index + 1
+    if correction.applied:
+        initial, missing = review_initial_from_classification(correction.outcome, current.content)
+        initial['include'] = target.cleaned_data['include']
+        corrected = BatchEntryForm(
+            membership,
+            prefix=BatchReviewForm.prefix(index),
+            initial=initial,
+            missing=missing,
+            today=today,
+        )
+        retry_form.replace_form(index, corrected)
+        notice = _correction_notice(corrected, correction.changed)
+        retry_form.notices[index] = BATCH_CORRECTION_NOTICE.format(
+            number=number, notice=notice[:1].lower() + notice[1:]
+        )
+        return _render_batch(request, retry_form)
+
+    notice = CORRECTION_FAILED_NOTICE
+    if correction.rejection == CorrectionRejection.TOO_LONG:
+        retry_form.target_form.add_error('correction', CORRECTION_TOO_LONG_ERROR)
+        notice = ''
+    elif correction.rejection == CorrectionRejection.SCHOOL_ITEM_MISMATCH:
+        label = dict(Entry.ENTRY_TYPE_CHOICES)[correction.school_item.entry_type.value]
+        notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
+    if notice:
+        retry_form.notices[index] = BATCH_CORRECTION_NOTICE.format(number=number, notice=notice)
+    return _render_batch(request, retry_form)
 
 
 def _saved_entries(membership, saved):
