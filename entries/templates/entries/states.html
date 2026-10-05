@@ -6,6 +6,7 @@
 {% block content %}
 <h1>Stany ekranu „Dodaj wpis”</h1>
 <p class="fn-muted">Strona tylko dla trybu DEBUG. Dane są fikcyjne i nic nie jest zapisywane.</p>
+<p class="fn-muted">Strona offline aplikacji: <a href="{% url 'offline' %}" data-kitchen-link="offline">Brak połączenia</a></p>
 {% for section in sections %}
 <section data-kitchen-state="{{ section.name }}">
     <hr>
@@ -26,7 +27,7 @@
         {% include "entries/_review_form.html" with form=section.review_form %}
     {% endif %}
     {% if section.capture_form %}
-        {% include "entries/_capture_form.html" with form=section.capture_form %}
+        {% include "entries/_capture_form.html" with form=section.capture_form progress_state=section.progress_state %}
     {% endif %}
 </section>
 {% endfor %}

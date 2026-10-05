@@ -437,13 +437,13 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [x] 2.1 PWA tests prove `/manifest.webmanifest`, `/sw.js` and `/offline/` return 200 to anonymous users with `application/manifest+json`, `text/javascript` + `Cache-Control: no-cache`, and `Cache-Control: no-cache` respectively.
-- [x] 2.2 A manifest test proves `id`, `start_url` and `scope` are `/`, `display` is `standalone`, `lang` is `pl`, `orientation` is absent, `theme_color`/`background_color` match the `tokens.css` values, and the 192, 512 and maskable 512 icons resolve through Django's static files finders.
-- [x] 2.3 A service worker source test proves the non-GET early return, the precache list, the unescaped literal `"/offline/"` and the release-derived cache name are present, and that `cache.put`, `indexedDB`, `push`/`sync`/`notificationclick` event listeners and any `/entries/`, `/api/`, `/account/`, `/accounts/` or `/admin/` URL are absent.
-- [x] 2.4 An offline page test proves the Polish copy renders and, for an authenticated parent, no username, "Wyloguj" or CSRF token appears.
-- [x] 2.5 Layout tests prove the login page and parent entry list include the manifest link, `apple-touch-icon` and `js/pwa-register.js` with `data-sw-url="/sw.js"`.
-- [x] 2.6 Focused tests pass: `uv run python manage.py test family_notes`.
-- [x] 2.7 Django checks pass: `uv run python manage.py check`.
+- [x] 2.1 PWA tests prove `/manifest.webmanifest`, `/sw.js` and `/offline/` return 200 to anonymous users with `application/manifest+json`, `text/javascript` + `Cache-Control: no-cache`, and `Cache-Control: no-cache` respectively. — 1b3cbe4
+- [x] 2.2 A manifest test proves `id`, `start_url` and `scope` are `/`, `display` is `standalone`, `lang` is `pl`, `orientation` is absent, `theme_color`/`background_color` match the `tokens.css` values, and the 192, 512 and maskable 512 icons resolve through Django's static files finders. — 1b3cbe4
+- [x] 2.3 A service worker source test proves the non-GET early return, the precache list, the unescaped literal `"/offline/"` and the release-derived cache name are present, and that `cache.put`, `indexedDB`, `push`/`sync`/`notificationclick` event listeners and any `/entries/`, `/api/`, `/account/`, `/accounts/` or `/admin/` URL are absent. — 1b3cbe4
+- [x] 2.4 An offline page test proves the Polish copy renders and, for an authenticated parent, no username, "Wyloguj" or CSRF token appears. — 1b3cbe4
+- [x] 2.5 Layout tests prove the login page and parent entry list include the manifest link, `apple-touch-icon` and `js/pwa-register.js` with `data-sw-url="/sw.js"`. — 1b3cbe4
+- [x] 2.6 Focused tests pass: `uv run python manage.py test family_notes`. — 1b3cbe4
+- [x] 2.7 Django checks pass: `uv run python manage.py check`. — 1b3cbe4
 
 #### Manual
 
@@ -455,11 +455,11 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [ ] 3.1 Gallery tests prove the five `progress_*` sections render with their copy, DEBUG gating holds, non-parents are denied, and no rows are written.
-- [ ] 3.2 Full test suite passes: `uv run python manage.py test`.
-- [ ] 3.3 Django checks pass: `uv run python manage.py check`.
-- [ ] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 3.5 Static collection includes the new assets: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/classification-progress.js`, `js/pwa-register.js` and the `pwa/` icons.
+- [x] 3.1 Gallery tests prove the five `progress_*` sections render with their copy, DEBUG gating holds, non-parents are denied, and no rows are written.
+- [x] 3.2 Full test suite passes: `uv run python manage.py test`.
+- [x] 3.3 Django checks pass: `uv run python manage.py check`.
+- [x] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 3.5 Static collection includes the new assets: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/classification-progress.js`, `js/pwa-register.js` and the `pwa/` icons.
 
 #### Manual
 

@@ -20,6 +20,7 @@ STATE_COPY = {
     'connection_lost': 'Utracono połączenie podczas rozpoznawania. Gdy wróci, spróbuj ponownie.',
 }
 RETRY_STATES = ('stalled', 'connection_lost')
+ANY_ONE = object()
 VOID_TAGS = frozenset((
     'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta',
     'source', 'track', 'wbr',
@@ -118,7 +119,9 @@ def _normalized(text):
 def assert_progress_regions(test, html, visible=None):
     """Every progress live region is always rendered and holds the five states.
 
-    ``visible`` maps nothing by default: every state block must be hidden.
+    ``visible`` names the one block rendered visible (state gallery only);
+    by default every state block is hidden, and ``ANY_ONE`` allows at most
+    one visible block per region (the whole gallery page).
     Returns the number of checked regions, so callers can prove the check
     was not vacuous.
     """
@@ -136,7 +139,9 @@ def assert_progress_regions(test, html, visible=None):
                 name = block['attrs']['data-progress-state']
                 test.assertEqual(block['attrs'].get('class'), 'fn-panel fn-panel--notice')
                 test.assertIn(STATE_COPY[name], _normalized(block['text']))
-                if name == visible:
+                if visible == ANY_ONE:
+                    pass
+                elif name == visible:
                     test.assertNotIn('hidden', block['attrs'], name)
                 else:
                     test.assertIn('hidden', block['attrs'], name)
@@ -146,6 +151,8 @@ def assert_progress_regions(test, html, visible=None):
                     test.assertIn('Spróbuj ponownie', block['text'])
                 else:
                     test.assertEqual(block['retry'], 0, name)
+            shown = [block for block in region['blocks'] if 'hidden' not in block['attrs']]
+            test.assertLessEqual(len(shown), 1)
     return len(collector.regions)
 
 

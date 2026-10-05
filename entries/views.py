@@ -505,6 +505,17 @@ STATES_MEMBER_CHOICES = [('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek')
 STATES_DATE = datetime.date(2026, 10, 5)
 
 
+# Progress states (S-06) shown statically in the gallery, with their labels.
+PROGRESS_STATE_LABELS = (
+    ('running', 'trwa'),
+    ('slow', 'dłużej niż zwykle'),
+    ('stalled', 'brak odpowiedzi'),
+    ('offline', 'brak połączenia przed wysłaniem'),
+    ('connection_lost', 'utracone połączenie'),
+)
+PROGRESS_STATES_TEXT = 'Kasia ma jutro sprawdzian z matematyki'
+
+
 def states(request):
     """DEBUG-only page rendering every capture state from unsaved synthetic data."""
     if not settings.DEBUG:
@@ -821,6 +832,15 @@ def states(request):
                 text='Trening codziennie przez dwa tygodnie o 17:00',
             ),
         },
+        *(
+            {
+                'name': f'progress_{state}',
+                'label': f'Postęp rozpoznawania: {label}',
+                'capture_form': CaptureForm(initial={'text': PROGRESS_STATES_TEXT}),
+                'progress_state': state,
+            }
+            for state, label in PROGRESS_STATE_LABELS
+        ),
     ]
     return render(
         request,

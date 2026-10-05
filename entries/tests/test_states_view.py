@@ -1,16 +1,23 @@
 from unittest import mock
 
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from entries import views
 from entries.models import Entry
 
 from .classification_progress_markup import SCRIPT_URL as PROGRESS_SCRIPT_URL
-from .classification_progress_markup import assert_progress_regions
+from .classification_progress_markup import (
+    ANY_ONE,
+    STATE_COPY,
+    assert_progress_regions,
+    progress_forms,
+)
 from .enter_submit_markup import SCRIPT_URL as ENTER_SCRIPT_URL
 from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import WRITE_PREFIXES, FamilyFixtureMixin
 
 STATES_URL = reverse('entries:states')
 STATE_NAMES = (
@@ -38,6 +45,7 @@ STATE_NAMES = (
     'batch_saved',
     'too_many',
 )
+PROGRESS_STATES = ('running', 'slow', 'stalled', 'offline', 'connection_lost')
 
 
 class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
@@ -124,7 +132,61 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.assertContains(response, 'data-progress-slow-after="10"')
         self.assertContains(response, 'data-progress-stalled-after="35"')
         self.assertNotContains(response, 'data-progress-slow-after=""')
-        self.assertGreater(assert_progress_regions(self, response.content.decode()), 0)
+        self.assertGreater(
+            assert_progress_regions(self, response.content.decode(), visible=ANY_ONE), 0
+        )
+
+    @override_settings(DEBUG=True)
+    def test_progress_states_render_statically_without_writes(self):
+        self.client.force_login(self.parent.user)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(STATES_URL)
+
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        for state in PROGRESS_STATES:
+            with self.subTest(state=state):
+                marker = f'data-kitchen-state="progress_{state}"'
+                self.assertIn(marker, html)
+                start = html.index(marker)
+                section = html[start:html.index('</section>', start)]
+                self.assertIn(STATE_COPY[state], section)
+                self.assertEqual(assert_progress_regions(self, section, visible=state), 1)
+                [form] = progress_forms(section)
+                [submit] = form['buttons']
+                busy = state in ('running', 'slow')
+                self.assertEqual(submit['attrs'].get('aria-busy') == 'true', busy)
+                elapsed_hidden = 'data-progress-elapsed aria-hidden="true" hidden' in section
+                self.assertEqual(elapsed_hidden, not busy)
+                self.assertIn('Kasia ma jutro sprawdzian z matematyki</textarea>', section)
+        self.assertContains(
+            response,
+            f'<a href="{reverse("offline")}" data-kitchen-link="offline">Brak połączenia</a>',
+            html=True,
+        )
+        writes = [
+            query['sql']
+            for query in queries.captured_queries
+            if query['sql'].lstrip().upper().startswith(WRITE_PREFIXES)
+            and 'django_session' not in query['sql']
+        ]
+        self.assertEqual(writes, [])
+        self.assertFalse(Entry.objects.exists())
+
+    @override_settings(DEBUG=True)
+    def test_only_progress_sections_show_a_progress_state(self):
+        self.client.force_login(self.parent.user)
+
+        html = self.client.get(STATES_URL).content.decode()
+
+        for name in STATE_NAMES:
+            with self.subTest(state=name):
+                marker = f'data-kitchen-state="{name}"'
+                start = html.index(marker)
+                section = html[start:html.index('</section>', start)]
+                assert_progress_regions(self, section)
+                self.assertNotIn('aria-busy', section)
 
     @override_settings(DEBUG=True)
     def test_child_is_forbidden_and_anonymous_is_redirected(self):
