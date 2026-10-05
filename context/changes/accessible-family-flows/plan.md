@@ -397,9 +397,9 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Automated
 
-- [x] 2.1 Layout and title tests pass: `uv run python manage.py test family_notes.tests entries.tests.test_manage_views entries.tests.test_capture_views`
-- [x] 2.2 Child and gallery views still pass: `uv run python manage.py test entries.tests.test_child_views entries.tests.test_child_states_view entries.tests.test_states_view entries.tests.test_manage_states`
-- [x] 2.3 Django checks pass: `uv run python manage.py check`
+- [x] 2.1 Layout and title tests pass: `uv run python manage.py test family_notes.tests entries.tests.test_manage_views entries.tests.test_capture_views` — 8a7dc23
+- [x] 2.2 Child and gallery views still pass: `uv run python manage.py test entries.tests.test_child_views entries.tests.test_child_states_view entries.tests.test_states_view entries.tests.test_manage_states` — 8a7dc23
+- [x] 2.3 Django checks pass: `uv run python manage.py check` — 8a7dc23
 
 #### Manual
 
@@ -411,12 +411,12 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Automated
 
-- [ ] 3.1 Audit tests pass: `uv run python manage.py test entries.tests.test_accessibility family_notes.test_accessibility`
-- [ ] 3.2 Token contrast test passes: `uv run python manage.py test family_notes.test_tokens_contrast`
-- [ ] 3.3 Deliberate break detected: temporarily restoring `id="{{ field.auto_id }}-error"` in `_field.html` makes `entries.tests.test_accessibility` fail, and reverting makes it pass
-- [ ] 3.4 Full suite passes: `uv run python manage.py test`
-- [ ] 3.5 Django checks pass: `uv run python manage.py check`
-- [ ] 3.6 No model changes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 3.1 Audit tests pass: `uv run python manage.py test entries.tests.test_accessibility family_notes.test_accessibility`
+- [x] 3.2 Token contrast test passes: `uv run python manage.py test family_notes.test_tokens_contrast`
+- [x] 3.3 Deliberate break detected: temporarily restoring `id="{{ field.auto_id }}-error"` in `_field.html` makes `entries.tests.test_accessibility` fail, and reverting makes it pass
+- [x] 3.4 Full suite passes: `uv run python manage.py test`
+- [x] 3.5 Django checks pass: `uv run python manage.py check`
+- [x] 3.6 No model changes: `uv run python manage.py makemigrations --check --dry-run`
 
 #### Manual
 
