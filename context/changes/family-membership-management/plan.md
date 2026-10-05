@@ -258,14 +258,14 @@ No schema or data migration, no backfill and no feature flag. Rollback is to rem
 
 #### Automated
 
-- [ ] 1.1 Service tests cover listing, rename, deactivate and reactivate for an active parent, plus denial for a child, an inactive parent, a parent of another family, and a missing actor membership.
-- [ ] 1.2 Rename tests reject a blank or over-length display name, and a name that normalizes to another active member's name, with a Polish error and leave the row unchanged.
-- [ ] 1.3 Guard tests prove a parent cannot deactivate themselves or the last active parent, that deactivation revokes that member's automation tokens, and that reactivation leaves them revoked.
-- [ ] 1.4 Reactivation tests cover reactivating an inactive member and the Polish error when the user is already active in another family.
-- [ ] 1.5 Targeted tests pass: `uv run python manage.py test family_access.tests.test_membership_services`.
-- [ ] 1.6 Migration drift check passes with no new migration: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 1.8 Stale-authority tests change the actor's or target's row directly in the database after it was resolved (actor deactivated or demoted; target already reactivated or deactivated) and prove the call raises `PermissionDenied` or the Polish state error with no change.
-- [ ] 1.9 A guard test proves a parent whose `User.is_active` is False does not count as a remaining parent, so the last usable parent cannot be deactivated.
+- [x] 1.1 Service tests cover listing, rename, deactivate and reactivate for an active parent, plus denial for a child, an inactive parent, a parent of another family, and a missing actor membership.
+- [x] 1.2 Rename tests reject a blank or over-length display name, and a name that normalizes to another active member's name, with a Polish error and leave the row unchanged.
+- [x] 1.3 Guard tests prove a parent cannot deactivate themselves or the last active parent, that deactivation revokes that member's automation tokens, and that reactivation leaves them revoked.
+- [x] 1.4 Reactivation tests cover reactivating an inactive member and the Polish error when the user is already active in another family.
+- [x] 1.5 Targeted tests pass: `uv run python manage.py test family_access.tests.test_membership_services`.
+- [x] 1.6 Migration drift check passes with no new migration: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 1.8 Stale-authority tests change the actor's or target's row directly in the database after it was resolved (actor deactivated or demoted; target already reactivated or deactivated) and prove the call raises `PermissionDenied` or the Polish state error with no change.
+- [x] 1.9 A guard test proves a parent whose `User.is_active` is False does not count as a remaining parent, so the last usable parent cannot be deactivated.
 
 #### Manual
 
