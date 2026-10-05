@@ -417,13 +417,13 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [ ] 1.1 View tests prove the capture form and follow-up form render the progress partial with all five hidden `data-progress-state` blocks, the exact Polish copy, the retry button, and the `data-progress-slow-after="10"` / `data-progress-stalled-after="35"` attributes under default settings.
-- [ ] 1.2 A view test with `override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)` proves both thresholds follow the settings (`6` and `22`).
-- [ ] 1.3 View tests prove the review form (proposal, `correction_failed`, confirm-invalid) renders the progress partial, „Popraw” carries `data-classification-submit`, „Zapisz wpis” does not, and the review form has no `data-classification-default`; capture and follow-up forms carry `data-classification-default`, "Pomiń" has no `data-classification-submit`; structured create/edit forms and the saved panel do not render the partial.
-- [ ] 1.11 A markup test proves that in every rendered progress partial no ancestor of `[role=status][data-progress-live]` carries `hidden`, and that the region contains the five hidden state blocks.
-- [ ] 1.4 View tests prove the capture page and DEBUG state gallery include both the `js/classification-progress.js` and S-05 `js/enter-submit.js` script tags, and a test proves the new file resolves through Django's static files finders.
-- [ ] 1.5 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view`.
-- [ ] 1.6 Django checks pass: `uv run python manage.py check`.
+- [x] 1.1 View tests prove the capture form and follow-up form render the progress partial with all five hidden `data-progress-state` blocks, the exact Polish copy, the retry button, and the `data-progress-slow-after="10"` / `data-progress-stalled-after="35"` attributes under default settings.
+- [x] 1.2 A view test with `override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)` proves both thresholds follow the settings (`6` and `22`).
+- [x] 1.3 View tests prove the review form (proposal, `correction_failed`, confirm-invalid) renders the progress partial, „Popraw” carries `data-classification-submit`, „Zapisz wpis” does not, and the review form has no `data-classification-default`; capture and follow-up forms carry `data-classification-default`, "Pomiń" has no `data-classification-submit`; structured create/edit forms and the saved panel do not render the partial.
+- [x] 1.11 A markup test proves that in every rendered progress partial no ancestor of `[role=status][data-progress-live]` carries `hidden`, and that the region contains the five hidden state blocks.
+- [x] 1.4 View tests prove the capture page and DEBUG state gallery include both the `js/classification-progress.js` and S-05 `js/enter-submit.js` script tags, and a test proves the new file resolves through Django's static files finders.
+- [x] 1.5 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view`.
+- [x] 1.6 Django checks pass: `uv run python manage.py check`.
 
 #### Manual
 

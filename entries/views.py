@@ -1,5 +1,6 @@
 import datetime
 import logging
+import math
 import uuid
 from dataclasses import replace
 
@@ -125,8 +126,29 @@ def _require_parent(request):
     return require_parent_membership(request.user)
 
 
+# The page reports a stalled request this long after the provider deadline.
+PROGRESS_STALLED_MARGIN_SECONDS = 10
+
+
+def _progress_thresholds():
+    """Client-side progress timing (seconds), derived from the provider limits.
+
+    After one attempt timeout the provider may be retrying, so the page says
+    it takes longer than usual; with no response well past the deadline it
+    offers a retry.
+    """
+    return {
+        'progress_slow_after': math.ceil(settings.CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS),
+        'progress_stalled_after': (
+            math.ceil(settings.CLASSIFICATION_DEADLINE_SECONDS) + PROGRESS_STALLED_MARGIN_SECONDS
+        ),
+    }
+
+
 def _render(request, state, **context):
-    return render(request, 'entries/capture.html', {'state': state, **context})
+    return render(
+        request, 'entries/capture.html', {'state': state, **_progress_thresholds(), **context}
+    )
 
 
 @sensitive_post_parameters('text', 'content')
@@ -803,7 +825,11 @@ def states(request):
     return render(
         request,
         'entries/states.html',
-        {'sections': sections, 'manage_sections': _manage_state_sections(membership)},
+        {
+            'sections': sections,
+            'manage_sections': _manage_state_sections(membership),
+            **_progress_thresholds(),
+        },
     )
 
 

@@ -1,4 +1,4 @@
-<form method="post" action="{% url 'entries:confirm_batch' %}" data-state-part="batch">
+<form method="post" action="{% url 'entries:confirm_batch' %}" data-state-part="batch" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
     <h2>Sprawdź wpisy ({{ form.count|default:0 }})</h2>
     {% if form.non_field_errors %}
@@ -44,7 +44,7 @@
                     <summary>Popraw tekstem</summary>
                     {% include "entries/_field.html" with field=entry.form.correction hint="" %}
                     {% include "entries/_enter_hint.html" with field=entry.form.correction %}
-                    <button type="submit" name="action" value="correct-{{ entry.index }}" id="{{ entry.form.correct_submit_id }}" class="secondary" formnovalidate>Popraw</button>
+                    <button type="submit" name="action" value="correct-{{ entry.index }}" id="{{ entry.form.correct_submit_id }}" class="secondary" formnovalidate data-classification-submit>Popraw</button>
                 </details>
                 {{ entry.form.submission_key }}
             </fieldset>
@@ -53,5 +53,6 @@
             <button type="submit" name="action" value="save">Zapisz wpisy</button>
             <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
         </div>
+        {% include "entries/_classification_progress.html" %}
     {% endif %}
 </form>

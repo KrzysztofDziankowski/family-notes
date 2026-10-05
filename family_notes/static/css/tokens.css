@@ -321,3 +321,18 @@
   flex: 1;
   border-top: 1px solid var(--fn-color-border);
 }
+
+/* Classification progress (S-06) */
+.fn-progress {
+  margin-top: var(--fn-space-3);
+}
+
+.fn-progress .fn-panel {
+  margin-bottom: var(--fn-space-2);
+}
+
+.fn-progress-elapsed {
+  margin: 0 0 var(--fn-space-3);
+  font-size: 0.875em;
+  font-variant-numeric: tabular-nums;
+}

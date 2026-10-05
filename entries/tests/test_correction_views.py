@@ -23,6 +23,11 @@ from entries.models import Entry
 
 from .test_capture_views import RecordingHandler
 from .test_classification_service import REFERENCE_DATE, WRITE_PREFIXES, FamilyFixtureMixin
+from .classification_progress_markup import (
+    assert_progress_regions,
+    classification_submitters,
+    progress_forms,
+)
 from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_follow_up_views import ScriptedBackend, as_post_data
 
@@ -419,7 +424,8 @@ class MarkupTests(CorrectionViewMixin, TestCase):
                 self.assertContains(
                     page,
                     f'<button type="submit" name="action" value="correct" id="correct-submit" '
-                    f'class="secondary" formaction="{CORRECT_URL}" formnovalidate>Popraw</button>',
+                    f'class="secondary" formaction="{CORRECT_URL}" formnovalidate '
+                    f'data-classification-submit>Popraw</button>',
                     html=True,
                 )
                 self.assertContains(page, 'data-enter-submitter="correct-submit"')
@@ -480,3 +486,36 @@ class EnterSubmitReviewTests(CorrectionViewMixin, TestCase):
         self.assertNotIn('data-enter-submit', content)
         self.assertNotIn('enterkeyhint', content)
         assert_enter_assets(self, page, ['id_correction'])
+
+
+class ProgressIndicatorReviewTests(CorrectionViewMixin, TestCase):
+    """S-06: „Popraw” calls the provider and shows the indicator; saving does not."""
+
+    def review_pages(self):
+        return {
+            'proposal': self.run_with_backend(CAPTURE_URL, {'text': INSTRUCTION}, first_output()),
+            'correction_failed': self.correct(
+                self.posted_data(correction='bla bla'),
+                ClassificationBackendError(UnavailableReason.TIMEOUT),
+            ),
+            'invalid': self.client.post(CONFIRM_URL, self.posted_data()),
+        }
+
+    def test_review_form_marks_only_popraw_as_a_classification_submit(self):
+        for name, page in self.review_pages().items():
+            with self.subTest(state=name):
+                self.assertEqual(page.context['state'], name)
+                content = page.content.decode()
+                self.assertEqual(assert_progress_regions(self, content), 1)
+                [form] = progress_forms(content)
+                self.assertEqual(form['attrs']['action'], CONFIRM_URL)
+                # The default (no-submitter) action saves, so it never classifies.
+                self.assertNotIn('data-classification-default', form['attrs'])
+                self.assertEqual(form['attrs'].get('data-progress-slow-after'), '10')
+                self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '35')
+                buttons = {button['text'].strip(): button['attrs'] for button in form['buttons']}
+                self.assertEqual(set(buttons), {'Zapisz wpis', 'Popraw'})
+                self.assertNotIn('data-classification-submit', buttons['Zapisz wpis'])
+                self.assertIn('data-classification-submit', buttons['Popraw'])
+                self.assertEqual(buttons['Popraw'].get('formaction'), CORRECT_URL)
+                self.assertEqual(classification_submitters(form), ['Popraw'])

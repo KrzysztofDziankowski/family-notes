@@ -6,6 +6,9 @@ from django.urls import reverse
 from entries import views
 from entries.models import Entry
 
+from .classification_progress_markup import SCRIPT_URL as PROGRESS_SCRIPT_URL
+from .classification_progress_markup import assert_progress_regions
+from .enter_submit_markup import SCRIPT_URL as ENTER_SCRIPT_URL
 from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_classification_service import FamilyFixtureMixin
 
@@ -109,6 +112,19 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
             self, response, ['id_text', 'id_answer', 'id_correction', 'id_e0-correction']
         )
         self.assertGreater(assert_enter_never_saves(self, response.content.decode()), 0)
+
+    @override_settings(DEBUG=True)
+    def test_gallery_loads_both_scripts_and_every_live_region_is_rendered(self):
+        self.client.force_login(self.parent.user)
+
+        response = self.client.get(STATES_URL)
+
+        self.assertContains(response, f'<script src="{PROGRESS_SCRIPT_URL}" defer></script>', html=True)
+        self.assertContains(response, f'<script src="{ENTER_SCRIPT_URL}" defer></script>', html=True)
+        self.assertContains(response, 'data-progress-slow-after="10"')
+        self.assertContains(response, 'data-progress-stalled-after="35"')
+        self.assertNotContains(response, 'data-progress-slow-after=""')
+        self.assertGreater(assert_progress_regions(self, response.content.decode()), 0)
 
     @override_settings(DEBUG=True)
     def test_child_is_forbidden_and_anonymous_is_redirected(self):

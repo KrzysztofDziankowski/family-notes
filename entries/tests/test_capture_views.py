@@ -5,7 +5,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from entries.classification.openai_backend import OpenAIClassificationBackend
@@ -22,6 +22,13 @@ from entries.classification.types import (
 from entries.models import Entry
 from family_access.models import FamilyMember
 
+from .classification_progress_markup import (
+    SCRIPT_URL as PROGRESS_SCRIPT_URL,
+    assert_progress_regions,
+    classification_submitters,
+    progress_forms,
+)
+from .enter_submit_markup import SCRIPT_URL as ENTER_SCRIPT_URL
 from .enter_submit_markup import assert_enter_assets
 from .test_classification_acceptance import (
     PRD_CONTENT,
@@ -617,3 +624,112 @@ class EnterSubmitCaptureTests(CaptureViewMixin, TestCase):
         self.assertEqual(response.context['state'], 'proposal')
         assert_enter_assets(self, response, ['id_correction'])
         self.assertNotIn('data-enter-submit', str(response.context['review_form']['content']))
+
+
+class ProgressIndicatorCaptureTests(CaptureViewMixin, TestCase):
+    """S-06: classification forms render the progress partial and thresholds."""
+
+    def question(self):
+        response, _ = self.classify_with(
+            ClassificationFollowUp(
+                missing_fields=(MissingField.DATE,),
+                entry_type=EntryType.CALENDAR_EVENT,
+                content=PRD_CONTENT,
+                school_item=SchoolItemKind.TEST,
+                member_name='michał',
+            ),
+            member=self.child,
+        )
+        self.assertEqual(response.context['state'], 'question')
+        return response
+
+    def only_progress_form(self, response):
+        forms = progress_forms(response.content.decode())
+        self.assertEqual(len(forms), 1)
+        return forms[0]
+
+    def test_capture_and_follow_up_forms_render_hidden_states_and_default_thresholds(self):
+        pages = {
+            'capture': (self.client.get(CAPTURE_URL), reverse('entries:capture'), ['Rozpoznaj']),
+            'question': (self.question(), reverse('entries:answer'), ['Dalej']),
+        }
+        for name, (response, action, submitters) in pages.items():
+            with self.subTest(page=name):
+                content = response.content.decode()
+                self.assertEqual(assert_progress_regions(self, content), 1)
+                form = self.only_progress_form(response)
+                self.assertEqual(form['attrs']['action'], action)
+                self.assertEqual(form['attrs'].get('data-progress-slow-after'), '10')
+                self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '35')
+                self.assertIn('data-classification-default', form['attrs'])
+                self.assertEqual(classification_submitters(form), submitters)
+                self.assertContains(
+                    response,
+                    '<p class="fn-muted fn-progress-elapsed" data-progress-elapsed '
+                    'aria-hidden="true" hidden>0 s</p>',
+                    html=True,
+                )
+
+    def test_skip_is_not_a_classification_submitter(self):
+        form = self.only_progress_form(self.question())
+
+        labels = [button['text'].strip() for button in form['buttons']]
+        self.assertEqual(labels, ['Dalej', 'Pomiń'])
+        skip = form['buttons'][1]
+        self.assertEqual(skip['attrs'].get('value'), 'skip')
+        self.assertNotIn('data-classification-submit', skip['attrs'])
+
+    @override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)
+    def test_thresholds_follow_the_provider_settings(self):
+        for name, response in (('capture', self.client.get(CAPTURE_URL)), ('question', self.question())):
+            with self.subTest(page=name):
+                form = self.only_progress_form(response)
+                self.assertEqual(form['attrs'].get('data-progress-slow-after'), '6')
+                self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '22')
+
+    @override_settings(
+        CLASSIFICATION_DEADLINE_SECONDS=12.2, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=5.5
+    )
+    def test_fractional_settings_round_up(self):
+        form = self.only_progress_form(self.client.get(CAPTURE_URL))
+
+        self.assertEqual(form['attrs'].get('data-progress-slow-after'), '6')
+        self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '23')
+
+    def test_capture_page_loads_both_scripts_and_the_new_one_resolves(self):
+        response = self.client.get(CAPTURE_URL)
+
+        self.assertIsNotNone(finders.find('js/classification-progress.js'))
+        self.assertContains(response, f'<script src="{PROGRESS_SCRIPT_URL}" defer></script>', html=True)
+        self.assertContains(response, f'<script src="{ENTER_SCRIPT_URL}" defer></script>', html=True)
+
+    def test_saved_panel_has_no_progress_partial_of_its_own(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.TODO.value,
+            content='Kupić zeszyt',
+            created_by=self.parent,
+        )
+
+        response = self.client.get(f'{CAPTURE_URL}?saved={entry.pk}')
+
+        self.assertEqual(response.context['state'], 'saved')
+        self.assertContains(response, 'Dodano wpis')
+        # Only the capture form below the panel carries the indicator.
+        self.assertEqual(assert_progress_regions(self, response.content.decode()), 1)
+        self.assertEqual(self.only_progress_form(response)['attrs']['action'], CAPTURE_URL)
+
+    def test_structured_create_and_edit_forms_have_no_progress_partial(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.TODO.value,
+            content='Kupić zeszyt',
+            created_by=self.parent,
+        )
+        for url in (reverse('entries:create'), reverse('entries:edit', args=[entry.pk])):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, 'data-classification-progress')
+                self.assertNotContains(response, 'data-progress-state')
+                self.assertNotContains(response, PROGRESS_SCRIPT_URL)

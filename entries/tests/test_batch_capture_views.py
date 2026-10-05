@@ -32,6 +32,11 @@ from entries.forms import BATCH_EMPTY_SELECTION_ERROR, BATCH_STALE_ERROR
 from entries.models import Entry
 from entries.views import SAVE_FAILED_ERROR, TOO_MANY_ENTRIES_NOTICE
 
+from .classification_progress_markup import (
+    assert_progress_regions,
+    classification_submitters,
+    progress_forms,
+)
 from .enter_submit_markup import assert_enter_assets, assert_enter_never_saves
 from .test_capture_views import RecordingHandler
 from .test_classification_service import FamilyFixtureMixin
@@ -603,7 +608,8 @@ class BatchCorrectionTests(BatchCorrectionMixin, TestCase):
             self.assertContains(
                 response,
                 f'<button type="submit" name="action" value="correct-{index}" '
-                f'id="e{index}-correct-submit" class="secondary" formnovalidate>Popraw</button>',
+                f'id="e{index}-correct-submit" class="secondary" formnovalidate '
+                f'data-classification-submit>Popraw</button>',
                 html=True,
             )
             self.assertContains(response, f'data-enter-submitter="e{index}-correct-submit"')
@@ -643,6 +649,30 @@ class BatchCorrectionTests(BatchCorrectionMixin, TestCase):
         self.assertEqual(refused.status_code, 403)
         self.assertEqual(anonymous.status_code, 302)
         self.assertEqual(self.backend.requests, [])
+
+
+class BatchProgressIndicatorTests(BatchCorrectionMixin, TestCase):
+    """S-06: each proposal's „Popraw” shows the indicator; „Zapisz wpisy” does not."""
+
+    def test_only_the_popraw_buttons_are_classification_submits(self):
+        response, _ = self.meetings_form()
+
+        content = response.content.decode()
+        self.assertEqual(assert_progress_regions(self, content), 1)
+        [form] = progress_forms(content)
+        self.assertEqual(form['attrs']['action'], reverse('entries:confirm_batch'))
+        self.assertNotIn('data-classification-default', form['attrs'])
+        marked = [
+            button['attrs'].get('value')
+            for button in form['buttons']
+            if 'data-classification-submit' in button['attrs']
+        ]
+        self.assertEqual(marked, ['correct-0', 'correct-1', 'correct-2'])
+        saves = [b for b in form['buttons'] if b['attrs'].get('value') == 'save']
+        self.assertEqual(len(saves), 2)
+        for save in saves:
+            self.assertNotIn('data-classification-submit', save['attrs'])
+        self.assertEqual(classification_submitters(form), ['Popraw'] * 3)
 
 
 class BatchEnterSubmitTests(BatchCorrectionMixin, TestCase):

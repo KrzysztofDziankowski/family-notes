@@ -20,6 +20,11 @@ from entries.classification.types import EntryType, SchoolItemKind, UnavailableR
 from entries.models import Entry
 from family_access.models import FamilyMember
 
+from .classification_progress_markup import (
+    assert_progress_regions,
+    classification_submitters,
+    progress_forms,
+)
 from .enter_submit_markup import assert_enter_assets
 from .test_capture_views import RecordingHandler
 from .test_classification_service import WRITE_PREFIXES, FamilyFixtureMixin
@@ -119,7 +124,7 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertContains(response, f'action="{ANSWER_URL}"')
         self.assertContains(response, f'Kiedy odbędzie się „{CONTENT}”?')
         self.assertContains(response, f'Rozpoznano: wydarzenie „{CONTENT}”')
-        self.assertContains(response, '<button type="submit">Dalej</button>', html=True)
+        self.assertContains(response, '<button type="submit" data-classification-submit>Dalej</button>', html=True)
         self.assertContains(response, 'name="action" value="skip"')
         self.assertContains(response, 'formnovalidate')
         self.assertContains(response, 'Zacznij od nowa')
@@ -542,3 +547,34 @@ class EnterSubmitQuestionTests(FollowUpViewMixin, TestCase):
         self.assertEqual(len(self.backend.requests), calls + 1)
         self.assertEqual(skipped.context['state'], 'skipped')
         self.assertFalse(Entry.objects.exists())
+
+
+class ProgressIndicatorAnswerTests(FollowUpViewMixin, TestCase):
+    """S-06: the answer step keeps the indicator on every form it renders."""
+
+    def test_re_asked_question_keeps_the_indicator_on_dalej_only(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='   ')
+
+        self.assertEqual(response.context['state'], 'question')
+        self.assertEqual(assert_progress_regions(self, response.content.decode()), 1)
+        [form] = progress_forms(response.content.decode())
+        self.assertEqual(form['attrs']['action'], ANSWER_URL)
+        self.assertIn('data-classification-default', form['attrs'])
+        self.assertEqual(classification_submitters(form), ['Dalej'])
+
+    def test_answer_and_skip_reviews_mark_only_popraw(self):
+        _, data = self.ask()
+        pages = {
+            'proposal': self.answer(data, output(date=NEXT_FRIDAY), answer='w piątek'),
+            'skipped': self.answer(data, answer='', action='skip'),
+        }
+        for name, response in pages.items():
+            with self.subTest(state=name):
+                self.assertEqual(response.context['state'], name)
+                self.assertEqual(assert_progress_regions(self, response.content.decode()), 1)
+                [form] = progress_forms(response.content.decode())
+                self.assertEqual(form['attrs']['action'], CONFIRM_URL)
+                self.assertNotIn('data-classification-default', form['attrs'])
+                self.assertEqual(classification_submitters(form), ['Popraw'])
