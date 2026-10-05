@@ -17,7 +17,7 @@ empty. Rows hide the date and assignee: the day and assignee headings carry them
             <h3 class="fn-manage-subsection-title">{{ group.heading }}</h3>
             <ul class="fn-entry-list">
                 {% for entry in group.entries %}
-                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" edit_url_name="entries:edit" hide_assignee=True hide_date=True %}
+                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" hide_type=True hide_assignee=True hide_date=True %}
                 {% endfor %}
             </ul>
         </section>

@@ -218,14 +218,17 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
                 self.assertNotIn(self.foreign.pk, self.rendered_rows(response))
                 self.assertNotIn(self.lucky.pk, self.rendered_rows(response))
 
-    def test_rows_show_type_content_schedule_assignee_and_links(self):
+    def test_rows_show_title_time_and_detail_link_only(self):
         self.tomorrow.assigned_member = self.child
         self.tomorrow.save()
 
         response = self.client.get(INDEX_URL)
 
         self.assertContains(response, f'href="{detail_url(self.tomorrow.pk)}"')
-        self.assertContains(response, f'href="{edit_url(self.tomorrow.pk)}"')
+        # Owner 2026-10-05: no type label and no "Edytuj" on list rows; editing
+        # stays on the detail page.
+        self.assertNotContains(response, f'href="{edit_url(self.tomorrow.pk)}"')
+        self.assertNotContains(response, 'fn-entry-type')
         self.assertContains(response, 'Michał')
         # S-08: the day heading carries the date and the assignee sub-heading
         # the assignee; the row shows only the time.
@@ -619,20 +622,24 @@ class DeleteTests(ManageViewMixin, TestCase):
 class ManagementTemplateTests(ManageViewMixin, TestCase):
     """2.6: create, capture, edit and delete actions are reachable."""
 
-    def test_edit_links_carry_visually_hidden_entry_context(self):
-        self.entry('Oddać książkę do biblioteki', date=self.days(1))
-        long = self.entry('Bardzo długi opis ' * 10, date=self.days(2))
+    def test_list_rows_have_no_edit_link_and_no_empty_meta(self):
+        untimed = self.entry('Oddać książkę do biblioteki', date=self.days(1))
 
         response = self.client.get(INDEX_URL)
 
-        self.assertContains(
-            response,
-            'Edytuj<span class="fn-visually-hidden">: Oddać książkę do biblioteki</span></a>',
-        )
-        self.assertContains(
-            response,
-            f'Edytuj<span class="fn-visually-hidden">: {long.content[:59]}…</span></a>',
-        )
+        self.assertNotContains(response, 'Edytuj')
+        self.assertContains(response, 'Oddać książkę do biblioteki')
+        html = response.content.decode()
+        start = html.index(f'data-entry-row="{untimed.pk}"')
+        row = html[start:html.index('</li>', start)]
+        self.assertNotIn('fn-entry-meta', row)
+
+    def test_detail_page_keeps_the_edit_link(self):
+        entry = self.entry('Oddać książkę do biblioteki', date=self.days(1))
+
+        response = self.client.get(detail_url(entry.pk))
+
+        self.assertContains(response, f'href="{edit_url(entry.pk)}"')
 
     def test_index_exposes_structured_create_and_capture(self):
         response = self.client.get(INDEX_URL)
