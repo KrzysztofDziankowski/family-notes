@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 2
 status: draft
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 prd_version: 2
 main_goal: quality
 top_blocker: decisions
@@ -24,11 +24,11 @@ milestone_status: proposed
 **Proposed M-2: Improved Family Capture** — Status: proposed
 
 - **Intent:** Improve family capture correctness and review, mobile capture, accessibility, and in-app family administration.
-- **Source materials:** `context/foundation/prd-v2.md` (draft v2).
+- **Source materials:** `context/foundation/prd-v2.md` (draft v2); owner decision 2026-10-05 to use generic entries throughout the application (S-21).
 - **Done when:** after activation and scope confirmation, every included slice is done and the selected release success criteria are met.
 - **Scope anchors:** PK-01–PK-10, PK-16 (without invitations), PK-17, PK-20; US-01–US-11. Owner removed PK-12–PK-15, PK-18, PK-19 on 2026-10-04 (see Parked). Audio capture is excluded.
 - **Activation boundary:** confirm scope, finish or explicitly abandon the current open milestone, then adopt the agreed tranche into the canonical roadmap. Do not open a second milestone through this file.
-- **Framing:** owner confirmed on 2026-10-04 that all remaining slices belong to the next milestone, in the order below; no feature flags, no backfill, no E2E tests yet. Product decisions are largely resolved. Invest in classification correctness, existing-data compatibility, and review clarity; reuse application foundations.
+- **Framing:** owner confirmed on 2026-10-04 that all remaining slices belong to the next milestone, in the order below; no feature flags, no backfill, no E2E tests yet. The owner added S-21 on 2026-10-05 with an explicit exception to the no-backfill rule: convert every existing entry to the generic type. Product decisions are largely resolved. Invest in classification correctness, existing-data compatibility, and review clarity; reuse application foundations.
 
 ## Vision recap
 
@@ -58,6 +58,7 @@ Confirmed delivery order (owner asked the agent to determine it, 2026-10-04): th
 | 12 | S-14 | family-membership-management | Authorized family manager can manage family members in the application. | S-17 (soft — reuse audit helper) | PK-16 | planning |
 | 13 | S-15 | family-role-management | Authorized family manager can manage roles in the application. | S-14 | PK-16 | planning |
 | 14 | S-16 | multiple-family-use | Authorized member can use the application across multiple families. | S-14, S-15 | PK-16 | planning |
+| 15 | S-21 | generic-family-entries | Family members capture and browse generic entries without choosing task, event, or note. | S-01, S-03, S-04, S-20 | Owner decision 2026-10-05 | planning |
 
 ## Baseline
 
@@ -272,6 +273,20 @@ No new foundations are proposed. Existing application layers are available; each
 - **Plan:** `context/changes/multiple-family-use/plan.md`
 - **Status:** planning
 
+### S-21: Family members use generic entries without choosing task, event, or note
+
+- **Outcome:** Parents capture, review, create, and edit generic entries, and parents and children browse them without the broad task/event/note labels or a type selector. All existing entries are converted to the generic type.
+- **Change ID:** generic-family-entries
+- **PRD refs:** Owner decision 2026-10-05; supersedes the broad task/event/note classification in the baseline PRD for this slice.
+- **Prerequisites:** S-01, S-03, S-04, S-20 (integrate against their current classification, school-detail, correction, and batch contracts).
+- **Parallel with:** — (shares classification, validation, services, forms, templates, API, and migration contracts).
+- **Blockers:** Production rollout requires the PostgreSQL rehearsal and maintenance-deployment work in `context/changes/testing-production-security-schema-safety/plan.md`, phases 3–4. Local implementation can proceed before those release prerequisites are completed.
+- **Unknowns:**
+  - Resolved 2026-10-05: every existing and new entry is generic; legacy constants remain dormant; broad type controls and labels disappear; ordinary dates are optional; school details and their requirements remain; REST keeps its response shape with `entry_type="generic"`; conversion is irreversible and deployment stops old writers before migration.
+- **Risk:** Hiding the selector alone leaves the old taxonomy active in classification, school rules, validation, automation, and saved proposals. Converting existing types also affects API consumers and application rollback compatibility.
+- **Plan:** `context/changes/generic-family-entries/plan.md`
+- **Status:** planning
+
 ## Backlog Handoff
 
 | Roadmap ID | Change ID | Suggested issue title | Ready for `/10x-plan` | Notes |
@@ -290,6 +305,7 @@ No new foundations are proposed. Existing application layers are available; each
 | S-14 | family-membership-management | Authorized family manager can manage family members in the application | planned | Plan written; owner decisions applied 2026-10-04. |
 | S-15 | family-role-management | Authorized family manager can manage roles in the application | planned | Plan written; owner decisions applied 2026-10-04. |
 | S-16 | multiple-family-use | Authorized member can use the application across multiple families | planned | Plan written; owner decisions applied 2026-10-04. |
+| S-21 | generic-family-entries | Family members use generic entries without choosing task, event, or note | planned | Plan and brief written 2026-10-05; includes conversion of every existing entry and the release prerequisites. |
 
 ## Open Roadmap Questions
 
