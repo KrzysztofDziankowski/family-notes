@@ -209,10 +209,10 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Automated
 
-- [x] 1.1 Signup tests prove that GET/POST `/accounts/signup/` render the Polish closed page and create no user.
-- [x] 1.2 Adapter tests prove that local signup is closed and social signup is open, and that a new social login creates an unmapped `User` that sees only the unconfigured state.
-- [x] 1.3 Targeted tests pass: `uv run python manage.py test family_access family_notes`
-- [x] 1.4 Django checks and migration check pass: `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 Signup tests prove that GET/POST `/accounts/signup/` render the Polish closed page and create no user. — 67367a6
+- [x] 1.2 Adapter tests prove that local signup is closed and social signup is open, and that a new social login creates an unmapped `User` that sees only the unconfigured state. — 67367a6
+- [x] 1.3 Targeted tests pass: `uv run python manage.py test family_access family_notes` — 67367a6
+- [x] 1.4 Django checks and migration check pass: `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run` — 67367a6
 
 #### Manual
 
@@ -223,8 +223,8 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Automated
 
-- [ ] 2.1 Login page tests assert that no sign-up link or text is rendered, and the existing login tests stay green.
-- [ ] 2.2 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 2.1 Login page tests assert that no sign-up link or text is rendered, and the existing login tests stay green.
+- [x] 2.2 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
 
 #### Manual
 

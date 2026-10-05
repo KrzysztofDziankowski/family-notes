@@ -100,6 +100,17 @@ class LoginPageTests(TestCase):
 
         self.assertContains(response, '/accounts/google/login/?next=%2Fentries%2Fmine%2F')
 
+    def test_login_page_offers_no_sign_up_option(self):
+        response = self.client.get(reverse('account_login'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse('account_signup'))
+        body = response.content.decode().lower()
+        for stem in ('zarejestruj', 'rejestracj', 'sign up'):
+            with self.subTest(stem=stem):
+                self.assertNotIn(stem, body)
+        self.assertContains(response, 'name="password"')
+
 
 class ErrorPageTests(FamilyFixtureMixin, TestCase):
     def test_parent_on_child_list_gets_polish_403_in_base_layout(self):
