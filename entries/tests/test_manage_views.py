@@ -366,7 +366,7 @@ class CreateTests(ManageViewMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Podaj przedmiot.')
-        self.assertContains(response, 'id="id_school_subject-error"')
+        self.assertContains(response, 'id="id_school_subject_error"')
         self.assertFalse(Entry.objects.exists())
 
     def test_resubmitted_create_form_saves_one_entry(self):
@@ -395,7 +395,7 @@ class CreateTests(ManageViewMixin, TestCase):
         self.assertContains(response, 'To pole jest wymagane.')
         self.assertContains(response, 'Ten element szkolny wymaga rodzaju')
         self.assertContains(response, 'aria-invalid="true"')
-        self.assertContains(response, 'id="id_content-error"')
+        self.assertContains(response, 'id="id_content_error"')
 
     def test_create_form_offers_every_editable_field_and_a_submission_key(self):
         """2.6"""

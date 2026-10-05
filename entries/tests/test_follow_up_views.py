@@ -26,6 +26,7 @@ from .classification_progress_markup import (
     progress_forms,
 )
 from .enter_submit_markup import assert_enter_assets
+from .field_association_markup import assert_described_by
 from .test_capture_views import RecordingHandler
 from .test_classification_service import WRITE_PREFIXES, FamilyFixtureMixin, TwoParentFixtureMixin
 
@@ -411,6 +412,21 @@ class AnswerValidationTests(FollowUpViewMixin, TestCase):
         self.assertIn('answer', form.errors)
         self.assertIn('aria-invalid="true"', str(form['answer']))
         self.assertFalse(form.has_stale_fields())
+
+    def test_question_describes_the_answer_by_the_enter_hint(self):
+        response, _ = self.ask()
+
+        assert_described_by(self, response, 'id_answer', ['id_answer-enter-hint'])
+
+    def test_invalid_answer_lists_its_error_and_the_enter_hint(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='   ')
+
+        self.assertIn('aria-invalid="true"', str(response.context['follow_up_form']['answer']))
+        assert_described_by(
+            self, response, 'id_answer', ['id_answer_error', 'id_answer-enter-hint']
+        )
 
     def test_foreign_or_inactive_member_is_a_form_error(self):
         _, data = self.ask()

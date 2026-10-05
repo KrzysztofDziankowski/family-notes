@@ -51,6 +51,7 @@ from .forms import (
     ProposalCorrectionForm,
     review_initial_from_classification,
     batch_review_form_from_classification,
+    describe_fields,
     draft_from_form,
     follow_up_form_from_classification,
     proposal_from_draft,
@@ -147,7 +148,18 @@ def _progress_thresholds():
     }
 
 
+def _describe_capture_forms(context):
+    """Describe every form a capture page renders (see ``describe_fields``)."""
+    for key in ('capture_form', 'follow_up_form', 'review_form'):
+        if context.get(key) is not None:
+            describe_fields(context[key])
+    if context.get('batch_form') is not None:
+        for entry_form in context['batch_form'].forms:
+            describe_fields(entry_form)
+
+
 def _render(request, state, **context):
+    _describe_capture_forms(context)
     return render(
         request, 'entries/capture.html', {'state': state, **_progress_thresholds(), **context}
     )
@@ -220,7 +232,6 @@ def answer(request):
     skip = request.POST.get('action') == 'skip'
     form = FollowUpAnswerForm(membership, request.POST, skip=skip)
     if not form.is_valid():
-        _mark_invalid_fields(form)
         return _render(request, 'question', follow_up_form=form)
 
     text = form.cleaned_data['text']
@@ -296,7 +307,6 @@ def correct(request):
     membership = _require_parent(request)
     form = ProposalCorrectionForm(membership, request.POST)
     if not form.is_valid():
-        _mark_invalid_fields(form)
         return _render(request, 'invalid', review_form=form)
 
     today = timezone.localdate()
@@ -332,7 +342,6 @@ def correct(request):
     elif correction.rejection == CorrectionRejection.SCHOOL_ITEM_MISMATCH:
         label = dict(Entry.ENTRY_TYPE_CHOICES)[correction.school_item.entry_type.value]
         notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
-    _mark_invalid_fields(retry_form)
     return _render(request, 'correction_failed', review_form=retry_form, notice=notice)
 
 
@@ -347,7 +356,6 @@ def confirm(request):
             # An unapplied correction: nothing is saved, and the next save
             # gets a new key.
             review_form = _with_fresh_key(EntryReviewForm, membership, request.POST)
-            _mark_invalid_fields(review_form)
         return _render(request, 'invalid', review_form=review_form)
 
     data = review_form.cleaned_data
@@ -384,8 +392,6 @@ def _with_fresh_batch_keys(data, count):
 
 
 def _render_batch(request, form):
-    for entry_form in form.forms:
-        _mark_invalid_fields(entry_form)
     return _render(request, 'batch', batch_form=form)
 
 
@@ -855,6 +861,8 @@ def states(request):
             for state, label in PROGRESS_STATE_LABELS
         ),
     ]
+    for section in sections:
+        _describe_capture_forms(section)
     return render(
         request,
         'entries/states.html',
@@ -905,15 +913,6 @@ def _managed_entry_or_404(user, pk):
         raise Http404 from None
 
 
-def _mark_invalid_fields(form):
-    """Expose field errors to assistive technology."""
-    for name in form.errors:
-        if name in form.fields:
-            attrs = form.fields[name].widget.attrs
-            attrs['aria-invalid'] = 'true'
-            attrs['aria-describedby'] = f'{form[name].auto_id}-error'
-
-
 FAMILY_GROUP_HEADING = 'Cała rodzina'
 
 
@@ -956,6 +955,7 @@ def _detail_context(entry, list_mode, delete_open=False):
 
 
 def _form_context(form, *, entry=None):
+    describe_fields(form)
     return {'form': form, 'entry': entry}
 
 
@@ -1009,7 +1009,6 @@ def create(request):
         else:
             messages.success(request, ENTRY_CREATED_MESSAGE)
             return redirect('entries:detail', pk=entry.pk)
-    _mark_invalid_fields(form)
     return render(request, 'entries/manage_form.html', _form_context(form))
 
 
@@ -1046,7 +1045,6 @@ def edit(request, pk):
         else:
             messages.success(request, ENTRY_UPDATED_MESSAGE)
             return redirect('entries:detail', pk=entry.pk)
-    _mark_invalid_fields(form)
     return render(request, 'entries/manage_form.html', _form_context(form, entry=entry))
 
 
@@ -1168,7 +1166,6 @@ def _manage_state_sections(membership):
     )
     _use_synthetic_members(invalid_form)
     invalid_form.is_valid()
-    _mark_invalid_fields(invalid_form)
 
     edit_form = EntryEditForm(membership, entry=test_entry)
     _use_synthetic_members(edit_form)

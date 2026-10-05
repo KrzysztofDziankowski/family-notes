@@ -1,9 +1,9 @@
 ---
 change_id: accessible-family-flows
 title: Family member can use the agreed family flows under explicit accessibility criteria
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

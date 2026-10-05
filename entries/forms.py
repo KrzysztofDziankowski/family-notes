@@ -44,6 +44,42 @@ PAST_DATE_WARNING = (
 ENTER_SUBMIT_ATTRS = {'data-enter-submit': '', 'enterkeyhint': 'send'}
 
 
+def describe_fields(form, *, with_errors=True):
+    """Point every visible field's ``aria-describedby`` at what ``_field.html`` renders.
+
+    The IDs, in rendering order: ``<auto_id>-hint`` (a review hint for a
+    missing or past value), ``<auto_id>_error`` (Django's own error ID, one
+    container per field), ``<auto_id>-enter-hint`` (the S-05 Enter hint of a
+    ``data-enter-submit`` field) and ``<auto_id>-human`` (the readable review
+    date). A field with an error or a hint is ``aria-invalid``. Call it on
+    every rendered form after validation; ``with_errors=False`` composes the
+    error-free part without triggering validation (form ``__init__``).
+    """
+    errors = form.errors if with_errors else {}
+    hints = getattr(form, 'missing', None) or {}
+    display_date = getattr(form, 'display_date', None)
+    for bound in form.visible_fields():
+        name = bound.name
+        attrs = bound.field.widget.attrs
+        ids = []
+        if hints.get(name):
+            ids.append(f'{bound.auto_id}-hint')
+        if name in errors:
+            ids.append(f'{bound.auto_id}_error')
+        if 'data-enter-submit' in attrs:
+            ids.append(f'{bound.auto_id}-enter-hint')
+        if name == 'date' and display_date is not None and display_date():
+            ids.append(f'{bound.auto_id}-human')
+        if name in errors or hints.get(name):
+            attrs['aria-invalid'] = 'true'
+        else:
+            attrs.pop('aria-invalid', None)
+        if ids:
+            attrs['aria-describedby'] = ' '.join(ids)
+        else:
+            attrs.pop('aria-describedby', None)
+
+
 class CaptureForm(forms.Form):
     text = forms.CharField(
         label='Co trzeba zapisać?',
@@ -220,10 +256,9 @@ class EntryReviewForm(EntryFieldsForm):
             self.missing.setdefault(
                 'date', PAST_DATE_WARNING.format(date=shown_date.strftime('%d.%m.%Y'))
             )
-        for name in self.missing:
-            attrs = self.fields[name].widget.attrs
-            attrs['aria-invalid'] = 'true'
-            attrs['aria-describedby'] = f'{self[name].auto_id}-hint'
+        # Missing fields are aria-invalid and described by their hint; the
+        # errors join in when the view describes the validated form.
+        describe_fields(self, with_errors=False)
 
     @property
     def correct_submit_id(self):

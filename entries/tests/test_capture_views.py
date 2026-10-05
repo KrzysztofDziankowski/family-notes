@@ -9,7 +9,11 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from entries.classification.openai_backend import OpenAIClassificationBackend
-from entries.classification.service import ParentBatchClassification, ParentClassification
+from entries.classification.service import (
+    MAX_SUBMITTED_TEXT_LENGTH,
+    ParentBatchClassification,
+    ParentClassification,
+)
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
@@ -30,6 +34,7 @@ from .classification_progress_markup import (
 )
 from .enter_submit_markup import SCRIPT_URL as ENTER_SCRIPT_URL
 from .enter_submit_markup import assert_enter_assets
+from .field_association_markup import assert_described_by
 from .test_classification_acceptance import (
     PRD_CONTENT,
     PRD_INSTRUCTION,
@@ -468,8 +473,9 @@ class PastDateWarningTests(CaptureViewMixin, TestCase):
         form = response.context['review_form']
         date_input = str(form['date'])
         self.assertIn('aria-invalid="true"', date_input)
-        self.assertIn('aria-describedby="id_date-hint"', date_input)
+        self.assertIn('aria-describedby="id_date-hint id_date-human"', date_input)
         self.assertContains(response, 'id="id_date-hint"')
+        self.assertContains(response, 'id="id_date-human"')
         self.assertNotIn('aria-invalid', str(form['content']))
 
         data = {name: '' if value is None else str(value) for name, value in form.initial.items()}
@@ -801,3 +807,55 @@ class TwoParentCaptureTests(TwoParentFixtureMixin, CaptureViewMixin, TestCase):
                 self.assertEqual(response.context['state'], 'invalid')
                 self.assertIn('assigned_member', response.context['review_form'].errors)
         self.assertFalse(Entry.objects.exists())
+
+
+class FieldAssociationTests(CaptureViewMixin, TestCase):
+    """Every ``aria-describedby`` ID resolves to exactly one rendered element (S-17)."""
+
+    def test_initial_capture_describes_the_text_by_the_enter_hint(self):
+        response = self.client.get(CAPTURE_URL)
+
+        assert_described_by(self, response, 'id_text', ['id_text-enter-hint'])
+
+    def test_empty_capture_describes_the_text_by_its_error_and_the_enter_hint(self):
+        response = self.client.post(CAPTURE_URL, {'text': '   '})
+
+        self.assertContains(response, 'aria-invalid="true"')
+        assert_described_by(self, response, 'id_text', ['id_text_error', 'id_text-enter-hint'])
+
+    def test_too_long_capture_describes_the_text_by_its_error(self):
+        response = self.client.post(CAPTURE_URL, {'text': 'x' * (MAX_SUBMITTED_TEXT_LENGTH + 1)})
+
+        assert_described_by(self, response, 'id_text', ['id_text_error', 'id_text-enter-hint'])
+
+    def test_classified_too_long_capture_describes_the_text_by_its_error(self):
+        response, _ = self.classify_with(
+            ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG)
+        )
+
+        self.assertEqual(response.context['state'], 'empty')
+        assert_described_by(self, response, 'id_text', ['id_text_error', 'id_text-enter-hint'])
+
+    def test_proposal_describes_the_date_by_the_readable_date(self):
+        with mock.patch('entries.views.timezone.localdate', return_value=PRD_REFERENCE_DATE):
+            response, _ = self.classify_with(self.proposal(), member=self.child)
+
+        assert_described_by(self, response, 'id_date', ['id_date-human'])
+        assert_described_by(self, response, 'id_correction', ['id_correction-enter-hint'])
+        assert_described_by(self, response, 'id_content', [])
+
+    def test_confirm_invalid_references_resolve(self):
+        response = self.client.post(CONFIRM_URL, self.confirm_data(content='', date=''))
+
+        self.assertEqual(response.context['state'], 'invalid')
+        assert_described_by(self, response, 'id_content', ['id_content_error'])
+        assert_described_by(self, response, 'id_date', ['id_date_error'])
+        assert_described_by(self, response, 'id_correction', ['id_correction-enter-hint'])
+
+    def test_unapplied_correction_lists_its_error_and_the_enter_hint(self):
+        response = self.client.post(CONFIRM_URL, self.confirm_data(correction='zmień datę'))
+
+        self.assertEqual(response.context['state'], 'invalid')
+        assert_described_by(
+            self, response, 'id_correction', ['id_correction_error', 'id_correction-enter-hint']
+        )

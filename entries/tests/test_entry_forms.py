@@ -1,6 +1,7 @@
 import datetime
 import uuid
 
+from django.template.loader import render_to_string
 from django.test import TestCase
 
 from entries.classification.service import ParentClassification
@@ -22,10 +23,12 @@ from entries.forms import (
     EntryReviewForm,
     FollowUpAnswerForm,
     ProposalCorrectionForm,
+    describe_fields,
     review_form_from_classification,
 )
 from entries.models import Entry
 
+from .field_association_markup import assert_described_by
 from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 MONDAY = datetime.date(2026, 9, 21)
@@ -616,3 +619,89 @@ class TwoParentAssigneeFormTests(TwoParentFixtureMixin, TestCase):
         self.assertIn(
             f'<option value="{self.second_parent.pk}" selected>', str(form['assigned_member'])
         )
+
+
+class DescribeFieldsTests(FamilyFixtureMixin, TestCase):
+    """``describe_fields`` lists exactly the IDs ``_field.html`` renders (S-17)."""
+
+    def review_data(self, **overrides):
+        data = {
+            'entry_type': EntryType.CALENDAR_EVENT.value,
+            'content': 'Zebranie',
+            'date': '',
+            'time': '',
+            'assigned_member': '',
+            'school_item': '',
+            'school_subject': '',
+            'submission_key': str(uuid.uuid4()),
+        }
+        data.update(overrides)
+        return data
+
+    def render_field(self, form, name, hint=''):
+        describe_fields(form)
+        return render_to_string('entries/_field.html', {'field': form[name], 'hint': hint})
+
+    def test_hint_only(self):
+        form = EntryReviewForm(self.parent, missing={'date': 'Podaj datę.'})
+
+        html = self.render_field(form, 'date', hint='Podaj datę.')
+
+        self.assertIn('aria-invalid="true"', html)
+        assert_described_by(self, html, 'id_date', ['id_date-hint'])
+
+    def test_error_only(self):
+        form = EntryCreateForm(self.parent, self.review_data(content=''))
+        self.assertFalse(form.is_valid())
+
+        html = self.render_field(form, 'content')
+
+        self.assertIn('aria-invalid="true"', html)
+        assert_described_by(self, html, 'id_content', ['id_content_error'])
+
+    def test_missing_and_invalid_field_references_both_hint_and_error(self):
+        form = EntryReviewForm(self.parent, self.review_data(), missing={'date': 'Podaj datę.'})
+        self.assertFalse(form.is_valid())
+        self.assertIn('date', form.errors)
+
+        html = self.render_field(form, 'date', hint='Podaj datę.')
+
+        self.assertIn('Podaj datę.', html)
+        self.assertIn('Wydarzenie musi mieć datę.', html)
+        assert_described_by(self, html, 'id_date', ['id_date-hint', 'id_date_error'])
+
+    def test_two_errors_render_one_error_container(self):
+        form = EntryCreateForm(self.parent, self.review_data(content=''))
+        form.is_valid()
+        form.add_error('content', 'Druga uwaga.')
+
+        html = self.render_field(form, 'content')
+
+        self.assertIn('To pole jest wymagane.', html)
+        self.assertIn('Druga uwaga.', html)
+        assert_described_by(self, html, 'id_content', ['id_content_error'])
+
+    def test_readable_date_is_referenced_when_a_date_is_shown(self):
+        form = EntryReviewForm(self.parent, initial={'date': MONDAY})
+
+        describe_fields(form)
+
+        self.assertIn('aria-describedby="id_date-human"', str(form['date']))
+
+    def test_no_description_without_hint_error_or_date(self):
+        form = EntryReviewForm(self.parent)
+
+        describe_fields(form)
+
+        self.assertNotIn('aria-describedby', str(form['date']))
+        self.assertNotIn('aria-invalid', str(form['content']))
+
+    def test_enter_fields_reference_their_enter_hint_on_valid_and_invalid_renders(self):
+        valid = CaptureForm()
+        describe_fields(valid)
+        self.assertIn('aria-describedby="id_text-enter-hint"', str(valid['text']))
+
+        invalid = CaptureForm({'text': ''})
+        invalid.is_valid()
+        describe_fields(invalid)
+        self.assertIn('aria-describedby="id_text_error id_text-enter-hint"', str(invalid['text']))
