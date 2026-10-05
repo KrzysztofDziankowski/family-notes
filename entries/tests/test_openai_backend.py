@@ -32,8 +32,11 @@ from entries.classification.openai_backend import (
     CORRECTION_INSTRUCTIONS,
     DATE_RULES,
     INSTRUCTIONS,
+    MULTI_INSTRUCTIONS,
+    MULTI_MAX_OUTPUT_TOKENS,
     OpenAIClassificationBackend,
     StructuredClassification,
+    StructuredClassificationList,
     StructuredCorrection,
     build_openai_backend,
 )
@@ -872,6 +875,147 @@ class CorrectionAdapterTests(BackendHarness, SimpleTestCase):
             self.assertNotIn(CORRECTION_SENTINEL, line)
             self.assertNotIn(CONTENT_SENTINEL, line)
             self.assertNotIn(MEMBER_SENTINEL, line)
+
+
+def list_body(*entries):
+    return response_body(json.dumps({'entries': list(entries)}, ensure_ascii=False))
+
+
+MEETINGS_TEXT = 'Spotkanie z wychowawczynią dziś, jutro i w poniedziałek o 18:00'
+
+
+def meeting_entry(date, date_source, **overrides):
+    values = structured(
+        content=f'Spotkanie z wychowawczynią {date_source}',
+        date=date.isoformat(),
+        date_source=date_source,
+        time='18:00',
+        school_item=None,
+        member_name=None,
+        school_subject=None,
+        member_mention=None,
+    )
+    values.update(overrides)
+    return values
+
+
+class MultiEntryAdapterTests(BackendHarness, SimpleTestCase):
+    """``classify_many`` asks for a list and translates each entry on its own."""
+
+    def classify_many_with(self, *entries, request=None):
+        backend = self.make_backend([ok(list_body(*entries))])
+        return backend.classify_many(request or make_request(text=MEETINGS_TEXT))
+
+    def test_list_schema_larger_budget_and_same_input_keys(self):
+        request = make_request()
+        self.classify_many_with(structured(), request=request)
+
+        (body,) = self.transport.bodies()
+        self.assertEqual(body['instructions'], MULTI_INSTRUCTIONS)
+        self.assertGreaterEqual(body['max_output_tokens'], 2048)
+        self.assertEqual(body['max_output_tokens'], MULTI_MAX_OUTPUT_TOKENS)
+        self.assertIs(body['store'], False)
+        self.assertEqual(set(body), ALLOWED_REQUEST_FIELDS)
+        schema = body['text']['format']['schema']
+        self.assertIs(body['text']['format']['strict'], True)
+        self.assertEqual(list(schema['properties']), ['entries'])
+        self.assertIn('osobny wpis', schema['properties']['entries']['description'])
+        self.assertEqual(
+            json.loads(body['input']),
+            {
+                'data_odniesienia': '2026-09-17',
+                'dzien_tygodnia': 'czwartek',
+                'ustawienia_regionalne': 'pl-PL',
+                'dozwolone_osoby': [MEMBER_SENTINEL, OTHER_MEMBER_SENTINEL],
+                'polecenie': request.submitted_text,
+            },
+        )
+
+    def test_single_classify_keeps_its_schema_and_budget(self):
+        backend = self.make_backend([ok()])
+        backend.classify(make_request())
+
+        (body,) = self.transport.bodies()
+        self.assertEqual(body['instructions'], INSTRUCTIONS)
+        self.assertEqual(body['max_output_tokens'], 1024)
+        self.assertNotIn('entries', body['text']['format']['schema']['properties'])
+
+    def test_each_entry_keeps_its_own_grounded_date_and_shared_time(self):
+        outputs = self.classify_many_with(
+            meeting_entry(REFERENCE_DATE, 'dziś'),
+            meeting_entry(FRIDAY, 'jutro'),
+            meeting_entry(MONDAY, 'w poniedziałek'),
+        )
+
+        self.assertEqual([output.date for output in outputs], [REFERENCE_DATE, FRIDAY, MONDAY])
+        self.assertEqual({output.time for output in outputs}, {datetime.time(18, 0)})
+
+    def test_ungrounded_date_is_dropped_only_for_that_entry(self):
+        outputs = self.classify_many_with(
+            meeting_entry(REFERENCE_DATE, 'dziś'),
+            meeting_entry(FRIDAY, 'pojutrze'),
+        )
+
+        self.assertEqual(outputs[0].date, REFERENCE_DATE)
+        self.assertIsNone(outputs[1].date)
+        self.assertEqual(outputs[1].time, datetime.time(18, 0))
+
+    def test_each_title_has_its_own_date_phrase_stripped(self):
+        outputs = self.classify_many_with(
+            meeting_entry(REFERENCE_DATE, 'dziś'),
+            meeting_entry(FRIDAY, 'jutro'),
+        )
+
+        self.assertEqual(
+            [output.content for output in outputs],
+            ['Spotkanie z wychowawczynią', 'Spotkanie z wychowawczynią'],
+        )
+
+    def test_empty_list_gives_one_output_without_type(self):
+        outputs = self.classify_many_with()
+
+        self.assertEqual(len(outputs), 1)
+        self.assertIsNone(outputs[0].entry_type)
+
+    def test_single_object_body_is_malformed_for_a_list_call(self):
+        backend = self.make_backend([ok()])
+
+        with self.assertRaises(ClassificationBackendError) as caught:
+            backend.classify_many(make_request())
+
+        self.assertEqual(caught.exception.reason, UnavailableReason.MALFORMED_OUTPUT)
+
+    def test_schema_forbids_extra_fields(self):
+        with self.assertRaises(pydantic.ValidationError):
+            StructuredClassificationList.model_validate({'entries': [], 'extra': 1})
+
+    def test_corrections_are_refused(self):
+        backend = self.make_backend([])
+
+        with self.assertRaises(ValueError):
+            backend.classify_many(make_correction_request())
+
+        self.assertEqual(self.transport.requests, [])
+
+    def test_multi_instructions_inherit_the_date_rules_exactly_once(self):
+        self.assertTrue(MULTI_INSTRUCTIONS.startswith(INSTRUCTIONS))
+        self.assertEqual(MULTI_INSTRUCTIONS.count(DATE_RULES), 1)
+        self.assertIn('osobny wpis dla każdej daty', MULTI_INSTRUCTIONS)
+        self.assertIn('powtórz w każdym wpisie', MULTI_INSTRUCTIONS)
+
+    def test_list_call_shares_retry_and_logging(self):
+        backend = self.make_backend([TIMEOUT, ok(list_body(structured()))])
+
+        with self.assertLogs('entries.classification.openai_backend', level='INFO') as logs:
+            outputs = backend.classify_many(make_request())
+
+        self.assertEqual(len(outputs), 1)
+        self.assertEqual(len(self.transport.requests), 2)
+        (line,) = logs.output
+        self.assertIn('outcome=success', line)
+        self.assertIn('attempts=2', line)
+        self.assertNotIn(CONTENT_SENTINEL, line)
+        self.assertNotIn(SUBMITTED_SENTINEL, line)
 
 
 class TimingAndRetryTests(BackendHarness, SimpleTestCase):

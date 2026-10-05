@@ -87,6 +87,7 @@ class UnavailableReason(str, Enum):
     UNSUPPORTED_CONTENT = 'unsupported_content'
     UNKNOWN_MEMBER = 'unknown_member'
     INPUT_TOO_LONG = 'input_too_long'
+    TOO_MANY_ENTRIES = 'too_many_entries'
 
 
 @dataclass(frozen=True)

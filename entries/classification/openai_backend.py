@@ -15,7 +15,12 @@ instructions. A free-text correction instead sends the proposal on screen and
 the correction, never the original instruction; it uses its own schema
 (``StructuredCorrection``) whose ``changed_fields`` name what the correction
 changes. A new date not grounded in the correction is dropped from
-``changed_fields``, and the title guard runs only when the title changed. No conversations, response chaining, files, tools, background
+``changed_fields``, and the title guard runs only when the title changed.
+
+``classify_many`` asks for a list of entries (``StructuredClassificationList``)
+so one instruction can yield several proposals, one per requested date or
+occurrence. Each entry is translated on its own (``_translate_entry``): its
+date is grounded and its title guarded independently. No conversations, response chaining, files, tools, background
 mode, metadata, or tracing are used. ``store=False`` does not replace Zero Data
 Retention (ZDR), which is deferred until after the MVP.
 
@@ -63,6 +68,8 @@ DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
 # consume the budget; read/write/pool keep the full attempt timeout.
 CONNECT_TIMEOUT_SECONDS = 3.0
 DEFAULT_MAX_OUTPUT_TOKENS = 1024
+# Lower bound on the output budget of a list call, so ten entries fit.
+MULTI_MAX_OUTPUT_TOKENS = 2048
 
 EntryTypeValue = Literal[tuple(entry_type.value for entry_type in EntryType)]
 SchoolItemValue = Literal[tuple(kind.value for kind in SchoolItemKind)]
@@ -132,6 +139,19 @@ class StructuredClassification(BaseModel):
             'Imię lub zdrobnienie osoby dokładnie tak, jak użył go rodzic, '
             'przekształcone do mianownika (np. „Hania”); null, jeśli polecenie '
             'nie wymienia żadnej osoby.'
+        )
+    )
+
+
+# Strict list schema for one instruction that may request several entries.
+class StructuredClassificationList(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    entries: list[StructuredClassification] = Field(
+        description=(
+            'Wpisy, o które prosi polecenie. Każda podana data lub każde wystąpienie '
+            'to osobny wpis z własną datą i własnym date_source; wspólna godzina, '
+            'osoba i treść dotyczą każdego z nich. Jedna sprawa to jeden wpis.'
         )
     )
 
@@ -279,6 +299,17 @@ INSTRUCTIONS = (
     + DATE_RULES
 )
 
+# Instructions for one instruction that may request several entries. They
+# inherit ``DATE_RULES`` through ``INSTRUCTIONS`` and never append it again.
+MULTI_INSTRUCTIONS = (
+    INSTRUCTIONS
+    + ' Zwróć w entries osobny wpis dla każdej daty lub każdego wystąpienia, o które '
+    'prosi rodzic (np. „dziś, jutro i w poniedziałek” to trzy wpisy). Wspólne '
+    'szczegóły, takie jak godzina, osoba i treść, powtórz w każdym wpisie, a w '
+    'date_source każdego wpisu skopiuj tylko słowa podające jego własną datę. '
+    'Polecenie o jednej sprawie to jeden wpis.'
+)
+
 # Instructions for a free-text correction of the proposal on screen. They end
 # with the shared ``DATE_RULES``, unchanged; only the relative-shift rule is
 # specific to corrections.
@@ -354,7 +385,8 @@ def build_input(request: BackendRequest) -> str:
 class _Attempt:
     """Outcome of one provider attempt; holds safe metadata only."""
 
-    output: Optional[BackendOutput] = None
+    # One output, or a tuple of outputs for ``classify_many``.
+    output: Union[BackendOutput, Tuple[BackendOutput, ...], None] = None
     reason: Optional[UnavailableReason] = None
     retryable: bool = False
     status: Union[int, str, None] = None
@@ -404,6 +436,20 @@ class OpenAIClassificationBackend:
         self._client.close()
 
     def classify(self, request: BackendRequest) -> BackendOutput:
+        return self._run(request, multi=False)
+
+    def classify_many(self, request: BackendRequest) -> Tuple[BackendOutput, ...]:
+        """One output per entry the instruction requests (at least one).
+
+        Uses the list schema, ``MULTI_INSTRUCTIONS`` and a larger output
+        budget; retries, deadline and logging match ``classify``. An empty
+        list becomes one output without a type, i.e. the general note.
+        """
+        if request.correction_text is not None:
+            raise ValueError('classify_many does not apply corrections')
+        return self._run(request, multi=True)
+
+    def _run(self, request: BackendRequest, *, multi: bool):
         started_at = self._clock()
         deadline_at = started_at + self._deadline_seconds
         attempts = 0
@@ -413,7 +459,9 @@ class OpenAIClassificationBackend:
                 attempt = _Attempt(reason=UnavailableReason.TIMEOUT)
                 break
             attempts += 1
-            attempt = self._attempt(request, min(self._attempt_timeout_seconds, remaining))
+            attempt = self._attempt(
+                request, min(self._attempt_timeout_seconds, remaining), multi=multi
+            )
             now = self._clock()
             if attempt.output is not None and now > deadline_at:
                 # A transport timeout bounds each read, not the whole call, so
@@ -456,28 +504,40 @@ class OpenAIClassificationBackend:
             and remaining >= self._retry_backoff_seconds + self._attempt_timeout_seconds
         )
 
-    def request_kwargs(self, request: BackendRequest) -> dict:
+    def request_kwargs(self, request: BackendRequest, *, multi: bool = False) -> dict:
         """Keyword arguments for ``responses.parse`` (without the timeout)."""
         correcting = request.correction_text is not None
+        if multi:
+            instructions = MULTI_INSTRUCTIONS
+            text_format = StructuredClassificationList
+            max_output_tokens = max(self._max_output_tokens, MULTI_MAX_OUTPUT_TOKENS)
+        elif correcting:
+            instructions = CORRECTION_INSTRUCTIONS
+            text_format = StructuredCorrection
+            max_output_tokens = self._max_output_tokens
+        else:
+            instructions = INSTRUCTIONS
+            text_format = StructuredClassification
+            max_output_tokens = self._max_output_tokens
         kwargs = {
             'model': self._model,
-            'instructions': CORRECTION_INSTRUCTIONS if correcting else INSTRUCTIONS,
+            'instructions': instructions,
             'input': build_input(request),
-            'text_format': StructuredCorrection if correcting else StructuredClassification,
+            'text_format': text_format,
             'store': False,
-            'max_output_tokens': self._max_output_tokens,
+            'max_output_tokens': max_output_tokens,
         }
         # Sent only when configured: non-reasoning models reject the parameter.
         if self._reasoning_effort:
             kwargs['reasoning'] = {'effort': self._reasoning_effort}
         return kwargs
 
-    def _attempt(self, request: BackendRequest, timeout: float) -> _Attempt:
+    def _attempt(self, request: BackendRequest, timeout: float, *, multi: bool = False) -> _Attempt:
         # Failures are returned, not raised, so no provider exception (whose
         # message or body may echo family text) is chained to our error.
         try:
             response = self._client.responses.parse(
-                **self.request_kwargs(request),
+                **self.request_kwargs(request, multi=multi),
                 timeout=openai.Timeout(
                     timeout, connect=min(CONNECT_TIMEOUT_SECONDS, timeout)
                 ),
@@ -509,10 +569,10 @@ class OpenAIClassificationBackend:
             return _Attempt(reason=UnavailableReason.MALFORMED_OUTPUT)
         except openai.OpenAIError:
             return _Attempt(reason=UnavailableReason.PROVIDER_ERROR)
-        return _translate(response, request)
+        return _translate(response, request, multi=multi)
 
 
-def _translate(response: Any, request: BackendRequest) -> _Attempt:
+def _translate(response: Any, request: BackendRequest, *, multi: bool = False) -> _Attempt:
     status = getattr(response, 'status', None)
     request_id = getattr(response, '_request_id', None)
 
@@ -526,44 +586,74 @@ def _translate(response: Any, request: BackendRequest) -> _Attempt:
     if status != 'completed':
         return failure(UnavailableReason.PROVIDER_ERROR)
     parsed = response.output_parsed
-    correcting = request.correction_text is not None
-    expected = StructuredCorrection if correcting else StructuredClassification
-    if not isinstance(parsed, expected):
+    try:
+        if multi:
+            if not isinstance(parsed, StructuredClassificationList):
+                return failure(UnavailableReason.MALFORMED_OUTPUT)
+            output = tuple(_translate_entry(entry, request) for entry in parsed.entries)
+            if not output:
+                output = (BackendOutput(entry_type=None, content='', grounded=False),)
+        elif request.correction_text is not None:
+            if not isinstance(parsed, StructuredCorrection):
+                return failure(UnavailableReason.MALFORMED_OUTPUT)
+            output = _translate_correction(parsed, request)
+        else:
+            if not isinstance(parsed, StructuredClassification):
+                return failure(UnavailableReason.MALFORMED_OUTPUT)
+            output = _translate_entry(parsed, request)
+    except (TypeError, ValueError):
         return failure(UnavailableReason.MALFORMED_OUTPUT)
+    return _Attempt(output=output, status=status, request_id=request_id)
+
+
+def _translate_entry(parsed: StructuredClassification, request: BackendRequest) -> BackendOutput:
+    """One classified entry: date grounding, then the title guard, then mapping.
+
+    Raises ``TypeError``/``ValueError`` for values outside the domain.
+    """
     date_accepted = parsed.date is not None and _date_is_grounded(parsed.date_source, request)
-    changed_fields = None
+    content = strip_extracted_phrases(
+        parsed.content,
+        assignee_refs=_assignee_refs(parsed, request),
+        date_phrase=parsed.date_source if date_accepted else None,
+    )
+    return _backend_output(parsed, content=content, date_accepted=date_accepted)
+
+
+def _translate_correction(parsed: StructuredCorrection, request: BackendRequest) -> BackendOutput:
+    date_accepted = parsed.date is not None and _date_is_grounded(parsed.date_source, request)
+    changed = set(parsed.changed_fields)
+    if parsed.date is not None and not date_accepted:
+        # An ungrounded new date is dropped, never applied as "clear the date".
+        changed.discard('date')
     content = parsed.content
-    if correcting:
-        changed = set(parsed.changed_fields)
-        if parsed.date is not None and not date_accepted:
-            # An ungrounded new date is dropped, never applied as "clear the date".
-            changed.discard('date')
-        changed_fields = frozenset(changed)
-    if not correcting or 'content' in changed_fields:
+    if 'content' in changed:
         # A title copied from the proposal is left exactly as it was.
         content = strip_extracted_phrases(
             parsed.content,
             assignee_refs=_assignee_refs(parsed, request),
             date_phrase=parsed.date_source if date_accepted else None,
         )
-    try:
-        output = BackendOutput(
-            entry_type=EntryType(parsed.entry_type) if parsed.entry_type is not None else None,
-            content=content,
-            grounded=parsed.grounded,
-            date=parsed.date if date_accepted else None,
-            time=parsed.time,
-            school_item=(
-                SchoolItemKind(parsed.school_item) if parsed.school_item is not None else None
-            ),
-            member_name=parsed.member_name,
-            school_subject=parsed.school_subject,
-            member_mention=parsed.member_mention,
-            changed_fields=changed_fields,
-        )
-    except (TypeError, ValueError):
-        return failure(UnavailableReason.MALFORMED_OUTPUT)
-    return _Attempt(output=output, status=status, request_id=request_id)
+    return _backend_output(
+        parsed, content=content, date_accepted=date_accepted, changed_fields=frozenset(changed)
+    )
+
+
+def _backend_output(parsed, *, content: str, date_accepted: bool, changed_fields=None) -> BackendOutput:
+    return BackendOutput(
+        entry_type=EntryType(parsed.entry_type) if parsed.entry_type is not None else None,
+        content=content,
+        grounded=parsed.grounded,
+        date=parsed.date if date_accepted else None,
+        time=parsed.time,
+        school_item=(
+            SchoolItemKind(parsed.school_item) if parsed.school_item is not None else None
+        ),
+        member_name=parsed.member_name,
+        school_subject=parsed.school_subject,
+        member_mention=parsed.member_mention,
+        changed_fields=changed_fields,
+    )
 
 
 def _assignee_refs(parsed: StructuredClassification, request: BackendRequest) -> Tuple[str, ...]:

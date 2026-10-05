@@ -97,3 +97,16 @@ class ClassificationBackend(Protocol):
     def classify(self, request: BackendRequest) -> BackendOutput:
         """Return structured data or raise ``ClassificationBackendError``."""
         ...
+
+
+@runtime_checkable
+class MultiEntryClassificationBackend(Protocol):
+    """A backend that can split one instruction into several entries.
+
+    Optional: the parent batch service treats a backend without
+    ``classify_many`` as returning a one-item batch from ``classify``.
+    """
+
+    def classify_many(self, request: BackendRequest) -> Tuple[BackendOutput, ...]:
+        """Return one output per requested entry, or raise ``ClassificationBackendError``."""
+        ...
