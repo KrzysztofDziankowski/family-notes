@@ -362,8 +362,8 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Automated
 
-- [x] 2.1 Correction and capture view tests pass
-- [x] 2.2 Full suite, Django checks and migration check pass
+- [x] 2.1 Correction and capture view tests pass — 44a727c
+- [x] 2.2 Full suite, Django checks and migration check pass — 44a727c
 
 #### Manual
 
@@ -373,8 +373,8 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Automated
 
-- [ ] 3.1 States page and acceptance tests pass
-- [ ] 3.2 Full suite passes
+- [x] 3.1 States page and acceptance tests pass
+- [x] 3.2 Full suite passes
 
 #### Manual
 

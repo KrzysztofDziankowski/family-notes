@@ -31,13 +31,14 @@ from django.test import SimpleTestCase, TestCase, override_settings
 
 from entries.classification.backends import BackendOutput, ClassificationBackendError
 from entries.classification.openai_backend import OpenAIClassificationBackend, build_openai_backend
-from entries.classification.service import classify_for_parent
+from entries.classification.service import classify_for_parent, correct_proposal_for_parent
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
     ClassificationUnavailable,
     EntryType,
     MissingField,
+    ProposalValues,
     SchoolItemKind,
     UnavailableReason,
 )
@@ -65,6 +66,17 @@ PRD_INSTRUCTION = 'Michał ma w poniedziałek sprawdzian z biologii o skórze'
 PRD_CONTENT = 'Sprawdzian z biologii o skórze'
 DEADLINE_SECONDS = 25.0
 PRD_BUDGET_SECONDS = 30.0
+
+# PK-10 / US-10: a meeting proposed for Friday 2026-09-25, corrected on
+# Saturday 2026-09-19 with „zmień datę na 15 października”.
+CORRECTION_TEXT = 'zmień datę na 15 października'
+CORRECTED_DATE = datetime.date(2026, 10, 15)
+MEETING = ProposalValues(
+    entry_type=EntryType.CALENDAR_EVENT,
+    content='Spotkanie z wychowawczynią',
+    date=datetime.date(2026, 9, 25),
+    time=datetime.time(17, 0),
+)
 
 
 def model_output(**fields):
@@ -661,6 +673,89 @@ class TitleKeepsActionOnlyTests(AdapterPathMixin, TestCase):
         self.assertEqual(outcome.member, self.kasia)
 
 
+class FreeTextCorrectionTests(AdapterPathMixin, TestCase):
+    """PK-10 / US-10: a correction changes only the field it names."""
+
+    def correct(self, answer, current=MEETING, correction=CORRECTION_TEXT):
+        self.clock = FakeClock()
+        self.transport = ScriptedTransport(self.clock, [answer])
+        backend = OpenAIClassificationBackend(
+            client=make_client(self.transport),
+            model=MODEL,
+            clock=self.clock,
+            sleep=self.clock.sleep,
+        )
+        return correct_proposal_for_parent(
+            self.parent.user,
+            current,
+            correction,
+            reference_date=PRD_REFERENCE_DATE,
+            locale='pl-PL',
+            backend=backend,
+        )
+
+    def meeting_answer(self, **fields):
+        values = dict(
+            entry_type='calendar_event',
+            content='Spotkanie z wychowawczynią',
+            date=CORRECTED_DATE.isoformat(),
+            date_source='15 października',
+            time='17:00',
+            changed_fields=['date'],
+        )
+        values.update(fields)
+        return model_output(**values)
+
+    def test_date_correction_flows_into_the_merged_proposal(self):
+        correction = self.correct(self.meeting_answer())
+
+        self.assertEqual(
+            self.sent_input(),
+            {
+                'data_odniesienia': '2026-09-19',
+                'dzien_tygodnia': 'sobota',
+                'ustawienia_regionalne': 'pl-PL',
+                'dozwolone_osoby': ['Ewa', 'Michał', 'Ania'],
+                'obecna_propozycja': {
+                    'typ': 'calendar_event',
+                    'tytul': 'Spotkanie z wychowawczynią',
+                    'element_szkolny': None,
+                    'przedmiot': None,
+                    'data': '2026-09-25',
+                    'godzina': '17:00',
+                    'osoba': None,
+                },
+                'poprawka': CORRECTION_TEXT,
+            },
+        )
+        self.assertTrue(correction.applied)
+        self.assertEqual(correction.changed, frozenset({'date'}))
+        self.assertEqual(
+            correction.outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Spotkanie z wychowawczynią',
+                date=CORRECTED_DATE,
+                time=datetime.time(17, 0),
+            ),
+        )
+
+    def test_echoed_or_rewritten_fields_outside_changed_fields_are_ignored(self):
+        correction = self.correct(
+            self.meeting_answer(content='Spotkanie 15 października', time='18:00')
+        )
+
+        self.assertEqual(correction.outcome.result.content, 'Spotkanie z wychowawczynią')
+        self.assertEqual(correction.outcome.result.time, datetime.time(17, 0))
+        self.assertEqual(correction.outcome.result.date, CORRECTED_DATE)
+
+    def test_date_not_grounded_in_the_correction_is_not_applied(self):
+        correction = self.correct(self.meeting_answer(date_source='w piątek'))
+
+        self.assertFalse(correction.applied)
+        self.assertIsNone(correction.outcome)
+
+
 class ProviderFailureTests(AdapterPathMixin, TestCase):
     def test_provider_failures_become_safe_unavailable_results(self):
         cases = {
@@ -811,6 +906,45 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
         outcome = self.classify_live('Bartek ma kartkówkę z chemii we wtorek')
 
         self.assertIsNone(outcome.member)
+
+    def correct_live(self, correction, current=MEETING, current_member=None):
+        started = time.monotonic()
+        result = correct_proposal_for_parent(
+            self.parent.user,
+            current,
+            correction,
+            reference_date=PRD_REFERENCE_DATE,
+            current_member=current_member,
+            locale='pl-PL',
+        )
+        self.assertLess(time.monotonic() - started, PRD_BUDGET_SECONDS)
+        self.assertTrue(result.applied, result.rejection)
+        return result
+
+    def test_date_correction_changes_only_the_date(self):
+        correction = self.correct_live(CORRECTION_TEXT)
+
+        self.assertEqual(correction.changed, frozenset({'date'}))
+        self.assertEqual(
+            correction.outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Spotkanie z wychowawczynią',
+                date=CORRECTED_DATE,
+                time=datetime.time(17, 0),
+            ),
+        )
+
+    def test_member_correction_changes_only_the_person(self):
+        tymek = self._member('tymek', FamilyMember.Role.CHILD, 'Tymoteusz')
+
+        correction = self.correct_live('to dla Tymka')
+
+        self.assertEqual(correction.changed, frozenset({'member_name'}))
+        self.assertEqual(correction.outcome.member, tymek)
+        self.assertEqual(correction.outcome.result.date, MEETING.date)
+        self.assertEqual(correction.outcome.result.time, MEETING.time)
+        self.assertEqual(correction.outcome.result.content, MEETING.content)
 
 
 class SmokeCommandTests(SimpleTestCase):

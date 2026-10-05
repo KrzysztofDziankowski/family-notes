@@ -22,6 +22,8 @@ STATE_NAMES = (
     'question_subject',
     'answer_unavailable',
     'skipped',
+    'corrected',
+    'correction_failed',
     'invalid',
     'saved',
 )
@@ -69,6 +71,11 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
             'Data 01.10.2026 jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
             'Jeśli nie, popraw datę powyżej.',
         )
+        self.assertContains(response, 'Zaktualizowano: data.')
+        self.assertContains(response, views.CORRECTION_FAILED_NOTICE)
+        self.assertContains(response, 'Spotkanie z wychowawczynią')
+        self.assertContains(response, 'bla bla</textarea>')
+        self.assertContains(response, 'Popraw opis')
         self.assertContains(response, 'Kasia')
         for real_name in ('Michał', 'Ania', 'Ewa'):
             self.assertNotContains(response, real_name)

@@ -1,6 +1,7 @@
 import datetime
 import logging
 import uuid
+from dataclasses import replace
 
 from django.conf import settings
 from django.contrib import messages
@@ -432,6 +433,17 @@ def states(request):
     )
     skipped_form = skip_review_form(membership, combined_draft, None, today=STATES_DATE)
     _use_synthetic_members(skipped_form)
+    meeting = ClassificationProposal(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Spotkanie z wychowawczynią',
+        date=STATES_DATE + datetime.timedelta(days=10),
+        time=datetime.time(17, 0),
+    )
+    corrected_form = synthetic_review(meeting)
+    failed_correction_form = synthetic_review(
+        replace(meeting, date=STATES_DATE + datetime.timedelta(days=4))
+    )
+    failed_correction_form.initial['correction'] = 'bla bla'
 
     sections = [
         {'name': 'empty', 'label': 'Pusty formularz', 'capture_form': CaptureForm()},
@@ -522,6 +534,18 @@ def states(request):
             'label': 'Pytanie pominięte',
             'notice': SKIPPED_NOTICE,
             'review_form': skipped_form,
+        },
+        {
+            'name': 'corrected',
+            'label': 'Propozycja po poprawce',
+            'notice': CORRECTION_APPLIED_NOTICE.format(fields='data'),
+            'review_form': corrected_form,
+        },
+        {
+            'name': 'correction_failed',
+            'label': 'Poprawka niezastosowana',
+            'notice': CORRECTION_FAILED_NOTICE,
+            'review_form': failed_correction_form,
         },
         {'name': 'invalid', 'label': 'Błędy w formularzu', 'review_form': invalid_form},
         {
