@@ -18,8 +18,13 @@ from family_access.access import require_active_membership, scope_queryset_to_fa
 from family_access.models import FamilyMember
 from family_notes.log_safety import exception_summary
 
-from .classification.service import classify_follow_up_answer, classify_for_parent
-from .classification.service import ParentClassification
+from .classification.service import (
+    CorrectionRejection,
+    ParentClassification,
+    classify_follow_up_answer,
+    classify_for_parent,
+    correct_proposal_for_parent,
+)
 from .classification.types import (
     EntryType,
     MissingField,
@@ -30,14 +35,17 @@ from .classification.types import (
     UnavailableReason,
 )
 from .forms import (
+    CORRECTION_TOO_LONG_ERROR,
     CaptureForm,
     EntryCreateForm,
     EntryEditForm,
     EntryReviewForm,
     FollowUpAnswerForm,
+    ProposalCorrectionForm,
     draft_from_form,
     follow_up_form_from_classification,
     proposal_from_draft,
+    proposal_values_from_form,
     review_form_from_classification,
     skip_review_form,
 )
@@ -72,6 +80,23 @@ INPUT_TOO_LONG_ERROR = 'Tekst jest za długi. Skróć go i spróbuj ponownie.'
 SAVE_FAILED_ERROR = 'Nie udało się zapisać wpisu. Sprawdź dane i spróbuj ponownie.'
 SKIPPED_NOTICE = 'Brakujące dane pominięte — wpis zostanie zapisany jako notatka.'
 ANSWER_UNAVAILABLE_NOTICE = 'Nie udało się rozpoznać odpowiedzi. Uzupełnij brakujące pola.'
+CORRECTION_APPLIED_NOTICE = 'Zaktualizowano: {fields}.'
+CORRECTION_FAILED_NOTICE = (
+    'Nie udało się zastosować poprawki. Napisz ją inaczej albo popraw pola ręcznie.'
+)
+CORRECTION_SCHOOL_ITEM_NOTICE = (
+    'Ten element szkolny wymaga rodzaju „{label}”. Poprawka nie została zastosowana.'
+)
+# Changed correction fields, in review-form order, mapped to their form field.
+_CORRECTION_FIELD_ORDER = (
+    ('entry_type', 'entry_type'),
+    ('content', 'content'),
+    ('school_item', 'school_item'),
+    ('school_subject', 'school_subject'),
+    ('date', 'date'),
+    ('time', 'time'),
+    ('member_name', 'assigned_member'),
+)
 
 
 logger = logging.getLogger(__name__)
@@ -197,13 +222,88 @@ def answer(request):
     return _render(request, state, review_form=review_form, notice=notice)
 
 
-@sensitive_post_parameters('text', 'content')
+def _correction_notice(form, changed):
+    labels = [
+        str(form.fields[form_field].label).lower()
+        for name, form_field in _CORRECTION_FIELD_ORDER
+        if name in changed
+    ]
+    return CORRECTION_APPLIED_NOTICE.format(fields=', '.join(labels))
+
+
+def _with_fresh_key(form_class, membership, data, **kwargs):
+    """A bound form re-validated with the posted values and a new submission key."""
+    retry_data = data.copy()
+    retry_data['submission_key'] = str(uuid.uuid4())
+    form = form_class(membership, retry_data, **kwargs)
+    form.is_valid()
+    return form
+
+
+@sensitive_post_parameters('text', 'content', 'correction')
+@require_POST
+@login_required
+def correct(request):
+    """Apply the parent's free-text correction to the proposal on screen.
+
+    Nothing is saved here: the revised proposal (or the unchanged one, with a
+    notice) comes back on a review form posted to ``confirm``.
+    """
+    membership = _require_parent(request)
+    form = ProposalCorrectionForm(membership, request.POST)
+    if not form.is_valid():
+        _mark_invalid_fields(form)
+        return _render(request, 'invalid', review_form=form)
+
+    today = timezone.localdate()
+    current, member = proposal_values_from_form(form)
+    correction = correct_proposal_for_parent(
+        request.user,
+        current,
+        form.cleaned_data['correction'],
+        reference_date=today,
+        current_member=member,
+    )
+    if correction.applied:
+        review_form, _ = review_form_from_classification(
+            membership, correction.outcome, current.content, today=today
+        )
+        state = (
+            'proposal'
+            if isinstance(correction.outcome.result, ClassificationProposal)
+            else 'follow_up'
+        )
+        return _render(
+            request,
+            state,
+            review_form=review_form,
+            notice=_correction_notice(review_form, correction.changed),
+        )
+
+    retry_form = _with_fresh_key(ProposalCorrectionForm, membership, request.POST, today=today)
+    notice = CORRECTION_FAILED_NOTICE
+    if correction.rejection == CorrectionRejection.TOO_LONG:
+        retry_form.add_error('correction', CORRECTION_TOO_LONG_ERROR)
+        notice = ''
+    elif correction.rejection == CorrectionRejection.SCHOOL_ITEM_MISMATCH:
+        label = dict(Entry.ENTRY_TYPE_CHOICES)[correction.school_item.entry_type.value]
+        notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
+    _mark_invalid_fields(retry_form)
+    return _render(request, 'correction_failed', review_form=retry_form, notice=notice)
+
+
+@sensitive_post_parameters('text', 'content', 'correction')
 @require_POST
 @login_required
 def confirm(request):
     membership = _require_parent(request)
     review_form = EntryReviewForm(membership, request.POST)
     if not review_form.is_valid():
+        if review_form.has_error('correction'):
+            # An unapplied correction: nothing is saved, and the next save
+            # gets a new key.
+            review_form = _with_fresh_key(EntryReviewForm, membership, request.POST)
+            _mark_invalid_fields(review_form)
         return _render(request, 'invalid', review_form=review_form)
 
     data = review_form.cleaned_data

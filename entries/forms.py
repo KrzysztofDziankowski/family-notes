@@ -8,13 +8,18 @@ from family_access.access import scope_queryset_to_family
 from family_access.models import FamilyMember
 
 from .classification.follow_up import follow_up_question
-from .classification.service import MAX_FOLLOW_UP_ANSWER_LENGTH, MAX_SUBMITTED_TEXT_LENGTH
+from .classification.service import (
+    MAX_CORRECTION_LENGTH,
+    MAX_FOLLOW_UP_ANSWER_LENGTH,
+    MAX_SUBMITTED_TEXT_LENGTH,
+)
 from .classification.types import (
     SCHOOL_SUBJECT_MAX_LENGTH,
     ClassificationFollowUp,
     ClassificationProposal,
     EntryType,
     MissingField,
+    ProposalValues,
     SchoolItemKind,
 )
 from .models import Entry
@@ -150,13 +155,54 @@ class EntryFieldsForm(forms.Form):
                 self.add_error('school_subject', SCHOOL_SUBJECT_REQUIRED_ERROR)
 
 
+CORRECTION_LABEL = 'Popraw opis'
+CORRECTION_PLACEHOLDER = 'np. zmień datę na 15 października'
+CORRECTION_REQUIRED_ERROR = 'Wpisz, co zmienić.'
+CORRECTION_TOO_LONG_ERROR = 'Poprawka jest za długa.'
+UNAPPLIED_CORRECTION_ERROR = (
+    'Masz niezastosowaną poprawkę — naciśnij „Popraw” albo wyczyść pole.'
+)
+CORRECT_SUBMIT_ID = 'correct-submit'
+
+
+class CorrectionTextarea(forms.Textarea):
+    """Never rendered ``required``, so it cannot block „Zapisz wpis” in the browser."""
+
+    def use_required_attribute(self, initial):
+        return False
+
+
+def _correction_field(required):
+    return forms.CharField(
+        label=CORRECTION_LABEL,
+        max_length=MAX_CORRECTION_LENGTH,
+        required=required,
+        strip=True,
+        widget=CorrectionTextarea(attrs={'rows': 2, 'placeholder': CORRECTION_PLACEHOLDER}),
+        error_messages={
+            'required': CORRECTION_REQUIRED_ERROR,
+            'max_length': CORRECTION_TOO_LONG_ERROR,
+        },
+    )
+
+
 class EntryReviewForm(EntryFieldsForm):
-    """The classified proposal as an editable form; every posted value is untrusted."""
+    """The classified proposal as an editable form; every posted value is untrusted.
+
+    ``correction`` is the „Popraw opis” box. Saving refuses a non-blank
+    correction, so a typed but unapplied correction is never dropped silently.
+    """
 
     submission_key = forms.UUIDField(widget=forms.HiddenInput)
+    correction = _correction_field(required=False)
+
+    # Saving („Zapisz wpis”) refuses a typed but unapplied correction.
+    refuse_pending_correction = True
 
     def __init__(self, membership, *args, missing=None, today=None, **kwargs):
         super().__init__(membership, *args, **kwargs)
+        # Stable markup for Enter-to-„Popraw” (S-05): the box names its button.
+        self.fields['correction'].widget.attrs['data-enter-submitter'] = self.correct_submit_id
         self.missing = dict(missing or {})
         shown_date = self.display_date()
         if today is not None and shown_date is not None and shown_date < today:
@@ -168,6 +214,17 @@ class EntryReviewForm(EntryFieldsForm):
             attrs = self.fields[name].widget.attrs
             attrs['aria-invalid'] = 'true'
             attrs['aria-describedby'] = f'{self[name].auto_id}-hint'
+
+    @property
+    def correct_submit_id(self):
+        """The „Popraw” button id, unique per form prefix."""
+        return f'{self.prefix}-{CORRECT_SUBMIT_ID}' if self.prefix else CORRECT_SUBMIT_ID
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.refuse_pending_correction and cleaned.get('correction'):
+            self.add_error('correction', UNAPPLIED_CORRECTION_ERROR)
+        return cleaned
 
     def rows(self):
         """Visible fields paired with the hint shown for a missing value."""
@@ -187,6 +244,39 @@ class EntryReviewForm(EntryFieldsForm):
             except ValueError:
                 return None
         return value
+
+
+class ProposalCorrectionForm(EntryReviewForm):
+    """The proposal on screen (with manual edits) plus a free-text correction.
+
+    Only formats, family scope and the strict school-type mismatch are
+    checked; the schedule rules are skipped because the correction may be
+    what adds a missing date or subject.
+    """
+
+    correction = _correction_field(required=True)
+
+    refuse_pending_correction = False
+
+    def _require_schedule_fields(self, cleaned, entry_type, school_item):
+        return None
+
+
+def proposal_values_from_form(form):
+    """``(ProposalValues, member)`` from a valid review or correction form."""
+    cleaned = form.cleaned_data
+    member = cleaned['assigned_member']
+    school_item = cleaned['school_item']
+    values = ProposalValues(
+        entry_type=EntryType(cleaned['entry_type']),
+        content=cleaned['content'],
+        date=cleaned['date'],
+        time=cleaned['time'],
+        school_item=SchoolItemKind(school_item) if school_item else None,
+        school_subject=cleaned['school_subject'] or None,
+        member_name=member.display_name if member else None,
+    )
+    return values, member
 
 
 class ManagedEntryForm(EntryFieldsForm):

@@ -7,6 +7,7 @@ app_name = 'entries'
 urlpatterns = [
     path('new/', views.capture, name='capture'),
     path('answer/', views.answer, name='answer'),
+    path('correct/', views.correct, name='correct'),
     path('confirm/', views.confirm, name='confirm'),
     path('_states/', views.states, name='states'),
     # S-03 child view

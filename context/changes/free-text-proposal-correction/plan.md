@@ -350,9 +350,9 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Automated
 
-- [x] 1.1 Correction service tests pass
-- [x] 1.2 Adapter tests pass, including the unchanged first-classification input
-- [x] 1.3 Full suite and Django checks pass
+- [x] 1.1 Correction service tests pass — 10c7680
+- [x] 1.2 Adapter tests pass, including the unchanged first-classification input — 10c7680
+- [x] 1.3 Full suite and Django checks pass — 10c7680
 
 #### Manual
 
@@ -362,8 +362,8 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Automated
 
-- [ ] 2.1 Correction and capture view tests pass
-- [ ] 2.2 Full suite, Django checks and migration check pass
+- [x] 2.1 Correction and capture view tests pass
+- [x] 2.2 Full suite, Django checks and migration check pass
 
 #### Manual
 

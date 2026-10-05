@@ -427,7 +427,7 @@ class ReviewFormStrictSchoolItemTests(FamilyFixtureMixin, TestCase):
             {f.name for f in form.visible_fields()},
             {
                 'entry_type', 'content', 'date', 'time', 'assigned_member',
-                'school_item', 'school_subject',
+                'school_item', 'school_subject', 'correction',
             },
         )
 

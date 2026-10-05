@@ -14,9 +14,11 @@
             {% endwith %}
         {% endif %}
     {% endfor %}
+    {% include "entries/_field.html" with field=form.correction hint="" %}
     {{ form.submission_key }}
     <div class="fn-actions">
         <button type="submit">Zapisz wpis</button>
+        <button type="submit" name="action" value="correct" id="{{ form.correct_submit_id }}" class="secondary" formaction="{% url 'entries:correct' %}" formnovalidate>Popraw</button>
         <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
     </div>
 </form>
