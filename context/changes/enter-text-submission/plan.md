@@ -243,11 +243,11 @@ No database or data changes. Rollback: remove the script include and widget attr
 
 #### Automated
 
-- [x] 2.1 Follow-up tests prove a POST without `action` is answered via the backend and a POST with `action=skip` skips without a backend call.
-- [x] 2.2 Full test suite passes: `uv run python manage.py test`.
-- [x] 2.3 Django checks pass: `uv run python manage.py check`.
-- [x] 2.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [x] 2.5 Static collection includes the script: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/enter-submit.js`.
+- [x] 2.1 Follow-up tests prove a POST without `action` is answered via the backend and a POST with `action=skip` skips without a backend call. — e8c0835
+- [x] 2.2 Full test suite passes: `uv run python manage.py test`. — e8c0835
+- [x] 2.3 Django checks pass: `uv run python manage.py check`. — e8c0835
+- [x] 2.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — e8c0835
+- [x] 2.5 Static collection includes the script: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/enter-submit.js`. — e8c0835
 
 #### Manual
 
