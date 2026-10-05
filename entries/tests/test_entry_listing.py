@@ -11,20 +11,23 @@ from django.utils import timezone, translation
 from entries.classification.types import EntryType, SchoolItemKind
 from entries.listing import (
     DEFAULT_LIST_MODE,
+    GROUP_FAMILY,
     LIST_MODES,
     PAST,
     SECTION_DATED,
     SECTION_PAST,
     SECTION_UNDATED,
     UPCOMING,
+    EntrySection,
     day_heading,
+    group_by_assignee,
     group_by_day,
     normalize_list_mode,
     partition_entries,
 )
 from entries.models import Entry
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 TODAY = datetime.date(2026, 9, 28)
 YESTERDAY = TODAY - datetime.timedelta(days=1)
@@ -312,6 +315,168 @@ class GroupByDayTests(FamilyFixtureMixin, TestCase):
 
     def test_empty_input_has_no_groups(self):
         self.assertEqual(group_by_day([], TODAY), [])
+
+
+class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
+    """S-08: assignee groups over partitioned sections (children, parents, family)."""
+
+    def _entry(self, content, member=None, date=None, time=None):
+        return Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.NOTE.value,
+            content=content,
+            date=date,
+            time=time,
+            assigned_member=member,
+        )
+
+    def _sections(self, mode):
+        return partition_entries(
+            Entry.objects.select_related('assigned_member'), mode, TODAY
+        )
+
+    def _shape(self, groups):
+        return [
+            (group.key, [(s.key, [e.content for e in s.entries]) for s in group.sections])
+            for group in groups
+        ]
+
+    def _key(self, member):
+        return f'member-{member.pk}'
+
+    def test_mixed_assignees_group_children_then_parents_then_family(self):
+        # Created out of group order, so the order comes from roles and pks.
+        self._entry('family-tomorrow', date=TOMORROW)
+        self._entry('pawel-undated', self.second_parent)
+        self._entry('ewa-today', self.parent, date=TODAY)
+        self._entry('ania-today', self.other_child, date=TODAY, time=datetime.time(8, 0))
+        self._entry('michal-tomorrow', self.child, date=TOMORROW)
+        self._entry('michal-today', self.child, date=TODAY, time=datetime.time(9, 0))
+        self._entry('michal-undated', self.child)
+        self._entry('family-undated')
+        self._entry('michal-yesterday', self.child, date=YESTERDAY)
+        self._entry('pawel-yesterday', self.second_parent, date=YESTERDAY)
+        self._entry('family-yesterday', date=YESTERDAY)
+
+        self.assertEqual(
+            self._shape(group_by_assignee(self._sections(UPCOMING))),
+            [
+                (self._key(self.child), [
+                    (SECTION_DATED, ['michal-today', 'michal-tomorrow']),
+                    (SECTION_UNDATED, ['michal-undated']),
+                ]),
+                (self._key(self.other_child), [(SECTION_DATED, ['ania-today'])]),
+                (self._key(self.parent), [(SECTION_DATED, ['ewa-today'])]),
+                (self._key(self.second_parent), [(SECTION_UNDATED, ['pawel-undated'])]),
+                (GROUP_FAMILY, [
+                    (SECTION_DATED, ['family-tomorrow']),
+                    (SECTION_UNDATED, ['family-undated']),
+                ]),
+            ],
+        )
+        self.assertEqual(
+            self._shape(group_by_assignee(self._sections(PAST))),
+            [
+                (self._key(self.child), [(SECTION_PAST, ['michal-yesterday'])]),
+                (self._key(self.second_parent), [(SECTION_PAST, ['pawel-yesterday'])]),
+                (GROUP_FAMILY, [(SECTION_PAST, ['family-yesterday'])]),
+            ],
+        )
+
+    def test_groups_carry_their_member(self):
+        self._entry('michal', self.child)
+        self._entry('family')
+
+        groups = group_by_assignee(self._sections(UPCOMING))
+
+        self.assertEqual([group.member for group in groups], [self.child, None])
+
+    def test_inactive_child_groups_with_children_before_parents(self):
+        self._entry('ewa', self.parent)
+        self._entry('zosia', self.inactive_child)
+        self._entry('jolanta', self.inactive_parent)
+        self._entry('michal', self.child)
+
+        groups = group_by_assignee(self._sections(UPCOMING))
+
+        self.assertEqual(
+            [group.key for group in groups],
+            [
+                self._key(self.child),
+                self._key(self.inactive_child),
+                self._key(self.parent),
+                self._key(self.inactive_parent),
+            ],
+        )
+
+    def test_group_with_only_undated_rows_omits_the_empty_dated_section(self):
+        self._entry('ania-undated', self.other_child)
+        self._entry('michal-today', self.child, date=TODAY)
+
+        self.assertEqual(
+            self._shape(group_by_assignee(self._sections(UPCOMING))),
+            [
+                (self._key(self.child), [(SECTION_DATED, ['michal-today'])]),
+                (self._key(self.other_child), [(SECTION_UNDATED, ['ania-undated'])]),
+            ],
+        )
+
+    def test_empty_input_has_no_groups(self):
+        self.assertEqual(group_by_assignee(self._sections(UPCOMING)), [])
+        self.assertEqual(group_by_assignee([]), [])
+
+    def test_order_within_groups_matches_partition_and_rows_appear_once(self):
+        members = [self.child, None, self.second_parent, self.other_child, self.parent]
+        for index in range(15):
+            member = members[index % len(members)]
+            day = TODAY + datetime.timedelta(days=(7 - index) % 4)
+            self._entry(f'dated-{index}', member, date=day, time=datetime.time(8 + index % 3, 0))
+            self._entry(f'undated-{index}', member)
+            self._entry(f'past-{index}', member, date=YESTERDAY - datetime.timedelta(days=index % 3))
+
+        for mode in (UPCOMING, PAST):
+            with self.subTest(mode=mode):
+                sections = self._sections(mode)
+                expected = {s.key: [e.pk for e in s.entries] for s in sections}
+                groups = group_by_assignee(self._sections(mode))
+
+                grouped = [e.pk for g in groups for s in g.sections for e in s.entries]
+                self.assertEqual(len(grouped), len(set(grouped)))
+                self.assertEqual(
+                    sorted(grouped), sorted(pk for pks in expected.values() for pk in pks)
+                )
+                for group in groups:
+                    for section in group.sections:
+                        pks = [e.pk for e in section.entries]
+                        self.assertEqual(
+                            pks, [pk for pk in expected[section.key] if pk in set(pks)]
+                        )
+                        assignees = {e.assigned_member_id for e in section.entries}
+                        self.assertEqual(len(assignees), 1)
+
+    def test_sections_are_evaluated_once_without_extra_queries(self):
+        self._entry('michal', self.child, date=TODAY)
+        self._entry('ewa', self.parent)
+        self._entry('family')
+        sections = self._sections(UPCOMING)
+
+        with self.assertNumQueries(len(sections)):
+            group_by_assignee(sections)
+
+    def test_helper_does_not_scope_by_family(self):
+        Entry.objects.create(
+            family=self.other_family,
+            entry_type=EntryType.NOTE.value,
+            content='theirs',
+            assigned_member=self.other_family_child,
+        )
+        rows = list(Entry.objects.select_related('assigned_member'))
+
+        groups = group_by_assignee([EntrySection(SECTION_UNDATED, rows)])
+
+        self.assertEqual(
+            [group.key for group in groups], [self._key(self.other_family_child)]
+        )
 
 
 @override_settings(ROOT_URLCONF='entries.tests.test_entry_listing')

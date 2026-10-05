@@ -226,8 +226,8 @@ None.
 
 #### Automated
 
-- [ ] 1.1 Grouping tests prove group order (children, parents, then "Cała rodzina"), input-order preservation, exact-once membership, and empty-section omission.
-- [ ] 1.2 Listing tests pass: `uv run python manage.py test entries.tests.test_entry_listing`
+- [x] 1.1 Grouping tests prove group order (children, parents, then "Cała rodzina"), input-order preservation, exact-once membership, and empty-section omission.
+- [x] 1.2 Listing tests pass: `uv run python manage.py test entries.tests.test_entry_listing`
 
 ### Phase 2: Grouped Parent Index and Gallery
 
