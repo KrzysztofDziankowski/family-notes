@@ -500,7 +500,11 @@ def _saved_entries(membership, saved):
 
 
 # Fictional kitchen-sink data: never real family members or saved rows.
-STATES_MEMBER_CHOICES = [('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek')]
+# Children first, then one parent (S-07), in the real form's pk-like order.
+STATES_PARENT_NAME = 'Marta'
+STATES_MEMBER_CHOICES = [
+    ('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek'), ('s3', STATES_PARENT_NAME),
+]
 # Also the gallery's fictional "today", so the past-date warning is deterministic.
 STATES_DATE = datetime.date(2026, 10, 5)
 
@@ -1087,6 +1091,12 @@ def _manage_state_sections(membership):
         ),
     )
     undated = _synthetic_entry(4, content='Oddać książkę do biblioteki')
+    parent_note = _synthetic_entry(
+        7,
+        entry_type=EntryType.NOTE.value,
+        content='Odebrać paczkę z paczkomatu',
+        member=STATES_PARENT_NAME,
+    )
     past_entry = _synthetic_entry(
         5,
         content='Zapłacić za obiady',
@@ -1134,7 +1144,7 @@ def _manage_state_sections(membership):
             'label': 'Lista: nadchodzące',
             'list': _synthetic_list(
                 UPCOMING,
-                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, long_note])],
+                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, parent_note, long_note])],
             ),
         },
         {

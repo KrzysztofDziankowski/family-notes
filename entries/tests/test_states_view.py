@@ -96,6 +96,8 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.assertContains(response, 'bla bla</textarea>')
         self.assertContains(response, 'Popraw opis')
         self.assertContains(response, 'Kasia')
+        # S-07: a fictional parent is offered alongside the children.
+        self.assertContains(response, '<option value="s3">Marta</option>', html=True)
         self.assertContains(response, 'Sprawdź wpisy (3)')
         self.assertContains(response, 'Taki sam jak wpis 1.')
         self.assertContains(response, 'Wybierz co najmniej jeden wpis.')

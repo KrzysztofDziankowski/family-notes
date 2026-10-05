@@ -101,3 +101,22 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
 
         self.client.force_login(self.other_family_child.user)
         self.assertEqual(self.client.get(STATES_URL).status_code, 403)
+
+
+class ParentAssigneeGalleryTests(FamilyFixtureMixin, TestCase):
+    """S-07: the gallery shows a fictional parent as an option and as an assignee."""
+
+    @override_settings(DEBUG=True)
+    def test_parent_appears_in_create_options_and_upcoming_list(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        option = '<option value="s3">Marta</option>'
+        for name in ('create', 'invalid'):
+            with self.subTest(state=name):
+                self.assertIn(option, state_html(html, name))
+        upcoming = state_html(html, 'list_upcoming')
+        self.assertIn('Odebrać paczkę z paczkomatu', upcoming)
+        row = upcoming[upcoming.index('Odebrać paczkę z paczkomatu'):]
+        row = row[:row.index('data-entry-row=') if 'data-entry-row=' in row else len(row)]
+        self.assertIn('Marta', row)
