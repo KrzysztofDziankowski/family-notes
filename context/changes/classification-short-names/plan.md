@@ -331,11 +331,11 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [x] 3.1 Capture and follow-up view tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views`
-- [x] 3.2 State gallery tests include the new state and still prove DEBUG gating and zero writes: `uv run python manage.py test entries.tests.test_states_view`
-- [x] 3.3 Full suite passes: `uv run python manage.py test`
-- [x] 3.4 Django checks pass: `uv run python manage.py check`
-- [x] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 3.1 Capture and follow-up view tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views` — fca6790
+- [x] 3.2 State gallery tests include the new state and still prove DEBUG gating and zero writes: `uv run python manage.py test entries.tests.test_states_view` — fca6790
+- [x] 3.3 Full suite passes: `uv run python manage.py test` — fca6790
+- [x] 3.4 Django checks pass: `uv run python manage.py check` — fca6790
+- [x] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run` — fca6790
 
 #### Manual
 
