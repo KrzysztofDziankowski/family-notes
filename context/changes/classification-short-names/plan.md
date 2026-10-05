@@ -305,8 +305,8 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [ ] 1.1 Matcher unit tests pass: `uv run python manage.py test entries.tests.test_short_names`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
+- [x] 1.1 Matcher unit tests pass: `uv run python manage.py test entries.tests.test_short_names`
+- [x] 1.2 Django checks pass: `uv run python manage.py check`
 
 #### Manual
 
