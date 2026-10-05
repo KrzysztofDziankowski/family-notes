@@ -1,4 +1,4 @@
-"""In-app family membership management (S-14): the only in-app write path for members.
+"""In-app family membership management (S-14, S-15): the only in-app write path for members.
 
 Every function takes the acting ``FamilyMember`` (not the ``User``) and
 re-checks that it is an active parent. Targets resolve inside the actor's
@@ -34,6 +34,13 @@ SELF_DEACTIVATION_ERROR = (
 )
 ALREADY_INACTIVE_ERROR = 'Ta osoba jest już nieaktywna.'
 ALREADY_ACTIVE_ERROR = 'Ta osoba jest już aktywna.'
+INVALID_ROLE_ERROR = 'Wybierz rolę: rodzic albo dziecko.'
+INACTIVE_ROLE_TARGET_ERROR = (
+    'Nie można zmienić roli osoby bez dostępu. Najpierw przywróć jej dostęp.'
+)
+SELF_DEMOTION_CONFIRM_ERROR = (
+    'Potwierdź, że chcesz zrezygnować z uprawnień rodzica.'
+)
 ACTIVE_ELSEWHERE_ERROR = (
     'Nie można przywrócić tej osoby, bo jej konto należy już do innej rodziny. '
     'Skontaktuj się z administratorem rodziny.'
@@ -154,6 +161,19 @@ def can_deactivate(actor, member):
     return True
 
 
+def can_change_role(actor, member):
+    """Whether the edit page may offer a role change (the service re-checks under lock).
+
+    Only active members change roles, and the family's last usable parent is
+    never offered a demotion.
+    """
+    if not is_parent(actor) or not member.is_active:
+        return False
+    if member.role == FamilyMember.Role.PARENT:
+        return _remaining_parent_exists(member.family_id, excluding_member_id=member.pk)
+    return True
+
+
 def rename_member(actor, member_id, display_name):
     """Change a member's display name; return the saved member."""
     _require_parent_actor(actor)
@@ -220,4 +240,47 @@ def reactivate_member(actor, member_id):
         except IntegrityError:
             raise ValidationError(ACTIVE_ELSEWHERE_ERROR) from None
     _log_event('member_reactivated', target, fresh_actor)
+    return target
+
+
+def change_member_role(actor, member_id, new_role, *, confirm_self=False):
+    """Switch an active member between parent and child; return the member.
+
+    Authority is decided under the ``Family`` lock from re-read rows: only an
+    active parent may act, inactive targets are refused, the family's last
+    usable parent cannot be demoted and demoting oneself needs
+    ``confirm_self``. Demotion revokes the member's automation tokens; a later
+    promotion never restores them. ``User`` staff and superuser flags are
+    never read or written.
+    """
+    if new_role not in FamilyMember.Role.values:
+        raise ValidationError(INVALID_ROLE_ERROR)
+    _require_parent_actor(actor)
+    with transaction.atomic():
+        family = _lock_family(actor.family_id)
+        fresh_actor, target = _relock_members(family, actor.pk, member_id)
+        if not target.is_active:
+            raise ValidationError(INACTIVE_ROLE_TARGET_ERROR)
+        old_role = target.role
+        if old_role == new_role:
+            return target
+        if target.pk == fresh_actor.pk and not confirm_self:
+            raise ValidationError(SELF_DEMOTION_CONFIRM_ERROR)
+        demoting = old_role == FamilyMember.Role.PARENT
+        if demoting:
+            _ensure_parent_remains(family, excluding_member_id=target.pk)
+        target.role = new_role
+        target.save(update_fields=['role', 'updated_at'])
+        if demoting:
+            target.automation_tokens.filter(revoked_at__isnull=True).update(
+                revoked_at=timezone.now()
+            )
+    logger.info(
+        'membership_event=role_changed family=%s member=%s actor=%s old_role=%s new_role=%s',
+        target.family_id,
+        target.pk,
+        fresh_actor.pk,
+        old_role,
+        new_role,
+    )
     return target

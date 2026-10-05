@@ -238,13 +238,13 @@ No schema change, no data backfill and no feature flag. Rollback is to remove th
 
 #### Automated
 
-- [ ] 1.1 Service tests cover promotion and demotion by an active parent, the unchanged-role no-op, and the invalid-role rejection.
-- [ ] 1.2 Escalation tests prove a child cannot change any role (including their own), and that an inactive parent, a parent of another family and a user without a membership are denied with no change.
-- [ ] 1.3 Guard tests prove the last active parent cannot be demoted, self-demotion without `confirm_self` is refused, and self-demotion with confirmation succeeds when another parent remains.
-- [ ] 1.4 Token tests prove demotion revokes every unrevoked token of the member, and that re-promotion leaves those tokens revoked.
-- [ ] 1.5 Tests prove `is_staff` and `is_superuser` are unchanged after every role change.
-- [ ] 1.6 Targeted tests pass: `uv run python manage.py test family_access.tests.test_role_services`.
-- [ ] 1.7 Stale-authority tests demote or deactivate the actor directly in the database after it was resolved, and deactivate the target the same way, and prove the role change is refused (`PermissionDenied` or the Polish inactive-target error) with no change.
+- [x] 1.1 Service tests cover promotion and demotion by an active parent, the unchanged-role no-op, and the invalid-role rejection.
+- [x] 1.2 Escalation tests prove a child cannot change any role (including their own), and that an inactive parent, a parent of another family and a user without a membership are denied with no change.
+- [x] 1.3 Guard tests prove the last active parent cannot be demoted, self-demotion without `confirm_self` is refused, and self-demotion with confirmation succeeds when another parent remains.
+- [x] 1.4 Token tests prove demotion revokes every unrevoked token of the member, and that re-promotion leaves those tokens revoked.
+- [x] 1.5 Tests prove `is_staff` and `is_superuser` are unchanged after every role change.
+- [x] 1.6 Targeted tests pass: `uv run python manage.py test family_access.tests.test_role_services`.
+- [x] 1.7 Stale-authority tests demote or deactivate the actor directly in the database after it was resolved, and deactivate the target the same way, and prove the role change is refused (`PermissionDenied` or the Polish inactive-target error) with no change.
 
 ### Phase 2: Role-Change UI and Effective-Access Regression
 
