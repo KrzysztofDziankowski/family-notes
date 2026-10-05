@@ -223,8 +223,8 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Automated
 
-- [x] 2.1 Login page tests assert that no sign-up link or text is rendered, and the existing login tests stay green.
-- [x] 2.2 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 2.1 Login page tests assert that no sign-up link or text is rendered, and the existing login tests stay green. — 3da5ab9
+- [x] 2.2 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run` — 3da5ab9
 
 #### Manual
 
