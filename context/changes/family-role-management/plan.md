@@ -206,7 +206,7 @@ Expose role changes to parents and prove the new role governs every access path 
 Use this when a parent reports that another parent demoted or deactivated them and the family wants it reversed.
 
 1. Confirm the request with the affected person and, where possible, the family through an out-of-band channel. The app does not decide family disputes.
-2. Find the events in the application logs by family id: `membership_event=role_changed` (S-15, with old and new role) and `membership_event=deactivated` (S-14). Each line has `family=`, `member=` and `actor=` ids and no names.
+2. Find the events in the application logs by family id: `membership_event=role_changed` (S-15, with old and new role) and `membership_event=member_deactivated` (S-14). Each line has `family=`, `member=` and `actor=` ids and no names.
 3. In Django admin open Family access → Family members, filter by the family, and open the member with that id.
 4. Restore the state: set `Role` back to `Parent` and/or tick `Is active`, then save. Admin edits bypass the in-app `Family` lock, so make one change at a time.
 5. Automation tokens revoked by the demotion or deactivation stay revoked. If the parent needs automation again, issue a new token in Family access → Automation tokens and hand it over securely.
