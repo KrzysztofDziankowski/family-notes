@@ -37,7 +37,7 @@ FamilyNotes is a Django 5.2 web application managed with `uv`. The repository cu
 - Before creating markup, check the partials in `entries/templates/entries/_*.html` and `@family_notes/templates/_error.html`. Add new shared classes to `tokens.css`, built from existing tokens.
 - No literal colours, inline `style=` attributes or `<style>` blocks in templates; `scripts/hooks/quality_gate.py` flags them in the cleaned templates.
 - Every Django error page (403/404/500) extends the base layout.
-- DEBUG-only kitchen sinks: `/entries/_states/` (parent capture and management views) and `/entries/mine/_states/` (child views). Add new states there.
+- DEBUG-only kitchen sinks: `/entries/_states/` (parent capture and management views), `/entries/mine/_states/` (child views) and `/account/family/_states/` (family member management). Add new states there.
 - All user-facing copy is in Polish (Django admin excepted).
 - Accessibility target is WCAG 2.2 AA; follow the checklist in `@context/foundation/accessibility.md` (skip link, `_field.html` + `describe_fields`, „Błąd: ” titles, tokens only). Every new product page or state adds a case to `entries/tests/test_accessibility.py` or `family_notes/test_accessibility.py` (audit helper: `family_notes/a11y_audit.py`).
 

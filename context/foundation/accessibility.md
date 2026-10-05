@@ -28,12 +28,15 @@ out of scope.
   invalid), and the „Usuń wpis” disclosure.
 - Child assigned-entry list (upcoming, past, empty) and detail.
 - Account status (parent, child, unconfigured account).
+- Family member management (S-14): member list (with guard error and notice), display-name
+  edit (valid and invalid), and the account page link (`family_access/tests/test_membership_accessibility.py`).
 - The S-06 `/offline/` page (anonymous and signed in) and web manifest: no orientation lock
   (SC 1.3.4).
 - 403, 404 (signed in and anonymous) and 500 pages.
 
 **Not covered:** Django admin (operator-only, English), allauth pages other than sign-in, and the
-DEBUG-only state galleries (`/entries/_states/`, `/entries/mine/_states/`), which repeat field
+DEBUG-only state galleries (`/entries/_states/`, `/entries/mine/_states/`,
+`/account/family/_states/`), which repeat field
 IDs by design.
 
 ## Checklist for every product page

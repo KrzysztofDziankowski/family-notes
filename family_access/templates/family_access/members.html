@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}{% if error %}Błąd: {% endif %}Członkowie rodziny{% endblock %}
+
+{% block content %}
+<h1>Członkowie rodziny</h1>
+{% include "entries/_manage_messages.html" %}
+{% include "family_access/_members.html" %}
+<p><a href="{% url 'account_status' %}">Wróć do konta</a></p>
+{% endblock %}
