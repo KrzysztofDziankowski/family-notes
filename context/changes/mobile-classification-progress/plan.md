@@ -455,11 +455,11 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [x] 3.1 Gallery tests prove the five `progress_*` sections render with their copy, DEBUG gating holds, non-parents are denied, and no rows are written.
-- [x] 3.2 Full test suite passes: `uv run python manage.py test`.
-- [x] 3.3 Django checks pass: `uv run python manage.py check`.
-- [x] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [x] 3.5 Static collection includes the new assets: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/classification-progress.js`, `js/pwa-register.js` and the `pwa/` icons.
+- [x] 3.1 Gallery tests prove the five `progress_*` sections render with their copy, DEBUG gating holds, non-parents are denied, and no rows are written. — 080c179
+- [x] 3.2 Full test suite passes: `uv run python manage.py test`. — 080c179
+- [x] 3.3 Django checks pass: `uv run python manage.py check`. — 080c179
+- [x] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 080c179
+- [x] 3.5 Static collection includes the new assets: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/classification-progress.js`, `js/pwa-register.js` and the `pwa/` icons. — 080c179
 
 #### Manual
 
