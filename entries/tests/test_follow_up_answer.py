@@ -8,8 +8,6 @@ import datetime
 import logging
 
 from django.apps import apps
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.test import SimpleTestCase, TestCase
@@ -53,6 +51,7 @@ def make_draft(missing=(MissingField.DATE,), member_name='Michał', **overrides)
         content=CONTENT,
         school_item=SchoolItemKind.QUIZ,
         member_name=member_name,
+        school_subject='matematyka',
     )
     values.update(overrides)
     return ClassificationFollowUp(**values)
@@ -99,6 +98,21 @@ class FollowUpQuestionTests(SimpleTestCase):
             'Kiedy odbędzie się „Kartkówka z matematyki” i której osoby dotyczy?',
         )
 
+    def test_subject_question_is_asked_after_date_and_member(self):
+        self.assertEqual(
+            self.question(MissingField.SCHOOL_SUBJECT, content='Sprawdzian'),
+            'Z jakiego przedmiotu jest „Sprawdzian”?',
+        )
+        self.assertEqual(
+            self.question(
+                MissingField.SCHOOL_SUBJECT,
+                MissingField.AFFECTED_MEMBER,
+                MissingField.DATE,
+                content='Sprawdzian',
+            ),
+            'Kiedy odbędzie się „Sprawdzian” i kogo dotyczy i z jakiego przedmiotu?',
+        )
+
     def test_order_is_deterministic(self):
         self.assertEqual(
             self.question(MissingField.AFFECTED_MEMBER, MissingField.DATE),
@@ -126,9 +140,9 @@ class FollowUpQuestionTests(SimpleTestCase):
 
 
 class FollowUpAnswerTestMixin(FamilyFixtureMixin):
-    def answer(self, backend, draft=None, answer=ANSWER, user=None, member='default', text=SUBMITTED_TEXT):
+    def answer(self, backend, draft=None, answer=ANSWER, membership='parent', member='default', text=SUBMITTED_TEXT):
         return classify_follow_up_answer(
-            user if user is not None else self.parent.user,
+            self.parent if membership == 'parent' else membership,
             text,
             draft if draft is not None else make_draft(),
             answer,
@@ -152,10 +166,42 @@ class MergeTests(FollowUpAnswerTestMixin, TestCase):
                 date=FRIDAY,
                 school_item=SchoolItemKind.QUIZ,
                 member_name='Michał',
+                school_subject='matematyka',
             ),
         )
         self.assertEqual(outcome.member, self.child)
         self.assertEqual(len(backend.requests), 1)
+
+    def test_missing_subject_is_filled_from_answer(self):
+        draft = make_draft((MissingField.SCHOOL_SUBJECT,), date=FRIDAY, school_subject=None)
+        backend = RecordingBackend(answer_output(date=None, school_subject=' fizyka '))
+
+        outcome = self.answer(backend, draft=draft)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.school_subject, 'fizyka')
+        self.assertEqual(outcome.result.date, FRIDAY)
+        self.assertEqual(outcome.member, self.child)
+
+    def test_draft_subject_is_kept_when_not_missing(self):
+        backend = RecordingBackend(answer_output(school_subject='historia'))
+
+        outcome = self.answer(backend)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.school_subject, 'matematyka')
+
+    def test_unanswered_subject_stays_missing(self):
+        draft = make_draft(
+            (MissingField.DATE, MissingField.SCHOOL_SUBJECT), school_subject=None
+        )
+        backend = RecordingBackend(answer_output(school_subject=None))
+
+        outcome = self.answer(backend, draft=draft)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertEqual(outcome.result.missing_fields, (MissingField.SCHOOL_SUBJECT,))
+        self.assertEqual(outcome.result.date, FRIDAY)
 
     def test_different_type_title_and_time_in_answer_result_are_ignored(self):
         backend = RecordingBackend(
@@ -301,6 +347,115 @@ class MergeTests(FollowUpAnswerTestMixin, TestCase):
         self.assertIsNone(outcome.member)
 
 
+class ShortNameAnswerTests(FollowUpAnswerTestMixin, TestCase):
+    """PK-01: a short name in the answer to a member question."""
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; rename her so each test
+        # chooses its own Hania/Anna collisions.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+
+    def member_draft(self, missing=(MissingField.AFFECTED_MEMBER,), **overrides):
+        return make_draft(missing, member_name=None, date=FRIDAY, **overrides)
+
+    def test_short_name_answer_fills_the_missing_member(self):
+        backend = RecordingBackend(answer_output(date=None))
+
+        outcome = self.answer(backend, draft=self.member_draft(), answer='Hania', member=None)
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.member_name, 'Hanna')
+        self.assertEqual(outcome.result.school_subject, 'matematyka')
+        self.assertEqual(outcome.member, self.hanna)
+
+    def test_model_mention_is_used_when_the_answer_is_not_a_bare_name(self):
+        backend = RecordingBackend(answer_output(date=None, member_mention='Hania'))
+
+        outcome = self.answer(
+            backend, draft=self.member_draft(), answer='chodzi o Hanię', member=None
+        )
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.member, self.hanna)
+
+    def test_ambiguous_short_name_answer_asks_again(self):
+        self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+        backend = RecordingBackend(
+            answer_output(date=None, member_name='Hanna', member_mention='Hania')
+        )
+
+        outcome = self.answer(backend, draft=self.member_draft(), answer='Hania', member=None)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)
+        self.assertIsNone(outcome.result.member_name)
+        self.assertIsNone(outcome.member)
+        self.assertEqual(
+            follow_up_question(outcome.result),
+            'Której osoby dotyczy „Kartkówka z matematyki”?',
+        )
+
+    def test_answer_text_wins_over_the_stale_instruction_mention(self):
+        self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+        draft = self.member_draft((MissingField.AMBIGUOUS_MEMBER, MissingField.AFFECTED_MEMBER))
+        # The model echoes the instruction's "Hania" instead of the answer.
+        backend = RecordingBackend(
+            answer_output(date=None, member_name='Hanna', member_mention='Hania')
+        )
+
+        outcome = self.answer(
+            backend, draft=draft, answer='Hanna', member=None, text='Hania ma kartkówkę'
+        )
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.member_name, 'Hanna')
+        self.assertEqual(outcome.member, self.hanna)
+
+    def test_subject_survives_member_resolution_and_merge(self):
+        draft = self.member_draft(
+            (MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT), school_subject=None
+        )
+        backend = RecordingBackend(
+            answer_output(date=None, school_subject='fizyka', member_mention='Hania')
+        )
+
+        outcome = self.answer(
+            backend, draft=draft, answer='Hania, z fizyki', member=None
+        )
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.school_subject, 'fizyka')
+        self.assertEqual(outcome.member, self.hanna)
+
+    def test_mention_is_ignored_when_the_member_was_not_missing(self):
+        backend = RecordingBackend(answer_output(member_mention='Hania'))
+
+        outcome = self.answer(backend, answer='w piątek, Hania')
+
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.member, self.child)
+
+    def test_answer_naming_inactive_or_foreign_members_never_resolves(self):
+        for name in ('Zosia', 'Zofia', 'Kuba', 'Jakub'):
+            with self.subTest(name):
+                backend = RecordingBackend(
+                    answer_output(date=None, member_name=name, member_mention=name)
+                )
+
+                outcome = self.answer(
+                    backend, draft=self.member_draft(), answer=name, member=None
+                )
+
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationUnavailable(reason=UnavailableReason.UNKNOWN_MEMBER),
+                )
+                self.assertIsNone(outcome.member)
+
+
 class RequestAndAuthorizationTests(FollowUpAnswerTestMixin, TestCase):
     def test_backend_request_carries_question_and_answer(self):
         backend = RecordingBackend(answer_output())
@@ -315,27 +470,34 @@ class RequestAndAuthorizationTests(FollowUpAnswerTestMixin, TestCase):
         self.assertEqual(request.reference_date, REFERENCE_DATE)
         self.assertEqual(request.locale, 'pl-PL')
 
+    def test_follow_up_request_never_names_the_requester(self):
+        """S-07: only the parent's own capture and correction carry the requester."""
+        backend = RecordingBackend(answer_output())
+
+        self.answer(backend, answer='dla mnie w piątek')
+
+        (request,) = backend.requests
+        self.assertIsNone(request.requester_name)
+
     def test_unauthorized_users_are_denied_without_backend_call(self):
-        outsider = get_user_model().objects.create_user(username='outsider')
         cases = {
-            'anonymous': AnonymousUser(),
-            'outsider without membership': outsider,
-            'child': self.child.user,
-            'inactive member': self.inactive_child.user,
+            'no family context': None,
+            'child': self.child,
+            'inactive member': self.inactive_child,
         }
-        for name, user in cases.items():
+        for name, membership in cases.items():
             with self.subTest(name):
                 backend = RecordingBackend(answer_output())
 
                 with self.assertRaises(PermissionDenied):
-                    self.answer(backend, user=user)
+                    self.answer(backend, membership=membership)
 
                 self.assertEqual(backend.requests, [])
 
     def test_other_family_parent_never_sees_or_keeps_our_member(self):
         backend = RecordingBackend(answer_output())
 
-        outcome = self.answer(backend, user=self.other_family_parent.user)
+        outcome = self.answer(backend, membership=self.other_family_parent)
 
         (request,) = backend.requests
         self.assertEqual(request.allowed_member_names, ('Tomek', 'Kuba'))

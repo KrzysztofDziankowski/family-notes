@@ -1,18 +1,33 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.backends.db import SessionStore
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from family_access.access import (
     can_read_assigned_child,
-    get_active_membership,
     is_parent,
-    require_active_membership,
     scope_queryset_to_family,
 )
+from family_access.context import (
+    SESSION_KEY,
+    peek_family_context,
+    require_family_context,
+    resolve_family_context,
+)
 from family_access.models import Family, FamilyMember
+
+
+def context_request(user, family_id=None):
+    """A GET request for ``user`` with a fresh session, optionally holding a family id."""
+    request = RequestFactory().get('/')
+    request.user = user
+    request.session = SessionStore()
+    if family_id is not None:
+        request.session[SESSION_KEY] = family_id
+    return request
 
 
 class FamilyModelTests(TestCase):
@@ -56,7 +71,8 @@ class FamilyMemberModelTests(TestCase):
         self.assertFalse(self.user.is_staff)
         self.assertFalse(self.user.is_superuser)
 
-    def test_user_cannot_have_two_active_memberships(self):
+    def test_user_can_be_active_in_two_families(self):
+        # S-16: one active membership per (user, family), not per user.
         FamilyMember.objects.create(
             user=self.user,
             family=self.family,
@@ -65,11 +81,28 @@ class FamilyMemberModelTests(TestCase):
         )
         another_family = Family.objects.create(name='Another Family')
 
+        FamilyMember.objects.create(
+            user=self.user,
+            family=another_family,
+            role=FamilyMember.Role.CHILD,
+            display_name='Alex',
+        )
+
+        self.assertEqual(self.user.family_memberships.filter(is_active=True).count(), 2)
+
+    def test_user_cannot_have_two_active_memberships_in_one_family(self):
+        FamilyMember.objects.create(
+            user=self.user,
+            family=self.family,
+            role=FamilyMember.Role.PARENT,
+            display_name='Alex',
+        )
+
         with self.assertRaises(IntegrityError), transaction.atomic():
             FamilyMember.objects.create(
                 user=self.user,
-                family=another_family,
-                role=FamilyMember.Role.PARENT,
+                family=self.family,
+                role=FamilyMember.Role.CHILD,
                 display_name='Alex',
             )
 
@@ -144,7 +177,7 @@ class FamilyAccessHelperTests(TestCase):
         )
 
     def test_parent_membership_is_active_and_can_read_assigned_child(self):
-        membership = get_active_membership(self.parent.user)
+        membership = resolve_family_context(context_request(self.parent.user))
 
         self.assertEqual(membership, self.parent)
         self.assertTrue(is_parent(membership))
@@ -160,23 +193,23 @@ class FamilyAccessHelperTests(TestCase):
         self.child.is_active = False
         self.child.save(update_fields=('is_active',))
 
-        self.assertIsNone(get_active_membership(self.child.user))
+        self.assertIsNone(resolve_family_context(context_request(self.child.user)))
         with self.assertRaises(PermissionDenied):
-            require_active_membership(self.child.user)
+            require_family_context(context_request(self.child.user))
 
     def test_unknown_authenticated_user_is_denied(self):
         user = get_user_model().objects.create_user(username='unknown')
 
-        self.assertIsNone(get_active_membership(user))
+        self.assertIsNone(resolve_family_context(context_request(user)))
         with self.assertRaises(PermissionDenied):
-            require_active_membership(user)
+            require_family_context(context_request(user))
 
     def test_unauthenticated_user_is_denied(self):
         user = AnonymousUser()
 
-        self.assertIsNone(get_active_membership(user))
+        self.assertIsNone(resolve_family_context(context_request(user)))
         with self.assertRaises(PermissionDenied):
-            require_active_membership(user)
+            require_family_context(context_request(user))
 
     def test_queryset_is_scoped_to_membership_family(self):
         another_family = Family.objects.create(name='Another Family')
@@ -204,6 +237,103 @@ class FamilyAccessHelperTests(TestCase):
             role=role,
             display_name=username.replace('-', ' ').title(),
         )
+
+
+class FamilyContextTests(TestCase):
+    """S-16: the request family context is validated against the database."""
+
+    def setUp(self):
+        self.family = Family.objects.create(name='Rodzina A')
+        self.other_family = Family.objects.create(name='Rodzina B')
+        self.user = get_user_model().objects.create_user(username='parent')
+        self.membership = FamilyMember.objects.create(
+            user=self.user, family=self.family, role=FamilyMember.Role.PARENT,
+            display_name='Ewa',
+        )
+
+    def assert_no_context(self, request):
+        self.assertEqual(peek_family_context(request), (None, 0))
+        self.assertIsNone(resolve_family_context(request))
+        with self.assertRaises(PermissionDenied):
+            require_family_context(request)
+
+    def test_single_membership_is_selected_automatically(self):
+        request = context_request(self.user)
+
+        self.assertEqual(peek_family_context(request), (self.membership, 1))
+        self.assertEqual(resolve_family_context(request), self.membership)
+        self.assertEqual(require_family_context(request), self.membership)
+        self.assertEqual(request.session.get(SESSION_KEY), None)
+        self.assertFalse(request.session.modified)
+
+    def test_valid_session_selection_is_used(self):
+        request = context_request(self.user, family_id=self.family.pk)
+
+        self.assertEqual(resolve_family_context(request), self.membership)
+        self.assertEqual(request.session[SESSION_KEY], self.family.pk)
+
+    def test_user_without_membership_has_no_context(self):
+        user = get_user_model().objects.create_user(username='unconfigured')
+
+        self.assert_no_context(context_request(user))
+
+    def test_anonymous_user_has_no_context(self):
+        self.assert_no_context(context_request(AnonymousUser()))
+
+    def test_inactive_membership_gives_no_context(self):
+        self.membership.is_active = False
+        self.membership.save(update_fields=('is_active',))
+
+        self.assert_no_context(context_request(self.user, family_id=self.family.pk))
+
+    def test_inactive_family_gives_no_context(self):
+        self.family.is_active = False
+        self.family.save(update_fields=('is_active',))
+
+        self.assert_no_context(context_request(self.user, family_id=self.family.pk))
+
+    def test_inactive_user_gives_no_context(self):
+        self.user.is_active = False
+        self.user.save(update_fields=('is_active',))
+
+        self.assert_no_context(context_request(self.user, family_id=self.family.pk))
+
+    def test_session_id_of_a_foreign_family_is_discarded(self):
+        request = context_request(self.user, family_id=self.other_family.pk)
+
+        self.assertEqual(resolve_family_context(request), self.membership)
+        self.assertEqual(request.session[SESSION_KEY], self.family.pk)
+
+    def test_session_id_of_an_inactive_family_membership_is_discarded(self):
+        FamilyMember.objects.create(
+            user=self.user, family=self.other_family, role=FamilyMember.Role.PARENT,
+            display_name='Ewa', is_active=False,
+        )
+        request = context_request(self.user, family_id=self.other_family.pk)
+
+        self.assertEqual(resolve_family_context(request), self.membership)
+        self.assertEqual(request.session[SESSION_KEY], self.family.pk)
+
+    def test_stale_session_id_without_any_membership_is_removed(self):
+        self.membership.is_active = False
+        self.membership.save(update_fields=('is_active',))
+        request = context_request(self.user, family_id=self.family.pk)
+
+        self.assertIsNone(resolve_family_context(request))
+        self.assertNotIn(SESSION_KEY, request.session)
+
+    def test_tampered_session_value_is_ignored(self):
+        for value in ('1', True, None, [self.family.pk]):
+            with self.subTest(value=value):
+                request = context_request(self.user)
+                request.session[SESSION_KEY] = value
+
+                self.assertEqual(peek_family_context(request), (self.membership, 1))
+
+    def test_sign_in_records_the_single_family(self):
+        self.client.force_login(self.user)
+
+        self.assertEqual(self.client.session[SESSION_KEY], self.family.pk)
 
 
 class AccountStatusRouteTests(TestCase):

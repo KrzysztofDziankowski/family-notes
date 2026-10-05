@@ -1,0 +1,60 @@
+{% load family_context %}
+<form method="post" action="{% url 'entries:confirm_batch' %}" data-state-part="batch" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
+    {% csrf_token %}
+    {% family_context_field %}
+    <h2>Sprawdź wpisy ({{ form.count|default:0 }})</h2>
+    {% if form.non_field_errors %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+    {% endif %}
+    {% if form.stale %}
+        <div class="fn-actions">
+            <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+        </div>
+    {% else %}
+        <input type="hidden" name="count" value="{{ form.count }}">
+        {# The first submit is the default for Enter in a field: it saves. #}
+        <div class="fn-actions">
+            <button type="submit" name="action" value="save">Zapisz wpisy</button>
+        </div>
+        {% for entry in form.entries %}
+            <fieldset data-batch-entry="{{ entry.number }}">
+                <legend>Wpis {{ entry.number }}</legend>
+                {% if entry.notice %}
+                    {% include "entries/_notice.html" with message=entry.notice %}
+                {% endif %}
+                {% if entry.form.non_field_errors %}
+                    <div class="fn-panel fn-panel--danger" role="alert">
+                        {% for error in entry.form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+                    </div>
+                {% endif %}
+                <label for="{{ entry.form.include.id_for_label }}">
+                    {{ entry.form.include }}
+                    {{ entry.form.include.label }}
+                </label>
+                {% if entry.hint %}<p class="fn-muted" data-duplicate-hint>{{ entry.hint }}</p>{% endif %}
+                {% for row in entry.form.rows %}
+                    {% include "entries/_field.html" with field=row.field hint=row.hint %}
+                    {% if row.field.name == "date" %}
+                        {% with shown_date=entry.form.display_date %}
+                            {% if shown_date %}<p class="fn-muted" id="{{ row.field.auto_id }}-human" data-human-date>{{ shown_date|date:"l, j E Y"|lower }}</p>{% endif %}
+                        {% endwith %}
+                    {% endif %}
+                {% endfor %}
+                <details{% if entry.form.correction.value or entry.form.correction.errors %} open{% endif %}>
+                    <summary>Popraw tekstem</summary>
+                    {% include "entries/_field.html" with field=entry.form.correction hint="" %}
+                    {% include "entries/_enter_hint.html" with field=entry.form.correction %}
+                    <button type="submit" name="action" value="correct-{{ entry.index }}" id="{{ entry.form.correct_submit_id }}" class="secondary" formnovalidate data-classification-submit>Popraw</button>
+                </details>
+                {{ entry.form.submission_key }}
+            </fieldset>
+        {% endfor %}
+        <div class="fn-actions">
+            <button type="submit" name="action" value="save">Zapisz wpisy</button>
+            <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+        </div>
+        {% include "entries/_classification_progress.html" %}
+    {% endif %}
+</form>

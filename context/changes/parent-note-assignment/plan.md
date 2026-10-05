@@ -285,38 +285,38 @@ None. No schema or data change. Existing entries keep their assignees. The OpenA
 
 #### Automated
 
-- [ ] 1.1 Form and service tests prove that self and other-parent assignment are accepted and that foreign-family and inactive parents are rejected without writes.
-- [ ] 1.2 Classification tests prove that a parent's display name resolves to that parent and pre-fills the review form, and that confirming saves the assignee.
-- [ ] 1.3 Read-path tests prove that the parent index, parent detail, and API show the parent assignee and that child list and detail never expose a parent-assigned entry.
-- [ ] 1.4 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service entries.tests.test_classification_service entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entries_api entries.tests.test_child_views entries.tests.test_child_entries` (plus the S-03/S-04 modules named in item 3 once merged)
-- [ ] 1.5 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.6 Follow-up, correction and batch tests prove that a follow-up answer or skip, an S-03 correction, and an S-04 batch save keep or save a parent assignee: `uv run python manage.py test entries.tests.test_follow_up_views entries.tests.test_proposal_correction entries.tests.test_correction_views entries.tests.test_batch_classification entries.tests.test_batch_capture_views`
+- [x] 1.1 Form and service tests prove that self and other-parent assignment are accepted and that foreign-family and inactive parents are rejected without writes. — b36c937
+- [x] 1.2 Classification tests prove that a parent's display name resolves to that parent and pre-fills the review form, and that confirming saves the assignee. — b36c937
+- [x] 1.3 Read-path tests prove that the parent index, parent detail, and API show the parent assignee and that child list and detail never expose a parent-assigned entry. — b36c937
+- [x] 1.4 Targeted tests pass: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_entry_service entries.tests.test_classification_service entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entries_api entries.tests.test_child_views entries.tests.test_child_entries` (plus the S-03/S-04 modules named in item 3 once merged) — b36c937
+- [x] 1.5 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run` — b36c937
+- [x] 1.6 Follow-up, correction and batch tests prove that a follow-up answer or skip, an S-03 correction, and an S-04 batch save keep or save a parent assignee: `uv run python manage.py test entries.tests.test_follow_up_views entries.tests.test_proposal_correction entries.tests.test_correction_views entries.tests.test_batch_classification entries.tests.test_batch_capture_views` — b36c937
 
 ### Phase 2: Gallery Coverage and Manual Verification
 
 #### Automated
 
-- [ ] 2.1 Gallery tests assert that the synthetic parent appears in assignee options and in the upcoming list state: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states`
-- [ ] 2.2 Django checks pass: `uv run python manage.py check`
+- [x] 2.1 Gallery tests assert that the synthetic parent appears in assignee options and in the upcoming list state: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states` — d22747b
+- [x] 2.2 Django checks pass: `uv run python manage.py check` — d22747b
 
 #### Manual
 
-- [ ] 2.3 At phone width, a parent creates a note via "Nowy wpis" assigned to themselves and another assigned to the other parent; both show the right name in the list and detail.
-- [ ] 2.4 Via "Dodaj wpis z tekstu", a parent writes a note naming the other parent; the review form pre-selects that parent and saving keeps it.
-- [ ] 2.5 Signed in as a child, neither note is visible in "Moje wpisy".
-- [ ] 2.6 A phone-width screenshot of the gallery list state is saved under `context/changes/parent-note-assignment/screenshots/`.
+- [x] 2.3 At phone width, a parent creates a note via "Nowy wpis" assigned to themselves and another assigned to the other parent; both show the right name in the list and detail.
+- [x] 2.4 Via "Dodaj wpis z tekstu", a parent writes a note naming the other parent; the review form pre-selects that parent and saving keeps it.
+- [x] 2.5 Signed in as a child, neither note is visible in "Moje wpisy".
+- [x] 2.6 A phone-width screenshot of the gallery list state is saved under `context/changes/parent-note-assignment/screenshots/`.
 
 ### Phase 3: Self-Reference Resolves to the Requesting Parent
 
 #### Automated
 
-- [ ] 3.1 Adapter tests prove that `autor_polecenia` is sent only with a requester, that requester-less and follow-up payloads are unchanged, and that the instructions carry the self-reference rule: `uv run python manage.py test entries.tests.test_openai_backend`
-- [ ] 3.2 Guard tests prove that self-reference phrases are stripped only when the resolved member is the requester: `uv run python manage.py test entries.tests.test_title_cleanup`
-- [ ] 3.3 Service and acceptance tests prove that "dla mnie: kupić mleko" yields the requester and the title "Kupić mleko", that corrections carry the requester while follow-up and EduVulcan requests do not, and that member validation is unchanged: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_classification_acceptance entries.tests.test_follow_up_answer entries.tests.test_family_classification entries.tests.test_batch_classification`
-- [ ] 3.4 Full suite and checks pass, with live tests skipped by default: `uv run python manage.py test`, `uv run python manage.py check`
+- [x] 3.1 Adapter tests prove that `autor_polecenia` is sent only with a requester, that requester-less and follow-up payloads are unchanged, and that the instructions carry the self-reference rule: `uv run python manage.py test entries.tests.test_openai_backend` — e3484e4
+- [x] 3.2 Guard tests prove that self-reference phrases are stripped only when the resolved member is the requester: `uv run python manage.py test entries.tests.test_title_cleanup` — e3484e4
+- [x] 3.3 Service and acceptance tests prove that "dla mnie: kupić mleko" yields the requester and the title "Kupić mleko", that corrections carry the requester while follow-up and EduVulcan requests do not, and that member validation is unchanged: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_classification_acceptance entries.tests.test_follow_up_answer entries.tests.test_family_classification entries.tests.test_batch_classification` — e3484e4
+- [x] 3.4 Full suite and checks pass, with live tests skipped by default: `uv run python manage.py test`, `uv run python manage.py check` — e3484e4
 
 #### Manual
 
-- [ ] 3.5 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live self-reference case passes.
-- [ ] 3.6 In the running app as `test_rodzic` (Ewa), entering "dla mnie: kupić mleko" shows the review form with title "Kupić mleko" and Ewa preselected; saving keeps Ewa as the assignee.
-- [ ] 3.7 Reading the adapter module docstring confirms that the privacy contract lists `autor_polecenia` and records the owner approval of 2026-10-04.
+- [x] 3.5 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live self-reference case passes.
+- [x] 3.6 In the running app as `test_rodzic` (Ewa), entering "dla mnie: kupić mleko" shows the review form with title "Kupić mleko" and Ewa preselected; saving keeps Ewa as the assignee.
+- [x] 3.7 Reading the adapter module docstring confirms that the privacy contract lists `autor_polecenia` and records the owner approval of 2026-10-04.

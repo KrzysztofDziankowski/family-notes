@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Stany członków rodziny{% endblock %}
+
+{% block content %}
+<h1>Stany ekranu „Członkowie rodziny”</h1>
+<p class="fn-muted">Strona tylko dla trybu DEBUG. Dane są fikcyjne i nic nie jest zapisywane.</p>
+{% for section in sections %}
+<section data-member-state="{{ section.name }}">
+    <hr>
+    <p class="fn-muted"><small>Stan: {{ section.label }} ({{ section.name }})</small></p>
+    {% if section.list %}
+        {% include "family_access/_members.html" with rows=section.list.rows error=section.list.error %}
+    {% endif %}
+    {% if section.form %}
+        {% include "family_access/_member_form.html" with form=section.form.form member=section.form.member %}
+    {% endif %}
+    {% if section.role %}
+        {% include "family_access/_member_role.html" with role=section.role %}
+    {% endif %}
+</section>
+{% endfor %}
+{% endblock %}

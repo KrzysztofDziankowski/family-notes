@@ -226,20 +226,20 @@ None.
 
 #### Automated
 
-- [ ] 1.1 Grouping tests prove group order (children, parents, then "Cała rodzina"), input-order preservation, exact-once membership, and empty-section omission.
-- [ ] 1.2 Listing tests pass: `uv run python manage.py test entries.tests.test_entry_listing`
+- [x] 1.1 Grouping tests prove group order (children, parents, then "Cała rodzina"), input-order preservation, exact-once membership, and empty-section omission. — 553107c
+- [x] 1.2 Listing tests pass: `uv run python manage.py test entries.tests.test_entry_listing` — 553107c
 
 ### Phase 2: Grouped Parent Index and Gallery
 
 #### Automated
 
-- [ ] 2.1 View tests prove group sequence, in-group order, exact-once rendering, and the inactive suffix in both modes, and the existing ordering and isolation tests stay green.
-- [ ] 2.2 Gallery tests assert the grouped upcoming state renders children, parent, and "Cała rodzina" groups.
-- [ ] 2.3 Entries tests pass: `uv run python manage.py test entries.tests`
-- [ ] 2.4 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 2.1 View tests prove group sequence, in-group order, exact-once rendering, and the inactive suffix in both modes, and the existing ordering and isolation tests stay green. — 519070b
+- [x] 2.2 Gallery tests assert the grouped upcoming state renders children, parent, and "Cała rodzina" groups. — 519070b
+- [x] 2.3 Entries tests pass: `uv run python manage.py test entries.tests` — 519070b
+- [x] 2.4 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run` — 519070b
 
 #### Manual
 
-- [ ] 2.5 At phone width (360 px), a parent sees entries grouped by child, then by parent, then "Cała rodzina", in both list modes, and the heading hierarchy reads clearly.
-- [ ] 2.6 An entry reassigned in "Edytuj" moves to the new assignee's group after saving.
-- [ ] 2.7 Phone-width screenshots of the grouped upcoming and past gallery states are saved under `context/changes/parent-list-child-grouping/screenshots/`.
+- [x] 2.5 At phone width (360 px), a parent sees entries grouped by child, then by parent, then "Cała rodzina", in both list modes, and the heading hierarchy reads clearly.
+- [x] 2.6 An entry reassigned in "Edytuj" moves to the new assignee's group after saving.
+- [x] 2.7 Phone-width screenshots of the grouped upcoming and past gallery states are saved under `context/changes/parent-list-child-grouping/screenshots/`.

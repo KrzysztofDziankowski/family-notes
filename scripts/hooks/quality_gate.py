@@ -96,6 +96,10 @@ def literal_errors(paths, base):
     return errors
 
 
+# Git on the /mnt/c SynologyDrive checkout can take ~10 s while tests run.
+GIT_TIMEOUT_SECONDS = 30
+
+
 def run(command, root, env, timeout):
     try:
         result = subprocess.run(command, cwd=root, env=env, stdout=subprocess.PIPE,
@@ -115,14 +119,14 @@ def stop_errors(data):
         return []
     base = cwd(data)
     env = dict(os.environ, NO_COLOR='1', FORCE_COLOR='0', CLASSIFICATION_LIVE_EVAL='0')
-    status, output = run(['git', 'rev-parse', '--show-toplevel'], base, env, 5)
+    status, output = run(['git', 'rev-parse', '--show-toplevel'], base, env, GIT_TIMEOUT_SECONDS)
     if status:
         return ['Cannot locate repository root:\n' + output]
     root = Path(output.strip())
     paths = []
     for command in (['git', 'diff', '--name-only', '-z', 'HEAD'],
                     ['git', 'ls-files', '--others', '--exclude-standard', '-z']):
-        status, output = run(command, root, env, 5)
+        status, output = run(command, root, env, GIT_TIMEOUT_SECONDS)
         if status:
             return ['Cannot collect changed files:\n' + output]
         paths.extend(name for name in output.split('\0') if name)

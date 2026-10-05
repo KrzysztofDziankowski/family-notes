@@ -305,8 +305,8 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [ ] 1.1 Matcher unit tests pass: `uv run python manage.py test entries.tests.test_short_names`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
+- [x] 1.1 Matcher unit tests pass: `uv run python manage.py test entries.tests.test_short_names` — e316efb
+- [x] 1.2 Django checks pass: `uv run python manage.py check` — e316efb
 
 #### Manual
 
@@ -316,12 +316,12 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [ ] 2.1 Adapter tests cover the new schema field, its translation and the unchanged input payload: `uv run python manage.py test entries.tests.test_openai_backend`
-- [ ] 2.2 Validation and service tests cover the unique, ambiguous and no-match cases, inactive and foreign safety, and repr safety: `uv run python manage.py test entries.tests.test_classification_contract entries.tests.test_classification_service`
-- [ ] 2.3 Follow-up answer tests cover resolving a short-name answer and the ambiguous answer: `uv run python manage.py test entries.tests.test_follow_up_answer`
-- [ ] 2.7 Follow-up answer text wins over the model's stale mention (Hanna+Anna family, instruction "Hania", answer "Hanna" → Hanna, no repeated question), and `school_subject` survives resolution and merge: `uv run python manage.py test entries.tests.test_follow_up_answer entries.tests.test_classification_service`
-- [ ] 2.4 Acceptance corpus includes the Hania → Hanna example and the ambiguity example: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [ ] 2.5 Automated family classification is unchanged, including a school event naming a child: `uv run python manage.py test entries.tests.test_family_classification entries.tests.test_conversion_worker`
+- [x] 2.1 Adapter tests cover the new schema field, its translation and the unchanged input payload: `uv run python manage.py test entries.tests.test_openai_backend` — 6462e37
+- [x] 2.2 Validation and service tests cover the unique, ambiguous and no-match cases, inactive and foreign safety, and repr safety: `uv run python manage.py test entries.tests.test_classification_contract entries.tests.test_classification_service` — 6462e37
+- [x] 2.3 Follow-up answer tests cover resolving a short-name answer and the ambiguous answer: `uv run python manage.py test entries.tests.test_follow_up_answer` — 6462e37
+- [x] 2.7 Follow-up answer text wins over the model's stale mention (Hanna+Anna family, instruction "Hania", answer "Hanna" → Hanna, no repeated question), and `school_subject` survives resolution and merge: `uv run python manage.py test entries.tests.test_follow_up_answer entries.tests.test_classification_service` — 6462e37
+- [x] 2.4 Acceptance corpus includes the Hania → Hanna example and the ambiguity example: `uv run python manage.py test entries.tests.test_classification_acceptance` — 6462e37
+- [x] 2.5 Automated family classification is unchanged, including a school event naming a child: `uv run python manage.py test entries.tests.test_family_classification entries.tests.test_conversion_worker` — 6462e37
 
 #### Manual
 
@@ -331,13 +331,13 @@ Not applicable: no schema or data changes. Reverting the code restores the previ
 
 #### Automated
 
-- [ ] 3.1 Capture and follow-up view tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views`
-- [ ] 3.2 State gallery tests include the new state and still prove DEBUG gating and zero writes: `uv run python manage.py test entries.tests.test_states_view`
-- [ ] 3.3 Full suite passes: `uv run python manage.py test`
-- [ ] 3.4 Django checks pass: `uv run python manage.py check`
-- [ ] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 3.1 Capture and follow-up view tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views` — fca6790
+- [x] 3.2 State gallery tests include the new state and still prove DEBUG gating and zero writes: `uv run python manage.py test entries.tests.test_states_view` — fca6790
+- [x] 3.3 Full suite passes: `uv run python manage.py test` — fca6790
+- [x] 3.4 Django checks pass: `uv run python manage.py check` — fca6790
+- [x] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run` — fca6790
 
 #### Manual
 
-- [ ] 3.6 At 360px width, the `question_ambiguous_member` gallery state reads naturally in Polish and the answer field is usable.
+- [x] 3.6 At 360px width, the `question_ambiguous_member` gallery state reads naturally in Polish and the answer field is usable.
 - [ ] 3.7 In Chrome on Android, a parent in a family with "Hanna" captures an instruction about "Hania", sees Hanna preselected, and saves the entry assigned to Hanna.

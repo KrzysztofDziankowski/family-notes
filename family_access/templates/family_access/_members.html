@@ -1,0 +1,59 @@
+{% load family_context %}
+{% comment %}
+Family member list (S-14). Parameters: rows (each {member, is_self, can_deactivate,
+confirm_open}), error (optional guard error). Confirmations are no-JavaScript <details>.
+{% endcomment %}
+{% if error %}
+<div class="fn-panel fn-panel--danger" role="alert" data-state-part="guard-error">
+    <p>{{ error }}</p>
+</div>
+{% endif %}
+<p class="fn-muted" data-state-part="admin-note">Nowe osoby dodaje do rodziny administrator rodziny. Tutaj możesz zmienić imię i rolę osoby oraz wyłączyć albo przywrócić jej dostęp.</p>
+<ul class="fn-entry-list">
+    {% for row in rows %}
+    {% with member=row.member %}
+    <li class="fn-entry-row fn-member-row" data-member-row="{{ member.pk }}">
+        <p class="fn-member-name">{{ member.display_name }}{% if row.is_self %} (Ty){% endif %}</p>
+        <p class="fn-entry-meta fn-muted">
+            <span>{% if member.role == "parent" %}Rodzic{% else %}Dziecko{% endif %}</span>
+            <span>{% if member.is_active %}Dostęp aktywny{% else %}Dostęp wyłączony{% endif %}</span>
+            <a href="{% url 'family_member_edit' member.pk %}">Zmień imię lub rolę<span class="fn-visually-hidden">: {{ member.display_name }}</span></a>
+        </p>
+        {% if member.is_active %}
+            {% if row.can_deactivate %}
+            <details class="fn-manage-delete" data-state-part="deactivate"{% if row.confirm_open %} open{% endif %}>
+                <summary>Wyłącz dostęp<span class="fn-visually-hidden">: {{ member.display_name }}</span></summary>
+                <p>Ta osoba straci dostęp do wpisów rodziny. Jej wpisy zostaną zachowane, a dostęp można później przywrócić.</p>
+                {% if member.role == "parent" %}<p>Tokeny automatyzacji tej osoby zostaną unieważnione. Po przywróceniu dostępu nowe tokeny wyda administrator rodziny.</p>{% endif %}
+                <form method="post" action="{% url 'family_member_deactivate' member.pk %}">
+                    {% csrf_token %}
+                    {% family_context_field %}
+                    <button type="submit" class="fn-manage-danger">Wyłącz dostęp<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
+                </form>
+            </details>
+            {% elif row.is_self %}
+            <p class="fn-muted" data-state-part="self-guard">Nie możesz wyłączyć własnego dostępu. Poproś o to drugiego rodzica lub administratora rodziny.</p>
+            {% else %}
+            <p class="fn-muted" data-state-part="last-parent-guard">To ostatni aktywny rodzic. Rodzina musi mieć co najmniej jednego aktywnego rodzica.</p>
+            {% endif %}
+        {% elif member.role == "parent" %}
+            <details class="fn-member-confirm" data-state-part="reactivate-parent"{% if row.confirm_open %} open{% endif %}>
+                <summary>Przywróć dostęp<span class="fn-visually-hidden">: {{ member.display_name }}</span></summary>
+                <p>Ta osoba odzyska uprawnienia rodzica. Jej dawne tokeny automatyzacji pozostaną unieważnione.</p>
+                <form method="post" action="{% url 'family_member_reactivate' member.pk %}">
+                    {% csrf_token %}
+                    {% family_context_field %}
+                    <button type="submit">Przywróć dostęp rodzica<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
+                </form>
+            </details>
+        {% else %}
+            <form method="post" action="{% url 'family_member_reactivate' member.pk %}" class="fn-member-form" data-state-part="reactivate-child">
+                {% csrf_token %}
+                {% family_context_field %}
+                <button type="submit" class="secondary">Przywróć dostęp<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
+            </form>
+        {% endif %}
+    </li>
+    {% endwith %}
+    {% endfor %}
+</ul>

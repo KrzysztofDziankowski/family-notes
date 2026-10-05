@@ -258,36 +258,36 @@ No schema or data migration, no backfill and no feature flag. Rollback is to rem
 
 #### Automated
 
-- [ ] 1.1 Service tests cover listing, rename, deactivate and reactivate for an active parent, plus denial for a child, an inactive parent, a parent of another family, and a missing actor membership.
-- [ ] 1.2 Rename tests reject a blank or over-length display name, and a name that normalizes to another active member's name, with a Polish error and leave the row unchanged.
-- [ ] 1.3 Guard tests prove a parent cannot deactivate themselves or the last active parent, that deactivation revokes that member's automation tokens, and that reactivation leaves them revoked.
-- [ ] 1.4 Reactivation tests cover reactivating an inactive member and the Polish error when the user is already active in another family.
-- [ ] 1.5 Targeted tests pass: `uv run python manage.py test family_access.tests.test_membership_services`.
-- [ ] 1.6 Migration drift check passes with no new migration: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 1.8 Stale-authority tests change the actor's or target's row directly in the database after it was resolved (actor deactivated or demoted; target already reactivated or deactivated) and prove the call raises `PermissionDenied` or the Polish state error with no change.
-- [ ] 1.9 A guard test proves a parent whose `User.is_active` is False does not count as a remaining parent, so the last usable parent cannot be deactivated.
+- [x] 1.1 Service tests cover listing, rename, deactivate and reactivate for an active parent, plus denial for a child, an inactive parent, a parent of another family, and a missing actor membership. — df6fb11
+- [x] 1.2 Rename tests reject a blank or over-length display name, and a name that normalizes to another active member's name, with a Polish error and leave the row unchanged. — df6fb11
+- [x] 1.3 Guard tests prove a parent cannot deactivate themselves or the last active parent, that deactivation revokes that member's automation tokens, and that reactivation leaves them revoked. — df6fb11
+- [x] 1.4 Reactivation tests cover reactivating an inactive member and the Polish error when the user is already active in another family. — df6fb11
+- [x] 1.5 Targeted tests pass: `uv run python manage.py test family_access.tests.test_membership_services`. — df6fb11
+- [x] 1.6 Migration drift check passes with no new migration: `uv run python manage.py makemigrations --check --dry-run`. — df6fb11
+- [x] 1.8 Stale-authority tests change the actor's or target's row directly in the database after it was resolved (actor deactivated or demoted; target already reactivated or deactivated) and prove the call raises `PermissionDenied` or the Polish state error with no change. — df6fb11
+- [x] 1.9 A guard test proves a parent whose `User.is_active` is False does not count as a remaining parent, so the last usable parent cannot be deactivated. — df6fb11
 
 #### Manual
 
-- [ ] 1.7 A reviewer confirms the service log lines contain only ids and event names, with no emails or display names.
+- [x] 1.7 A reviewer confirms the service log lines contain only ids and event names, with no emails or display names.
 
 ### Phase 2: Parent Member-Management UI and Regression
 
 #### Automated
 
-- [ ] 2.1 View tests cover each route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user.
-- [ ] 2.2 Mutation-denial tests prove the database is unchanged after a 403, a 404 or a guard error.
-- [ ] 2.3 Foreign and nonexistent member ids return the same status and show no foreign content.
-- [ ] 2.4 Accessibility audit cases pass for the member list, the edit form (valid and invalid) and the account page: `uv run python manage.py test family_access.tests.test_membership_accessibility`.
-- [ ] 2.5 State-gallery tests prove DEBUG gating, parent-only access and no database writes.
-- [ ] 2.6 Regression tests cover deactivation effects on assignee choices, EduVulcan child snapshots, parent entry visibility, token 401 and the account page, and access restored after reactivation.
-- [ ] 2.7 Full tests pass: `uv run python manage.py test`.
-- [ ] 2.8 Django checks pass: `uv run python manage.py check`.
-- [ ] 2.9 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 2.13 View tests prove an inactive parent's row renders the reactivation confirmation with "Ta osoba odzyska uprawnienia rodzica.", an inactive child's row does not, and a parent reactivation emits only the id-only log line.
+- [x] 2.1 View tests cover each route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user. — df712be
+- [x] 2.2 Mutation-denial tests prove the database is unchanged after a 403, a 404 or a guard error. — df712be
+- [x] 2.3 Foreign and nonexistent member ids return the same status and show no foreign content. — df712be
+- [x] 2.4 Accessibility audit cases pass for the member list, the edit form (valid and invalid) and the account page: `uv run python manage.py test family_access.tests.test_membership_accessibility`. — df712be
+- [x] 2.5 State-gallery tests prove DEBUG gating, parent-only access and no database writes. — df712be
+- [x] 2.6 Regression tests cover deactivation effects on assignee choices, EduVulcan child snapshots, parent entry visibility, token 401 and the account page, and access restored after reactivation. — df712be
+- [x] 2.7 Full tests pass: `uv run python manage.py test`. — df712be
+- [x] 2.8 Django checks pass: `uv run python manage.py check`. — df712be
+- [x] 2.9 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — df712be
+- [x] 2.13 View tests prove an inactive parent's row renders the reactivation confirmation with "Ta osoba odzyska uprawnienia rodzica.", an inactive child's row does not, and a parent reactivation emits only the id-only log line. — df712be
 
 #### Manual
 
-- [ ] 2.10 At 360px width a parent can rename a member and deactivate and reactivate a child, and sees the guard explanation for themselves and the last parent.
-- [ ] 2.11 A keyboard-only pass on the member list and edit page follows the `context/foundation/accessibility.md` checklist.
-- [ ] 2.12 The operator adds a new member in Django admin for a user created by Google first sign-in, and that member appears in the in-app list on the next request.
+- [x] 2.10 At 360px width a parent can rename a member and deactivate and reactivate a child, and sees the guard explanation for themselves and the last parent.
+- [x] 2.11 A keyboard-only pass on the member list and edit page follows the `context/foundation/accessibility.md` checklist.
+- [x] 2.12 The operator adds a new member in Django admin for a user created by Google first sign-in, and that member appears in the in-app list on the next request.

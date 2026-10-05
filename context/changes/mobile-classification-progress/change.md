@@ -1,9 +1,9 @@
 ---
 change_id: mobile-classification-progress
 title: Parent can see background classification activity and its result on a phone
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

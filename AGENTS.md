@@ -6,6 +6,7 @@ FamilyNotes is a Django 5.2 web application managed with `uv`. The repository cu
 
 - Never write to `context/archive/`; archived changes are immutable. If a resolved target is archived, stop and open a new change under `context/changes/`.
 - Enforce family-scoped access in every query and mutation. Parents may manage family entries, children may read only entries assigned to them, and unauthenticated users may not access family data; see `@context/foundation/prd.md`.
+- Resolve family only through the request family context (`family_access/context.py`: `resolve_family_context` / `require_family_context`, or `peek_family_context` in templates); never from the user alone. A person may belong to several families. Services take the context membership, every `method="post"` form to an `entries`/`family_access` view includes `{% family_context_field %}`, and automation requests take the family only from the token.
 - Keep classification input limited to producing and saving the requested family entry. Do not add secondary storage, analytics, or training use for that text.
 - Keep secrets and deployment-specific values out of source control. Replace the scaffolded development values in `@family_notes/settings.py` with environment-backed configuration before deployment.
 
@@ -37,8 +38,9 @@ FamilyNotes is a Django 5.2 web application managed with `uv`. The repository cu
 - Before creating markup, check the partials in `entries/templates/entries/_*.html` and `@family_notes/templates/_error.html`. Add new shared classes to `tokens.css`, built from existing tokens.
 - No literal colours, inline `style=` attributes or `<style>` blocks in templates; `scripts/hooks/quality_gate.py` flags them in the cleaned templates.
 - Every Django error page (403/404/500) extends the base layout.
-- DEBUG-only kitchen sinks: `/entries/_states/` (parent capture and management views) and `/entries/mine/_states/` (child views). Add new states there.
+- DEBUG-only kitchen sinks: `/entries/_states/` (parent capture and management views), `/entries/mine/_states/` (child views) and `/account/family/_states/` (family member management). Add new states there.
 - All user-facing copy is in Polish (Django admin excepted).
+- Accessibility target is WCAG 2.2 AA; follow the checklist in `@context/foundation/accessibility.md` (skip link, `_field.html` + `describe_fields`, „Błąd: ” titles, tokens only). Every new product page or state adds a case to `entries/tests/test_accessibility.py` or `family_notes/test_accessibility.py` (audit helper: `family_notes/a11y_audit.py`).
 
 ## Commits and Verification
 

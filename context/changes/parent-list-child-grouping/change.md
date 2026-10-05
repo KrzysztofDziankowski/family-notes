@@ -1,9 +1,9 @@
 ---
 change_id: parent-list-child-grouping
 title: Parent can browse family entries grouped by child
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

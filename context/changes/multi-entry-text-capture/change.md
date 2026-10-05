@@ -1,9 +1,9 @@
 ---
 change_id: multi-entry-text-capture
 title: Parent can review and save several entries from one instruction
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

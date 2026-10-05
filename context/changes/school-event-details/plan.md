@@ -359,24 +359,24 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [ ] 1.1 Migration is present and model drift is clean: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.2 Service tests cover required subject on confirm, create and update for each of the four kinds, optional subject elsewhere, subject length limit, and the automated path accepting a blank subject: `uv run python manage.py test entries.tests.test_entry_service`
-- [ ] 1.3 Contract tests reflect the new `SCHOOL_SUBJECT` required field for exactly the four event kinds: `uv run python manage.py test entries.tests.test_classification_contract`
-- [ ] 1.4 Django checks pass: `uv run python manage.py check`
-- [ ] 1.6 Service tests cover the edit rule: updating a subject-less automated or legacy school event (reassign, move date, retitle) saves without a subject; clearing an existing subject fails; changing the school item to one of the four kinds without a subject fails: `uv run python manage.py test entries.tests.test_entry_service`
+- [x] 1.1 Migration is present and model drift is clean: `uv run python manage.py makemigrations --check --dry-run` — 6cf2ca4
+- [x] 1.2 Service tests cover required subject on confirm, create and update for each of the four kinds, optional subject elsewhere, subject length limit, and the automated path accepting a blank subject: `uv run python manage.py test entries.tests.test_entry_service` — 6cf2ca4
+- [x] 1.3 Contract tests reflect the new `SCHOOL_SUBJECT` required field for exactly the four event kinds: `uv run python manage.py test entries.tests.test_classification_contract` — 6cf2ca4
+- [x] 1.4 Django checks pass: `uv run python manage.py check` — 6cf2ca4
+- [x] 1.6 Service tests cover the edit rule: updating a subject-less automated or legacy school event (reassign, move date, retitle) saves without a subject; clearing an existing subject fails; changing the school item to one of the four kinds without a subject fails: `uv run python manage.py test entries.tests.test_entry_service` — 6cf2ca4
 
 #### Manual
 
-- [ ] 1.5 Running the migration against a copy of a database containing existing school entries leaves every row with an empty subject and no other change.
+- [x] 1.5 Running the migration against a copy of a database containing existing school entries leaves every row with an empty subject and no other change.
 
 ### Phase 2: Classification Recognizes and Asks for the Subject
 
 #### Automated
 
-- [ ] 2.1 Validation tests prove that the four kinds without a subject produce a `SCHOOL_SUBJECT` follow-up only when required, that the subject is trimmed and passed through, and that a subject in an automated proposal never adds a missing field: `uv run python manage.py test entries.tests.test_classification_contract`
-- [ ] 2.2 Service tests cover parent classification, answer merge filling only a missing subject, and `classify_for_family` returning `CLASSIFIED` (not a general note) for a school event without a subject: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_family_classification entries.tests.test_follow_up_answer`
-- [ ] 2.3 Adapter tests cover the new schema field and translation, and that the input payload is unchanged: `uv run python manage.py test entries.tests.test_openai_backend entries.tests.test_classification_acceptance`
-- [ ] 2.5 Every `classify_output` caller, including the smoke command and the skipped live-wire tests, passes `require_school_subject` (no `TypeError`): `grep -rn "classify_output(" entries`
+- [x] 2.1 Validation tests prove that the four kinds without a subject produce a `SCHOOL_SUBJECT` follow-up only when required, that the subject is trimmed and passed through, and that a subject in an automated proposal never adds a missing field: `uv run python manage.py test entries.tests.test_classification_contract` — 65d57b8
+- [x] 2.2 Service tests cover parent classification, answer merge filling only a missing subject, and `classify_for_family` returning `CLASSIFIED` (not a general note) for a school event without a subject: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_family_classification entries.tests.test_follow_up_answer` — 65d57b8
+- [x] 2.3 Adapter tests cover the new schema field and translation, and that the input payload is unchanged: `uv run python manage.py test entries.tests.test_openai_backend entries.tests.test_classification_acceptance` — 65d57b8
+- [x] 2.5 Every `classify_output` caller, including the smoke command and the skipped live-wire tests, passes `require_school_subject` (no `TypeError`): `grep -rn "classify_output(" entries` — 65d57b8
 
 #### Manual
 
@@ -386,27 +386,27 @@ Additive `AddField` with `default=''` and `db_default=''`. Existing rows receive
 
 #### Automated
 
-- [ ] 3.1 Form tests cover a visible school item in review, the strict mismatch error in review, the required subject for the four kinds in review/create/edit, the follow-up hidden subject round-trip and tamper handling, editing a subject-less school entry without changing its school item saving successfully, and setting a school event kind or clearing a stored subject on edit failing with `Podaj przedmiot.`: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_follow_up_views`
-- [ ] 3.2 View tests cover confirm/create/edit persisting the subject, the capture follow-up asking for the subject, and detail pages rendering `Przedmiot` only when set: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_manage_views entries.tests.test_child_views`
-- [ ] 3.3 State gallery tests cover the new states, DEBUG gating and zero database writes: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states entries.tests.test_child_states_view`
+- [x] 3.1 Form tests cover a visible school item in review, the strict mismatch error in review, the required subject for the four kinds in review/create/edit, the follow-up hidden subject round-trip and tamper handling, editing a subject-less school entry without changing its school item saving successfully, and setting a school event kind or clearing a stored subject on edit failing with `Podaj przedmiot.`: `uv run python manage.py test entries.tests.test_entry_forms entries.tests.test_follow_up_views` — 31d9a41
+- [x] 3.2 View tests cover confirm/create/edit persisting the subject, the capture follow-up asking for the subject, and detail pages rendering `Przedmiot` only when set: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_manage_views entries.tests.test_child_views` — 31d9a41
+- [x] 3.3 State gallery tests cover the new states, DEBUG gating and zero database writes: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states entries.tests.test_child_states_view` — 31d9a41
 
 #### Manual
 
-- [ ] 3.4 At 360px width in the capture state gallery, the review form shows the school type select and subject field clearly, and the subject question reads naturally in Polish.
+- [x] 3.4 At 360px width in the capture state gallery, the review form shows the school type select and subject field clearly, and the subject question reads naturally in Polish.
 - [ ] 3.5 In Chrome on Android, a parent captures a test without a subject, answers the question, sees the subject in review, saves, and sees it on the detail page.
 
 ### Phase 4: Automated Intake and Read Compatibility
 
 #### Automated
 
-- [ ] 4.1 EduVulcan rule tests assert the subject for the four calendar categories, a blank subject for over-long values, and unchanged content: `uv run python manage.py test entries.tests.test_eduvulcan_rules entries.tests.test_eduvulcan_acceptance`
-- [ ] 4.2 Conversion tests prove that a rule-based school event persists its subject and that a classified school event without a subject persists as a calendar event, not a general note: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_conversion_lifecycle`
-- [ ] 4.3 API tests cover `school_subject` for set and blank entries and confirm that the existing keys are unchanged: `uv run python manage.py test entries.tests.test_entries_api`
-- [ ] 4.4 Full suite passes: `uv run python manage.py test`
-- [ ] 4.5 Django checks pass: `uv run python manage.py check`
-- [ ] 4.6 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 4.1 EduVulcan rule tests assert the subject for the four calendar categories, a blank subject for over-long values, and unchanged content: `uv run python manage.py test entries.tests.test_eduvulcan_rules entries.tests.test_eduvulcan_acceptance` — b6a807b
+- [x] 4.2 Conversion tests prove that a rule-based school event persists its subject and that a classified school event without a subject persists as a calendar event, not a general note: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_conversion_lifecycle` — b6a807b
+- [x] 4.3 API tests cover `school_subject` for set and blank entries and confirm that the existing keys are unchanged: `uv run python manage.py test entries.tests.test_entries_api` — b6a807b
+- [x] 4.4 Full suite passes: `uv run python manage.py test` — b6a807b
+- [x] 4.5 Django checks pass: `uv run python manage.py check` — b6a807b
+- [x] 4.6 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run` — b6a807b
 
 #### Manual
 
-- [ ] 4.7 A forwarded EduVulcan "Sprawdzian" notification on a local stack creates an entry whose detail page shows the subject.
-- [ ] 4.8 A pre-existing school entry without a subject still renders on parent and child detail pages and in the API response.
+- [x] 4.7 A forwarded EduVulcan "Sprawdzian" notification on a local stack creates an entry whose detail page shows the subject.
+- [x] 4.8 A pre-existing school entry without a subject still renders on parent and child detail pages and in the API response.

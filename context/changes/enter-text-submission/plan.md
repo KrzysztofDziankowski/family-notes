@@ -223,31 +223,31 @@ No database or data changes. Rollback: remove the script include and widget attr
 
 #### Automated
 
-- [ ] 1.1 Form/view tests prove the capture `text`, follow-up `answer` and review `correction` textareas render `data-enter-submit` and `enterkeyhint="send"` (the correction box additionally carrying S-03's `data-enter-submitter`), while review, create and edit `content` textareas do not.
-- [ ] 1.2 View tests prove the capture page (empty, question, proposal states) and the DEBUG state gallery include the `js/enter-submit.js` script tag, and each opted-in field renders the hint copy in a `hidden` `data-enter-hint` element with `id="<auto_id>-enter-hint"`.
-- [ ] 1.3 A test proves `js/enter-submit.js` is resolvable through Django's static files finders.
-- [ ] 1.11 Review-form tests (proposal, follow-up-highlight, `correction_failed` and confirm-invalid states, plus the S-04 batch review if present) prove Enter there can never post to `entries:confirm`: every `data-enter-submit` field inside a form whose action is `entries:confirm` carries a `data-enter-submitter` id that resolves to a submit button in the same form with `formaction` equal to `reverse('entries:correct')` (batch: `name="action" value="correct-<i>"`, id `e{i}-correct-submit`); no field points at „Zapisz wpis”.
-- [ ] 1.4 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view entries.tests.test_entry_forms`.
-- [ ] 1.5 Django checks pass: `uv run python manage.py check`.
+- [x] 1.1 Form/view tests prove the capture `text`, follow-up `answer` and review `correction` textareas render `data-enter-submit` and `enterkeyhint="send"` (the correction box additionally carrying S-03's `data-enter-submitter`), while review, create and edit `content` textareas do not. — 3d13573
+- [x] 1.2 View tests prove the capture page (empty, question, proposal states) and the DEBUG state gallery include the `js/enter-submit.js` script tag, and each opted-in field renders the hint copy in a `hidden` `data-enter-hint` element with `id="<auto_id>-enter-hint"`. — 3d13573
+- [x] 1.3 A test proves `js/enter-submit.js` is resolvable through Django's static files finders. — 3d13573
+- [x] 1.11 Review-form tests (proposal, follow-up-highlight, `correction_failed` and confirm-invalid states, plus the S-04 batch review if present) prove Enter there can never post to `entries:confirm`: every `data-enter-submit` field inside a form whose action is `entries:confirm` carries a `data-enter-submitter` id that resolves to a submit button in the same form with `formaction` equal to `reverse('entries:correct')` (batch: `name="action" value="correct-<i>"`, id `e{i}-correct-submit`); no field points at „Zapisz wpis”. — 3d13573
+- [x] 1.4 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view entries.tests.test_entry_forms`. — 3d13573
+- [x] 1.5 Django checks pass: `uv run python manage.py check`. — 3d13573
 
 #### Manual
 
-- [ ] 1.6 Desktop Chrome: Enter on the capture box submits; Shift+Enter inserts a newline; Enter on empty or whitespace-only text does nothing; holding Enter posts only once.
-- [ ] 1.7 Desktop Chrome: in the follow-up question, Enter performs "Dalej" (the answer is classified), never "Pomiń".
+- [x] 1.6 Desktop Chrome: Enter on the capture box submits; Shift+Enter inserts a newline; Enter on empty or whitespace-only text does nothing; holding Enter posts only once.
+- [x] 1.7 Desktop Chrome: in the follow-up question, Enter performs "Dalej" (the answer is classified), never "Pomiń".
 - [ ] 1.8 Android Chrome with Gboard: the keyboard shows a send action; typing Polish diacritics by long press and swipe typing never submits mid-word; the send key submits.
-- [ ] 1.9 With JavaScript disabled, all opted-in forms still submit only through their buttons, Enter inserts a newline, and no Enter hint is visible.
-- [ ] 1.10 Review, structured create and edit forms: Enter in "Tytuł" still inserts a newline and does not save.
-- [ ] 1.12 Review form: Enter in „Popraw opis” runs „Popraw” (the revised proposal is shown), no entry is saved, and an empty correction box ignores Enter.
+- [x] 1.9 With JavaScript disabled, all opted-in forms still submit only through their buttons, Enter inserts a newline, and no Enter hint is visible.
+- [x] 1.10 Review, structured create and edit forms: Enter in "Tytuł" still inserts a newline and does not save.
+- [x] 1.12 Review form: Enter in „Popraw opis” runs „Popraw” (the revised proposal is shown), no entry is saved, and an empty correction box ignores Enter.
 
 ### Phase 2: Regression and Release Verification
 
 #### Automated
 
-- [ ] 2.1 Follow-up tests prove a POST without `action` is answered via the backend and a POST with `action=skip` skips without a backend call.
-- [ ] 2.2 Full test suite passes: `uv run python manage.py test`.
-- [ ] 2.3 Django checks pass: `uv run python manage.py check`.
-- [ ] 2.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 2.5 Static collection includes the script: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/enter-submit.js`.
+- [x] 2.1 Follow-up tests prove a POST without `action` is answered via the backend and a POST with `action=skip` skips without a backend call. — e8c0835
+- [x] 2.2 Full test suite passes: `uv run python manage.py test`. — e8c0835
+- [x] 2.3 Django checks pass: `uv run python manage.py check`. — e8c0835
+- [x] 2.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — e8c0835
+- [x] 2.5 Static collection includes the script: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/enter-submit.js`. — e8c0835
 
 #### Manual
 

@@ -221,6 +221,7 @@ def serialize_entry(entry):
         'time': _iso_or_none(entry.time),
         'assigned_member': {'display_name': member.display_name} if member else None,
         'school_item': entry.school_item or None,
+        'school_subject': entry.school_subject or None,
         'source': entry.source,
         'created_at': _iso_or_none(entry.created_at),
         'updated_at': _iso_or_none(entry.updated_at),

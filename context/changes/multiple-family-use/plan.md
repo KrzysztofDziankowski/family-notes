@@ -347,50 +347,50 @@ Context resolution adds one indexed membership query per request, which is negli
 
 #### Automated
 
-- [ ] 1.1 Context unit tests cover one membership (auto-select), no membership, an inactive membership, an inactive family, an inactive `User`, a session id pointing to a foreign or inactive family (discarded), and an anonymous user.
-- [ ] 1.2 No user-based family lookup remains: `grep -rnE "get_active_membership|require_active_membership|family_memberships|FamilyMember\.objects\.filter\(user" --include=*.py entries family_access family_notes | grep -vE "/tests/|/migrations/|family_access/(context|models)\.py"` returns nothing.
-- [ ] 1.3 Existing suites pass unchanged in behavior, with the `test_access.py` helper tests rewritten as context tests: `uv run python manage.py test entries family_access family_notes`.
-- [ ] 1.4 Django checks pass: `uv run python manage.py check`.
-- [ ] 1.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 1.1 Context unit tests cover one membership (auto-select), no membership, an inactive membership, an inactive family, an inactive `User`, a session id pointing to a foreign or inactive family (discarded), and an anonymous user. — e88959e
+- [x] 1.2 No user-based family lookup remains: `grep -rnE "get_active_membership|require_active_membership|family_memberships|FamilyMember\.objects\.filter\(user" --include=*.py entries family_access family_notes | grep -vE "/tests/|/migrations/|family_access/(context|models)\.py"` returns nothing. — e88959e
+- [x] 1.3 Existing suites pass unchanged in behavior, with the `test_access.py` helper tests rewritten as context tests: `uv run python manage.py test entries family_access family_notes`. — e88959e
+- [x] 1.4 Django checks pass: `uv run python manage.py check`. — e88959e
+- [x] 1.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — e88959e
 
 #### Manual
 
-- [ ] 1.6 A reviewer confirms no view passes `request.user` to a service or form, and every service added by S-03, S-04 and S-07 takes the context membership.
+- [x] 1.6 A reviewer confirms no view passes `request.user` to a service or form, and every service added by S-03, S-04 and S-07 takes the context membership.
 
 ### Phase 2: Constraint Swap, Chooser, Switcher and Stale-Tab Guard
 
 #### Automated
 
-- [ ] 2.1 Migration tests use the `MigrationExecutor` pattern from `entries/tests/test_conversion_models.py:255-306` (migrate to `0003`, insert memberships, migrate to `0004`) and prove a user can hold active memberships in two families but not two active memberships in one family, and that the reverse refuses with the offending user ids when duplicates exist.
-- [ ] 2.2 Chooser tests cover listing only the user's own active memberships, a foreign or inactive `family_id` returning 404 with the session unchanged, the CSRF requirement, and the redirect to role home.
-- [ ] 2.3 Middleware tests prove a multi-family user with no selection is redirected to the chooser from every product route, and that single-family users are never redirected.
-- [ ] 2.4 Stale-tab tests walk the URL resolver for the `entries` and `family_access` namespaces and prove every POST route returns 409 and writes nothing when submitted with another family's `family_context` (or none, for a multi-family user), while a missing field is accepted for a single-family user.
-- [ ] 2.5 Admin and reactivation tests prove the operator can add an active membership in family B for a user active in A, a duplicate active `(user, family)` row is refused with a form error, and S-14 reactivation succeeds across families.
-- [ ] 2.6 Accessibility audit cases pass for the chooser, the header with the family switcher, and the 409 page: `uv run python manage.py test family_access.tests.test_family_context_accessibility`.
-- [ ] 2.7 Full tests pass: `uv run python manage.py test`.
-- [ ] 2.8 Django checks pass: `uv run python manage.py check`.
-- [ ] 2.9 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 2.14 Template tests render every GET page in the guarded namespaces for a multi-family parent and prove each `method="post"` form contains the `family_context` field.
-- [ ] 2.15 Context-processor tests prove a multi-family user with no selection can GET the chooser and the logout page and gets a plain 404 page for an unknown URL, with no redirect and no exception.
+- [x] 2.1 Migration tests use the `MigrationExecutor` pattern from `entries/tests/test_conversion_models.py:255-306` (migrate to `0003`, insert memberships, migrate to `0004`) and prove a user can hold active memberships in two families but not two active memberships in one family, and that the reverse refuses with the offending user ids when duplicates exist. — 5064767
+- [x] 2.2 Chooser tests cover listing only the user's own active memberships, a foreign or inactive `family_id` returning 404 with the session unchanged, the CSRF requirement, and the redirect to role home. — 5064767
+- [x] 2.3 Middleware tests prove a multi-family user with no selection is redirected to the chooser from every product route, and that single-family users are never redirected. — 5064767
+- [x] 2.4 Stale-tab tests walk the URL resolver for the `entries` and `family_access` namespaces and prove every POST route returns 409 and writes nothing when submitted with another family's `family_context` (or none, for a multi-family user), while a missing field is accepted for a single-family user. — 5064767
+- [x] 2.5 Admin and reactivation tests prove the operator can add an active membership in family B for a user active in A, a duplicate active `(user, family)` row is refused with a form error, and S-14 reactivation succeeds across families. — 5064767
+- [x] 2.6 Accessibility audit cases pass for the chooser, the header with the family switcher, and the 409 page: `uv run python manage.py test family_access.tests.test_family_context_accessibility`. — 5064767
+- [x] 2.7 Full tests pass: `uv run python manage.py test`. — 5064767
+- [x] 2.8 Django checks pass: `uv run python manage.py check`. — 5064767
+- [x] 2.9 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 5064767
+- [x] 2.14 Template tests render every GET page in the guarded namespaces for a multi-family parent and prove each `method="post"` form contains the `family_context` field. — 5064767
+- [x] 2.15 Context-processor tests prove a multi-family user with no selection can GET the chooser and the logout page and gets a plain 404 page for an unknown URL, with no redirect and no exception. — 5064767
 
 #### Manual
 
-- [ ] 2.10 At 360px width a two-family user picks a family, sees its name in the header, switches, and sees only the other family's entries.
-- [ ] 2.11 With two tabs on different families, saving a capture in the stale tab shows the Polish 409 page and creates no entry.
-- [ ] 2.12 The operator adds a second membership in Django admin for an existing user, and that user sees the "Zmień rodzinę" link on the next request.
-- [ ] 2.13 A keyboard-only pass on the chooser and the header switcher follows the `context/foundation/accessibility.md` checklist.
+- [x] 2.10 At 360px width a two-family user picks a family, sees its name in the header, switches, and sees only the other family's entries.
+- [x] 2.11 With two tabs on different families, saving a capture in the stale tab shows the Polish 409 page and creates no entry.
+- [x] 2.12 The operator adds a second membership in Django admin for an existing user, and that user sees the "Zmień rodzinę" link on the next request.
+- [x] 2.13 A keyboard-only pass on the chooser and the header switcher follows the `context/foundation/accessibility.md` checklist.
 
 ### Phase 3: Cross-Family Isolation Matrix, Automation and Worker Regression
 
 #### Automated
 
-- [ ] 3.1 The cross-family matrix passes for every listed web route: `uv run python manage.py test entries.tests.test_multi_family_access family_access.tests.test_multi_family_access`.
-- [ ] 3.2 Automation and worker regression tests pass: `uv run python manage.py test entries.tests.test_entries_api entries.tests.test_notification_intake entries.tests.test_conversion_worker`.
-- [ ] 3.3 Full tests pass: `uv run python manage.py test`.
-- [ ] 3.4 Django checks pass: `uv run python manage.py check`.
-- [ ] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 3.1 The cross-family matrix passes for every listed web route: `uv run python manage.py test entries.tests.test_multi_family_access family_access.tests.test_multi_family_access`. — 98314b6
+- [x] 3.2 Automation and worker regression tests pass: `uv run python manage.py test entries.tests.test_entries_api entries.tests.test_notification_intake entries.tests.test_conversion_worker`. — 98314b6
+- [x] 3.3 Full tests pass: `uv run python manage.py test`. — 98314b6
+- [x] 3.4 Django checks pass: `uv run python manage.py check`. — 98314b6
+- [x] 3.5 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 98314b6
 
 #### Manual
 
-- [ ] 3.6 With the seeded two-family user, a reviewer completes parent capture in one family and the child view in the other, and confirms no data from the other family appears anywhere.
-- [ ] 3.7 A reviewer confirms that a single-family user's flows (seeded parent and child) look and behave exactly as before.
+- [x] 3.6 With the seeded two-family user, a reviewer completes parent capture in one family and the child view in the other, and confirms no data from the other family appears anywhere.
+- [x] 3.7 A reviewer confirms that a single-family user's flows (seeded parent and child) look and behave exactly as before.

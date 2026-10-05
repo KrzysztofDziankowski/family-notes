@@ -209,23 +209,23 @@ No schema or data change. Users created through earlier local signups (if any) r
 
 #### Automated
 
-- [ ] 1.1 Signup tests prove that GET/POST `/accounts/signup/` render the Polish closed page and create no user.
-- [ ] 1.2 Adapter tests prove that local signup is closed and social signup is open, and that a new social login creates an unmapped `User` that sees only the unconfigured state.
-- [ ] 1.3 Targeted tests pass: `uv run python manage.py test family_access family_notes`
-- [ ] 1.4 Django checks and migration check pass: `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 Signup tests prove that GET/POST `/accounts/signup/` render the Polish closed page and create no user. — 67367a6
+- [x] 1.2 Adapter tests prove that local signup is closed and social signup is open, and that a new social login creates an unmapped `User` that sees only the unconfigured state. — 67367a6
+- [x] 1.3 Targeted tests pass: `uv run python manage.py test family_access family_notes` — 67367a6
+- [x] 1.4 Django checks and migration check pass: `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run` — 67367a6
 
 #### Manual
 
-- [ ] 1.5 With `runserver`, `/accounts/signup/` shows "Rejestracja jest wyłączona" in the app layout at phone width.
+- [x] 1.5 With `runserver`, `/accounts/signup/` shows "Rejestracja jest wyłączona" in the app layout at phone width.
 - [ ] 1.6 A Google account never used with the app completes sign-in and lands on the "not configured" status; a superuser can then map it in admin and the user sees family data on the next request.
 
 ### Phase 2: Remove the Visible Sign-Up Option
 
 #### Automated
 
-- [ ] 2.1 Login page tests assert that no sign-up link or text is rendered, and the existing login tests stay green.
-- [ ] 2.2 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run`
+- [x] 2.1 Login page tests assert that no sign-up link or text is rendered, and the existing login tests stay green. — 3da5ab9
+- [x] 2.2 Full suite, checks and migration check pass: `uv run python manage.py test`, `uv run python manage.py check`, `uv run python manage.py makemigrations --check --dry-run` — 3da5ab9
 
 #### Manual
 
-- [ ] 2.3 At 360 px and 1280 px the login page shows the Google button and password form with no sign-up option; screenshots are saved under `context/changes/remove-sign-up-option/screenshots/`.
+- [x] 2.3 At 360 px and 1280 px the login page shows the Google button and password form with no sign-up option; screenshots are saved under `context/changes/remove-sign-up-option/screenshots/`.

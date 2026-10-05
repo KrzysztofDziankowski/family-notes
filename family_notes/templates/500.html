@@ -11,6 +11,7 @@ Rendered by Django without a request context: no url lookups, no user, no contex
     <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
 </head>
 <body>
+    <a class="fn-skip-link" href="#main">Przejdź do treści</a>
     <header class="container">
         <nav aria-label="Główna nawigacja">
             <ul>
@@ -18,7 +19,7 @@ Rendered by Django without a request context: no url lookups, no user, no contex
             </ul>
         </nav>
     </header>
-    <main class="container">
+    <main id="main" class="container" tabindex="-1">
         <h1>Coś poszło nie tak</h1>
         <div class="fn-panel fn-panel--danger" role="alert">
             <p>Wystąpił błąd serwera. Spróbuj ponownie za chwilę.</p>

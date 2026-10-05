@@ -8,6 +8,8 @@
 #   test_kasia   child  "Kasia" - Rodzina testowa
 #   test_tymek   child  "Tymek" - Rodzina testowa (sibling)
 #   test_obcy    parent "Obcy"  - Inna rodzina (foreign family)
+#   test_dwie    parent "Ola"   - Rodzina testowa, and child "Ola" - Inna rodzina
+#                (two families: picks one on the chooser, switches in the header)
 # plus sample entries covering upcoming, today, undated, long, past/EduVulcan,
 # sibling, family-wide and foreign-family cases. Safe to re-run: it resets these
 # users' passwords and recreates entries of the two test families only.
@@ -33,9 +35,11 @@ def member(username, family, role, name):
     user, _ = User.objects.get_or_create(username=username)
     user.set_password(PASSWORD)
     user.save()
+    # One membership per (user, family): a person may belong to several families.
     membership, _ = FamilyMember.objects.update_or_create(
         user=user,
-        defaults={'family': family, 'role': role, 'display_name': name, 'is_active': True},
+        family=family,
+        defaults={'role': role, 'display_name': name, 'is_active': True},
     )
     return membership
 
@@ -47,6 +51,8 @@ tymek = member('test_tymek', family, FamilyMember.Role.CHILD, 'Tymek')
 
 foreign_family, _ = Family.objects.get_or_create(name='Inna rodzina')
 foreign_parent = member('test_obcy', foreign_family, FamilyMember.Role.PARENT, 'Obcy')
+two_family_parent = member('test_dwie', family, FamilyMember.Role.PARENT, 'Ola')
+two_family_child = member('test_dwie', foreign_family, FamilyMember.Role.CHILD, 'Ola')
 
 Entry.objects.filter(family__in=[family, foreign_family]).delete()
 
@@ -75,7 +81,10 @@ sibling = entry('Trening piłki (rodzeństwo)', tymek, entry_type='calendar_even
 family_wide = entry('Zebranie z wychowawcą (cała rodzina)', None, entry_type='calendar_event',
                     date=today + 4 * day)
 foreign = entry('OBCY-WPIS-SENTINEL', None, fam=foreign_family, created_by=foreign_parent)
+entry('Lekcja gry na pianinie (Ola w innej rodzinie)', two_family_child, fam=foreign_family,
+      created_by=foreign_parent, date=today + day)
 
 print(f'Password for all users: {PASSWORD}')
-print('Users: test_rodzic (parent), test_kasia (child), test_tymek (child), test_obcy (other family)')
+print('Users: test_rodzic (parent), test_kasia (child), test_tymek (child), test_obcy (other family),')
+print('       test_dwie (parent in Rodzina testowa, child in Inna rodzina)')
 print(f'Sibling entry id: {sibling.pk}; family-wide id: {family_wide.pk}; foreign id: {foreign.pk}')

@@ -1,0 +1,61 @@
+{% load family_context %}
+{% comment %}
+Role change (S-15). Parameter: role = {member, form, can_change, open, error}. The change sits
+in a no-JavaScript <details> confirmation and posts to its own route, separate from renaming.
+The actor's own row adds the self-demotion checkbox; the last usable parent gets an
+explanation instead of the form.
+{% endcomment %}
+{% with member=role.member form=role.form %}
+<section class="fn-member-role" data-state-part="role">
+    <h2>Rola w rodzinie</h2>
+    <p data-state-part="current-role">Obecna rola: <strong>{% if member.role == "parent" %}Rodzic{% else %}Dziecko{% endif %}</strong></p>
+    {% if role.error %}
+    <div class="fn-panel fn-panel--danger" role="alert" data-state-part="role-error">
+        <p>{{ role.error }}</p>
+    </div>
+    {% endif %}
+    {% if not member.is_active %}
+        <p class="fn-muted" data-state-part="role-inactive">Ta osoba nie ma dostępu, więc nie można zmienić jej roli. Najpierw przywróć jej dostęp na liście członków rodziny.</p>
+    {% elif not role.can_change %}
+        <p class="fn-muted" data-state-part="role-last-parent">To ostatni aktywny rodzic, więc nie można zmienić jego roli. Rodzina musi mieć co najmniej jednego aktywnego rodzica. Najpierw nadaj rolę rodzica innej osobie.</p>
+    {% else %}
+        <details class="fn-member-confirm" data-state-part="role-change"{% if role.open %} open{% endif %}>
+            <summary>Zmień rolę<span class="fn-visually-hidden">: {{ member.display_name }}</span></summary>
+            {% if member.role == "child" %}
+            <p data-state-part="promote-warning">Ta osoba będzie mogła zarządzać wpisami i członkami rodziny.</p>
+            {% else %}
+            <p data-state-part="demote-warning">Ta osoba straci uprawnienia rodzica: nie będzie mogła zarządzać wpisami ani członkami rodziny. Jej tokeny automatyzacji zostaną unieważnione, a nowe może wydać tylko administrator rodziny.</p>
+            {% endif %}
+            <form method="post" action="{% url 'family_member_role' member.pk %}" novalidate>
+                {% csrf_token %}
+                {% family_context_field %}
+                {% if form.errors %}
+                <div class="fn-panel fn-panel--danger" role="alert">
+                    <p>Popraw zaznaczone pola.</p>
+                    <ul>
+                        {% for field in form.visible_fields %}{% if field.errors %}<li><a href="#{{ field.auto_id }}">{{ field.label }}</a></li>{% endif %}{% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <fieldset id="{{ form.role.auto_id }}">
+                    <legend>{{ form.role.label }}</legend>
+                    {% for radio in form.role %}
+                    <label for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label>
+                    {% endfor %}
+                    {% if form.role.errors %}<small class="fn-field-error" id="{{ form.role.auto_id }}_error">{% for error in form.role.errors %}{% if not forloop.first %}<br>{% endif %}{{ error }}{% endfor %}</small>{% endif %}
+                </fieldset>
+                {% if form.confirm_self %}
+                <div data-state-part="self-demotion">
+                    <p>Zmieniasz własną rolę. Po zapisaniu stracisz dostęp do zarządzania wpisami i członkami rodziny. Przywrócić go może drugi rodzic albo administrator rodziny.</p>
+                    <label for="{{ form.confirm_self.id_for_label }}">{{ form.confirm_self }} {{ form.confirm_self.label }}</label>
+                    {% if form.confirm_self.errors %}<small class="fn-field-error" id="{{ form.confirm_self.auto_id }}_error">{% for error in form.confirm_self.errors %}{% if not forloop.first %}<br>{% endif %}{{ error }}{% endfor %}</small>{% endif %}
+                </div>
+                {% endif %}
+                <div class="fn-actions">
+                    <button type="submit">Zmień rolę<span class="fn-visually-hidden">: {{ member.display_name }}</span></button>
+                </div>
+            </form>
+        </details>
+    {% endif %}
+</section>
+{% endwith %}

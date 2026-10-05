@@ -14,6 +14,7 @@
     {% if membership.role == "parent" %}
         <p><a role="button" href="{% url 'entries:capture' %}">Dodaj wpis</a></p>
         <p><a href="{% url 'entries:index' %}">Wpisy rodziny</a></p>
+        <p><a href="{% url 'family_members' %}">Członkowie rodziny</a></p>
     {% endif %}
     {% if membership.role == "child" %}
         <p><a role="button" href="{% url 'entries:child_list' %}">Moje wpisy</a></p>

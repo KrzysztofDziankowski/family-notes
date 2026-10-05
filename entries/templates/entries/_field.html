@@ -1,9 +1,8 @@
-{% with describedby=field.auto_id|add:"-hint" %}
+{% comment %}
+Labelled field with its hint and errors. The IDs match entries.forms.describe_fields:
+the hint is "<auto_id>-hint" and every error sits in one "<auto_id>_error" container.
+{% endcomment %}
 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
 {{ field }}
-{% if field.errors %}
-    {% for error in field.errors %}<small class="fn-field-error" id="{{ field.auto_id }}-error">{{ error }}</small>{% endfor %}
-{% elif hint %}
-    <small class="fn-field-error" id="{{ describedby }}">{{ hint }}</small>
-{% endif %}
-{% endwith %}
+{% if hint %}<small class="fn-field-error" id="{{ field.auto_id }}-hint">{{ hint }}</small>{% endif %}
+{% if field.errors %}<small class="fn-field-error" id="{{ field.auto_id }}_error">{% for error in field.errors %}{% if not forloop.first %}<br>{% endif %}{{ error }}{% endfor %}</small>{% endif %}

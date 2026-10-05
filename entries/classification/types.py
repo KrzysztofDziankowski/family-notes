@@ -15,6 +15,11 @@ from enum import Enum
 from typing import Literal, Optional, Tuple, Union
 
 
+# Upper bound on a free-text school subject, shared by the model column,
+# forms, classification and EduVulcan rules.
+SCHOOL_SUBJECT_MAX_LENGTH = 100
+
+
 class EntryType(str, Enum):
     TODO = 'todo'
     CALENDAR_EVENT = 'calendar_event'
@@ -27,10 +32,12 @@ class MissingField(str, Enum):
     DATE = 'date'
     AFFECTED_MEMBER = 'affected_member'
     AMBIGUOUS_MEMBER = 'ambiguous_member'
+    SCHOOL_SUBJECT = 'school_subject'
 
 
 _DATE = (MissingField.DATE,)
 _DATE_AND_MEMBER = (MissingField.DATE, MissingField.AFFECTED_MEMBER)
+_SCHOOL_EVENT = (MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT)
 
 
 class SchoolItemKind(str, Enum):
@@ -40,10 +47,10 @@ class SchoolItemKind(str, Enum):
     Polish label for display. Add a kind by adding one member here.
     """
 
-    HOMEWORK = ('homework', 'zadanie domowe', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
-    CLASS_TEST = ('class_test', 'praca klasowa', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
-    TEST = ('test', 'sprawdzian', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
-    QUIZ = ('quiz', 'kartkówka', EntryType.CALENDAR_EVENT, _DATE_AND_MEMBER)
+    HOMEWORK = ('homework', 'zadanie domowe', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
+    CLASS_TEST = ('class_test', 'praca klasowa', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
+    TEST = ('test', 'sprawdzian', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
+    QUIZ = ('quiz', 'kartkówka', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
     LUCKY_NUMBER = ('lucky_number', 'szczęśliwy numerek', EntryType.NOTE, ())
     GRADE = ('grade', 'ocena', EntryType.NOTE, ())
     SUBSTITUTION = ('substitution', 'zastępstwo', EntryType.NOTE, _DATE)
@@ -80,6 +87,7 @@ class UnavailableReason(str, Enum):
     UNSUPPORTED_CONTENT = 'unsupported_content'
     UNKNOWN_MEMBER = 'unknown_member'
     INPUT_TOO_LONG = 'input_too_long'
+    TOO_MANY_ENTRIES = 'too_many_entries'
 
 
 @dataclass(frozen=True)
@@ -92,6 +100,7 @@ class ClassificationProposal:
     time: Optional[datetime.time] = None
     school_item: Optional[SchoolItemKind] = None
     member_name: Optional[str] = field(default=None, repr=False)
+    school_subject: Optional[str] = field(default=None, repr=False)
     kind: Literal['proposal'] = field(default='proposal', init=False)
 
 
@@ -106,7 +115,25 @@ class ClassificationFollowUp:
     time: Optional[datetime.time] = None
     school_item: Optional[SchoolItemKind] = None
     member_name: Optional[str] = field(default=None, repr=False)
+    school_subject: Optional[str] = field(default=None, repr=False)
     kind: Literal['follow_up'] = field(default='follow_up', init=False)
+
+
+@dataclass(frozen=True)
+class ProposalValues:
+    """The proposal currently on the review screen, possibly incomplete.
+
+    It carries the parent's manual edits into a free-text correction. It
+    holds no database IDs; the member is identified by display name only.
+    """
+
+    entry_type: EntryType
+    content: str = field(repr=False)
+    date: Optional[datetime.date] = None
+    time: Optional[datetime.time] = None
+    school_item: Optional[SchoolItemKind] = None
+    school_subject: Optional[str] = field(default=None, repr=False)
+    member_name: Optional[str] = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)

@@ -19,6 +19,6 @@ Parameters:
     <p class="fn-entry-meta fn-muted">
         {% if hide_date %}{% if entry.time %}<span>{{ entry.time|time:"H:i" }}</span>{% endif %}{% elif entry.date %}<span>{{ entry.date|date:"l, j E Y"|lower }}{% if entry.time %}, {{ entry.time|time:"H:i" }}{% endif %}</span>{% elif entry.effective_date %}<span>{{ entry.effective_date|date:"l, j E Y"|lower }}</span>{% else %}<span>Bez daty</span>{% endif %}
         {% if not hide_assignee %}<span>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Cała rodzina{% endif %}</span>{% endif %}
-        {% if edit_url_name %}<a href="{% url edit_url_name entry.pk %}">Edytuj</a>{% endif %}
+        {% if edit_url_name %}<a href="{% url edit_url_name entry.pk %}">Edytuj<span class="fn-visually-hidden">: {{ entry.content|truncatechars:60 }}</span></a>{% endif %}
     </p>
 </li>

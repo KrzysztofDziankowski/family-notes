@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block title %}{% if form.errors or role.form.errors or role.error %}Błąd: {% endif %}Edytuj osobę{% endblock %}
+
+{% block content %}
+<h1>Edytuj osobę</h1>
+<h2>Imię</h2>
+{% include "family_access/_member_form.html" %}
+{% include "family_access/_member_role.html" %}
+{% endblock %}

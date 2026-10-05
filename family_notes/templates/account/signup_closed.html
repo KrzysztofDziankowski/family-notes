@@ -1,0 +1,13 @@
+{% extends "account/base_entrance.html" %}
+{% comment %}
+Overrides allauth's "sign up closed" page: local registration is disabled and
+accounts are created by the family administrator after a Google sign-in.
+{% endcomment %}
+
+{% block head_title %}Rejestracja jest wyłączona{% endblock head_title %}
+
+{% block content %}
+    <h1>Rejestracja jest wyłączona</h1>
+    <p class="fn-muted">Konta zakłada administrator rodziny. Zaloguj się przez Google, a administrator przypisze Cię do rodziny.</p>
+    <p><a href="{% url 'account_login' %}">Wróć do logowania</a></p>
+{% endblock content %}

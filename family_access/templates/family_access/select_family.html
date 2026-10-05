@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}{% if error %}Błąd: {% endif %}Wybierz rodzinę{% endblock %}
+
+{% block content %}
+<h1>Wybierz rodzinę</h1>
+{% if memberships %}
+    <p>Należysz do kilku rodzin. Wpisy i członkowie są widoczni tylko w wybranej rodzinie.</p>
+    <form method="post" action="{% url 'select_family' %}" novalidate data-state-part="family-chooser">
+        {% csrf_token %}
+        {% if error %}
+        <div class="fn-panel fn-panel--danger" role="alert">
+            <p>Popraw zaznaczone pola.</p>
+            <ul><li><a href="#id_family_id">Rodzina</a></li></ul>
+        </div>
+        {% endif %}
+        <fieldset id="id_family_id">
+            <legend>Rodzina</legend>
+            {% for membership in memberships %}
+            <label for="id_family_id_{{ forloop.counter0 }}"><input type="radio" name="family_id" value="{{ membership.family_id }}" id="id_family_id_{{ forloop.counter0 }}"{% if membership.family_id == current_family_id %} checked{% endif %}{% if error %} aria-invalid="true" aria-describedby="id_family_id_error"{% endif %}> {{ membership.family.name }} ({% if membership.role == "parent" %}Rodzic{% else %}Dziecko{% endif %})</label>
+            {% endfor %}
+            {% if error %}<small class="fn-field-error" id="id_family_id_error">{{ error }}</small>{% endif %}
+        </fieldset>
+        <div class="fn-actions">
+            <button type="submit">Przejdź do rodziny</button>
+        </div>
+    </form>
+{% else %}
+    <p>Twoje członkostwo w rodzinie nie jest jeszcze skonfigurowane.</p>
+{% endif %}
+<p><a href="{% url 'account_status' %}">Wróć do konta</a></p>
+{% endblock %}

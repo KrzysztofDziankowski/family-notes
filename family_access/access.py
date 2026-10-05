@@ -1,24 +1,10 @@
-from django.core.exceptions import PermissionDenied
+"""Family-scoped authorization helpers.
+
+The family of a web request comes only from ``family_access.context``; these
+helpers take that membership and never derive a family from a ``User``.
+"""
 
 from .models import FamilyMember
-
-
-def get_active_membership(user):
-    if not getattr(user, 'is_authenticated', False):
-        return None
-
-    return (
-        FamilyMember.objects.select_related('family')
-        .filter(user=user, is_active=True, family__is_active=True)
-        .first()
-    )
-
-
-def require_active_membership(user):
-    membership = get_active_membership(user)
-    if membership is None:
-        raise PermissionDenied('An active family membership is required.')
-    return membership
 
 
 def is_parent(membership):

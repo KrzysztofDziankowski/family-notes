@@ -25,7 +25,12 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
 
-from ..classification.types import EntryType, MissingField, SchoolItemKind
+from ..classification.types import (
+    SCHOOL_SUBJECT_MAX_LENGTH,
+    EntryType,
+    MissingField,
+    SchoolItemKind,
+)
 from .children import match_child
 from .text import normalize_text, resolve_yearless_date
 from .types import ChildSnapshot, EntryProposal, OutputKind
@@ -92,7 +97,7 @@ class _Builder:
         self.proposals: List[EntryProposal] = []
 
     def add(self, *, kind=OutputKind.RULE, entry_type, content, date=None,
-            school_item=None, member=None):
+            school_item=None, member=None, school_subject=''):
         self.proposals.append(
             EntryProposal(
                 output_index=len(self.proposals),
@@ -102,10 +107,12 @@ class _Builder:
                 date=date,
                 school_item=school_item,
                 member=member,
+                school_subject=school_subject,
             )
         )
 
-    def add_for_child(self, child_name, *, entry_type, content, date=None, school_item=None):
+    def add_for_child(self, child_name, *, entry_type, content, date=None, school_item=None,
+                      school_subject=''):
         """Add a child-bound proposal, or an unassigned one naming the child."""
         member = match_child(child_name, self.children)
         if member is None:
@@ -119,6 +126,7 @@ class _Builder:
             date=date,
             school_item=school_item,
             member=member,
+            school_subject=school_subject,
         )
 
     def result(self) -> Optional[Proposals]:
@@ -171,12 +179,15 @@ def _calendar(key, message, reference, builder) -> Optional[Proposals]:
     date = _date_from(match, reference)
     if date is None:
         return None
+    subject = match.group('subject').strip()
     builder.add_for_child(
         match.group('child'),
         entry_type=EntryType.CALENDAR_EVENT,
         content=f"{label}: {match.group('subject')}",
         date=date,
         school_item=school_item,
+        # An over-long subject is left blank; the entry is still saved.
+        school_subject=subject if len(subject) <= SCHOOL_SUBJECT_MAX_LENGTH else '',
     )
     return builder.result()
 

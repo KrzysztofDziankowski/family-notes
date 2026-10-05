@@ -236,39 +236,39 @@ None; saved entries are unchanged.
 
 #### Automated
 
-- [ ] 1.1 Adapter contract tests pass, including the new instruction and payload assertions: `uv run python manage.py test entries.tests.test_openai_backend`
-- [ ] 1.2 Existing acceptance tests still pass unchanged: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [ ] 1.3 Django checks pass: `uv run python manage.py check`
-- [ ] 1.5 Contract tests assert that `DATE_RULES` states the same-weekday rule explicitly and that the schema field set is exactly the post-S-01/S-02 set (including `school_subject` and `member_mention`): `uv run python manage.py test entries.tests.test_openai_backend`
+- [x] 1.1 Adapter contract tests pass, including the new instruction and payload assertions: `uv run python manage.py test entries.tests.test_openai_backend` — 4a34b42
+- [x] 1.2 Existing acceptance tests still pass unchanged: `uv run python manage.py test entries.tests.test_classification_acceptance` — 4a34b42
+- [x] 1.3 Django checks pass: `uv run python manage.py check` — 4a34b42
+- [x] 1.5 Contract tests assert that `DATE_RULES` states the same-weekday rule explicitly and that the schema field set is exactly the post-S-01/S-02 set (including `school_subject` and `member_mention`): `uv run python manage.py test entries.tests.test_openai_backend` — 4a34b42
 
 #### Manual
 
-- [ ] 1.4 Reading `INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording of the title rule (with the "kasia zrobić pranie w piątek" example) and the relative-date rules
+- [x] 1.4 Reading `INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording of the title rule (with the "kasia zrobić pranie w piątek" example) and the relative-date rules
 
 ### Phase 2: Deterministic Title Guard
 
 #### Automated
 
-- [ ] 2.1 Guard unit tests pass: `uv run python manage.py test entries.tests.test_title_cleanup`
-- [ ] 2.2 Owner-example acceptance tests pass for clean and echoing model outputs: `uv run python manage.py test entries.tests.test_classification_acceptance`
-- [ ] 2.3 Classification service, follow-up and family classification tests still pass: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_follow_up_answer entries.tests.test_family_classification`
-- [ ] 2.4 EduVulcan conversion tests still pass: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_eduvulcan_acceptance`
-- [ ] 2.5 Full suite and checks pass: `uv run python manage.py test` and `uv run python manage.py check`
-- [ ] 2.7 Guard keeps what was not extracted: an unmatched leading name stays, and the school subject stays in "Kartkówka z matematyki": `uv run python manage.py test entries.tests.test_title_cleanup entries.tests.test_classification_acceptance`
+- [x] 2.1 Guard unit tests pass: `uv run python manage.py test entries.tests.test_title_cleanup` — f513172
+- [x] 2.2 Owner-example acceptance tests pass for clean and echoing model outputs: `uv run python manage.py test entries.tests.test_classification_acceptance` — f513172
+- [x] 2.3 Classification service, follow-up and family classification tests still pass: `uv run python manage.py test entries.tests.test_classification_service entries.tests.test_follow_up_answer entries.tests.test_family_classification` — f513172
+- [x] 2.4 EduVulcan conversion tests still pass: `uv run python manage.py test entries.tests.test_conversion_worker entries.tests.test_eduvulcan_acceptance` — f513172
+- [x] 2.5 Full suite and checks pass: `uv run python manage.py test` and `uv run python manage.py check` — f513172
+- [x] 2.7 Guard keeps what was not extracted: an unmatched leading name stays, and the school subject stays in "Kartkówka z matematyki": `uv run python manage.py test entries.tests.test_title_cleanup entries.tests.test_classification_acceptance` — f513172
 
 #### Manual
 
-- [ ] 2.6 Reviewing the guard's test table confirms no case removes a non-assignee name or an unaccepted date phrase
+- [x] 2.6 Reviewing the guard's test table confirms no case removes a non-assignee name or an unaccepted date phrase
 
 ### Phase 3: Live Check
 
 #### Automated
 
-- [ ] 3.1 Default suite still skips live tests: `uv run python manage.py test entries.tests.test_classification_live_wire`
+- [x] 3.1 Default suite still skips live tests: `uv run python manage.py test entries.tests.test_classification_live_wire` — a242ecc
 
 #### Manual
 
-- [ ] 3.2 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live owner-example case passes
-- [ ] 3.5 With `CLASSIFICATION_LIVE_EVAL=1`, the live same-weekday case (reference Friday 2026-10-09, "w piątek") returns 2026-10-16
-- [ ] 3.3 In the running app as `test_rodzic`, entering "kasia zrobić pranie w piątek" shows the review form with title "Zrobić pranie", the coming Friday's date and Kasia selected; saving creates exactly that entry
-- [ ] 3.4 An instruction without a person or date (e.g. "Kupić mleko") still produces the same title as before
+- [x] 3.2 With `CLASSIFICATION_LIVE_EVAL=1` and a configured key, the live owner-example case passes
+- [x] 3.5 With `CLASSIFICATION_LIVE_EVAL=1`, the live same-weekday case (reference Friday 2026-10-09, "w piątek") returns 2026-10-16
+- [x] 3.3 In the running app as `test_rodzic`, entering "kasia zrobić pranie w piątek" shows the review form with title "Zrobić pranie", the coming Friday's date and Kasia selected; saving creates exactly that entry
+- [x] 3.4 An instruction without a person or date (e.g. "Kupić mleko") still produces the same title as before

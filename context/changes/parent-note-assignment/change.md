@@ -1,7 +1,7 @@
 ---
 change_id: parent-note-assignment
 title: Parent can reliably assign a new note to themselves or another parent in the family
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
 updated: 2026-10-04
 archived_at: null

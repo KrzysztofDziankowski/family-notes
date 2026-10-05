@@ -6,15 +6,24 @@
     <title>{% block title %}{% endblock %} | FamilyNotes</title>
     <link rel="stylesheet" href="{% static 'vendor/pico/pico.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+    <link rel="manifest" href="{% url 'web_manifest' %}">
+    <link rel="icon" href="{% static 'pwa/icon-192.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'pwa/apple-touch-icon.png' %}">
+    <script src="{% static 'js/pwa-register.js' %}" data-sw-url="{% url 'service_worker' %}" defer></script>
 </head>
 <body>
+    <a class="fn-skip-link" href="#main">Przejdź do treści</a>
     <header class="container">
-        <nav aria-label="Główna nawigacja">
+        <nav class="fn-site-nav" aria-label="Główna nawigacja">
             <ul>
                 <li><a class="fn-brand" href="{% url 'home' %}">FamilyNotes</a></li>
             </ul>
             <ul>
                 {% if user.is_authenticated %}
+                {% if family_count > 1 %}
+                {% if current_family %}<li data-state-part="current-family"><span class="fn-muted">Rodzina: <strong>{{ current_family.name }}</strong></span></li>{% endif %}
+                <li><a href="{% url 'select_family' %}">{% if current_family %}Zmień rodzinę{% else %}Wybierz rodzinę{% endif %}</a></li>
+                {% endif %}
                 {% block nav %}
                 <li><a href="{% url 'account_status' %}">Konto</a></li>
                 <li>
@@ -28,8 +37,8 @@
             </ul>
         </nav>
     </header>
-    <main class="container">
-        {% block messages %}{% endblock %}
+    <main id="main" class="container" tabindex="-1">
+        {% block messages %}{% include "entries/_manage_messages.html" %}{% endblock %}
         {% block content %}{% endblock %}
     </main>
     {% block extra_body %}{% endblock %}

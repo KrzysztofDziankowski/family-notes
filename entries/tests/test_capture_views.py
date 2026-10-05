@@ -4,11 +4,16 @@ import uuid
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.staticfiles import finders
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from entries.classification.openai_backend import OpenAIClassificationBackend
-from entries.classification.service import ParentClassification
+from entries.classification.service import (
+    MAX_SUBMITTED_TEXT_LENGTH,
+    ParentBatchClassification,
+    ParentClassification,
+)
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
@@ -19,15 +24,25 @@ from entries.classification.types import (
     UnavailableReason,
 )
 from entries.models import Entry
+from family_access.models import FamilyMember
 
+from .classification_progress_markup import (
+    SCRIPT_URL as PROGRESS_SCRIPT_URL,
+    assert_progress_regions,
+    classification_submitters,
+    progress_forms,
+)
+from .enter_submit_markup import SCRIPT_URL as ENTER_SCRIPT_URL
+from .enter_submit_markup import assert_enter_assets
+from .field_association_markup import assert_described_by
 from .test_classification_acceptance import (
     PRD_CONTENT,
     PRD_INSTRUCTION,
     PRD_MONDAY,
     PRD_REFERENCE_DATE,
-    model_output,
+    model_entry_output,
 )
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 from .test_openai_backend import MODEL, FakeClock, ScriptedTransport, make_client
 
 CAPTURE_URL = reverse('entries:capture')
@@ -42,7 +57,8 @@ class CaptureViewMixin(FamilyFixtureMixin):
 
     def classify_with(self, result, member=None, text='Michał ma sprawdzian'):
         outcome = ParentClassification(result=result, member=member)
-        with mock.patch('entries.views.classify_for_parent', return_value=outcome) as classify:
+        batch = ParentBatchClassification(items=(outcome,))
+        with mock.patch('entries.views.classify_entries_for_parent', return_value=batch) as classify:
             response = self.client.post(CAPTURE_URL, {'text': text})
         return response, classify
 
@@ -53,6 +69,7 @@ class CaptureViewMixin(FamilyFixtureMixin):
             date=PRD_MONDAY,
             school_item=SchoolItemKind.TEST,
             member_name='michał',
+            school_subject='biologia',
         )
         values.update(overrides)
         return ClassificationProposal(**values)
@@ -65,6 +82,7 @@ class CaptureViewMixin(FamilyFixtureMixin):
             'time': '',
             'assigned_member': str(self.child.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'biologia',
             'submission_key': str(uuid.uuid4()),
         }
         data.update(overrides)
@@ -74,7 +92,7 @@ class CaptureViewMixin(FamilyFixtureMixin):
 class AccessMatrixTests(CaptureViewMixin, TestCase):
     def test_anonymous_is_redirected_to_login(self):
         self.client.logout()
-        with mock.patch('entries.views.classify_for_parent') as classify:
+        with mock.patch('entries.views.classify_entries_for_parent') as classify:
             for method, url in (('get', CAPTURE_URL), ('post', CAPTURE_URL), ('post', CONFIRM_URL)):
                 with self.subTest(method=method, url=url):
                     response = getattr(self.client, method)(url, {'text': 'x'})
@@ -96,7 +114,7 @@ class AccessMatrixTests(CaptureViewMixin, TestCase):
             'no membership': lambda: unconfigured,
             'inactive parent': inactive_parent,
         }
-        with mock.patch('entries.views.classify_for_parent') as classify:
+        with mock.patch('entries.views.classify_entries_for_parent') as classify:
             for name, get_user in cases.items():
                 self.client.force_login(get_user())
                 for method, url, data in (
@@ -131,13 +149,14 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
         transport = ScriptedTransport(
             clock,
             [
-                model_output(
+                model_entry_output(
                     entry_type='calendar_event',
                     content=PRD_CONTENT,
                     date=PRD_MONDAY.isoformat(),
                     date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
+                    school_subject='biologia',
                 )
             ],
         )
@@ -160,6 +179,8 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
         self.assertContains(review, 'value="2026-09-21"')
         self.assertContains(review, 'poniedziałek, 21 września 2026')
         self.assertContains(review, PRD_CONTENT)
+        self.assertEqual(form.initial['school_subject'], 'biologia')
+        self.assertContains(review, 'value="biologia"')
 
         data = {
             name: '' if value is None else str(value)
@@ -183,6 +204,75 @@ class Us01AcceptanceTests(CaptureViewMixin, TestCase):
         self.assertContains(saved, 'Co trzeba zapisać?')
 
 
+class ShortNameCaptureTests(CaptureViewMixin, TestCase):
+    """PK-01 through the real view, service and adapter, scripted transport."""
+
+    INSTRUCTION = 'Hania ma jutro dentystę'
+    TOMORROW = PRD_REFERENCE_DATE + datetime.timedelta(days=1)
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; keep her out of the way.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+
+    def capture(self, member_name=None):
+        clock = FakeClock()
+        transport = ScriptedTransport(
+            clock,
+            [
+                model_entry_output(
+                    entry_type='calendar_event',
+                    content='Dentysta',
+                    date=self.TOMORROW.isoformat(),
+                    date_source='jutro',
+                    member_name=member_name,
+                    member_mention='Hania',
+                )
+            ],
+        )
+        backend = OpenAIClassificationBackend(
+            client=make_client(transport), model=MODEL, clock=clock, sleep=clock.sleep
+        )
+        with mock.patch(
+            'entries.views.timezone.localdate', return_value=PRD_REFERENCE_DATE
+        ), mock.patch(
+            'entries.classification.openai_backend.build_openai_backend', return_value=backend
+        ):
+            return self.client.post(CAPTURE_URL, {'text': self.INSTRUCTION})
+
+    def test_unique_short_name_preselects_the_member_and_confirm_saves_her(self):
+        review = self.capture()
+
+        self.assertEqual(review.context['state'], 'proposal')
+        form = review.context['review_form']
+        self.assertEqual(form.initial['assigned_member'], self.hanna.pk)
+        self.assertContains(
+            review, f'<option value="{self.hanna.pk}" selected>Hanna</option>', html=True
+        )
+
+        data = {name: '' if value is None else str(value) for name, value in form.initial.items()}
+        self.client.post(CONFIRM_URL, data)
+
+        entry = Entry.objects.get()
+        self.assertEqual(entry.assigned_member, self.hanna)
+        self.assertEqual(entry.date, self.TOMORROW)
+
+    def test_ambiguous_short_name_asks_which_person_with_no_assignee(self):
+        self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+        response = self.capture(member_name='Hanna')
+
+        self.assertEqual(response.context['state'], 'question')
+        self.assertNotIn('review_form', response.context)
+        self.assertContains(response, 'Której osoby dotyczy „Dentysta”?')
+        form = response.context['follow_up_form']
+        self.assertIsNone(form.initial['assigned_member'])
+        self.assertEqual(form.initial['missing'], ['ambiguous_member'])
+        self.assertFalse(Entry.objects.exists())
+
+
 class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
     def test_corrected_values_are_saved(self):
         self.client.post(
@@ -192,6 +282,8 @@ class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
                 content='Poprawiony tytuł',
                 date='2026-09-22',
                 assigned_member=str(self.other_child.pk),
+                school_item='',
+                school_subject='',
             ),
         )
 
@@ -226,15 +318,55 @@ class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
         self.assertIn('assigned_member', response.context['review_form'].errors)
         self.assertFalse(Entry.objects.exists())
 
-    def test_school_item_is_cleared_when_type_changes(self):
-        self.client.post(
+    def test_school_item_type_mismatch_is_an_error_not_cleared(self):
+        response = self.client.post(
             CONFIRM_URL,
             self.confirm_data(entry_type=EntryType.NOTE.value, assigned_member='', date=''),
         )
 
+        self.assertEqual(response.context['state'], 'invalid')
+        self.assertContains(response, 'Ten element szkolny wymaga rodzaju „Wydarzenie”.')
+        self.assertFalse(Entry.objects.exists())
+
+    def test_clearing_the_school_item_saves_without_a_subject(self):
+        self.client.post(
+            CONFIRM_URL,
+            self.confirm_data(school_item='', school_subject=''),
+        )
+
         entry = Entry.objects.get()
-        self.assertEqual(entry.entry_type, 'note')
+        self.assertEqual(entry.entry_type, 'calendar_event')
         self.assertEqual(entry.school_item, '')
+        self.assertEqual(entry.school_subject, '')
+
+    def test_school_event_without_subject_is_an_error(self):
+        for kind in ('homework', 'class_test', 'test', 'quiz'):
+            with self.subTest(kind=kind):
+                response = self.client.post(
+                    CONFIRM_URL, self.confirm_data(school_item=kind, school_subject='  ')
+                )
+
+                self.assertEqual(response.context['state'], 'invalid')
+                self.assertContains(response, 'Podaj przedmiot.')
+                self.assertIn('school_subject', response.context['review_form'].errors)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_confirm_saves_the_stripped_subject(self):
+        self.client.post(CONFIRM_URL, self.confirm_data(school_subject='  Biologia  '))
+
+        entry = Entry.objects.get()
+        self.assertEqual(entry.school_subject, 'Biologia')
+
+    def test_review_shows_visible_school_item_and_subject(self):
+        response, _ = self.classify_with(
+            self.proposal(school_subject='biologia'), member=self.child
+        )
+
+        self.assertContains(response, '<label for="id_school_item">Element szkolny</label>', html=True)
+        self.assertContains(response, '<option value="test" selected>sprawdzian</option>', html=True)
+        self.assertContains(response, '<label for="id_school_subject">Przedmiot</label>', html=True)
+        self.assertContains(response, 'value="biologia"')
+        self.assertNotContains(response, 'type="hidden" name="school_item"')
 
     def test_invalid_review_keeps_submission_key(self):
         data = self.confirm_data(date='', school_item='')
@@ -341,8 +473,9 @@ class PastDateWarningTests(CaptureViewMixin, TestCase):
         form = response.context['review_form']
         date_input = str(form['date'])
         self.assertIn('aria-invalid="true"', date_input)
-        self.assertIn('aria-describedby="id_date-hint"', date_input)
+        self.assertIn('aria-describedby="id_date-hint id_date-human"', date_input)
         self.assertContains(response, 'id="id_date-hint"')
+        self.assertContains(response, 'id="id_date-human"')
         self.assertNotIn('aria-invalid', str(form['content']))
 
         data = {name: '' if value is None else str(value) for name, value in form.initial.items()}
@@ -453,3 +586,296 @@ class PrivacyTests(CaptureViewMixin, TestCase):
         for message in handler.messages:
             self.assertNotIn('SENTINEL-INSTRUKCJA', message)
         self.assertEqual(Entry.objects.count(), 1)
+
+
+class EnterSubmitCaptureTests(CaptureViewMixin, TestCase):
+    """S-05: the capture page loads the Enter script and marks its text boxes."""
+
+    def test_script_is_resolvable_through_the_static_finders(self):
+        self.assertIsNotNone(finders.find('js/enter-submit.js'))
+
+    def test_empty_state_opts_the_instruction_box_in(self):
+        response = self.client.get(CAPTURE_URL)
+
+        self.assertEqual(response.context['state'], 'empty')
+        field = str(response.context['capture_form']['text'])
+        self.assertIn('data-enter-submit=""', field)
+        self.assertIn('enterkeyhint="send"', field)
+        self.assertNotIn('data-enter-submitter', field)
+        assert_enter_assets(self, response, ['id_text'])
+
+    def test_question_state_opts_the_answer_box_in(self):
+        response, _ = self.classify_with(
+            ClassificationFollowUp(
+                missing_fields=(MissingField.DATE,),
+                entry_type=EntryType.CALENDAR_EVENT,
+                content=PRD_CONTENT,
+                school_item=SchoolItemKind.TEST,
+                member_name='michał',
+            ),
+            member=self.child,
+        )
+
+        self.assertEqual(response.context['state'], 'question')
+        field = str(response.context['follow_up_form']['answer'])
+        self.assertIn('data-enter-submit=""', field)
+        self.assertIn('enterkeyhint="send"', field)
+        # Enter means „Dalej” (the default action), never „Pomiń”.
+        self.assertNotIn('data-enter-submitter', field)
+        assert_enter_assets(self, response, ['id_answer'])
+
+    def test_proposal_state_loads_the_script_for_the_correction_box(self):
+        response, _ = self.classify_with(self.proposal(), member=self.child)
+
+        self.assertEqual(response.context['state'], 'proposal')
+        assert_enter_assets(self, response, ['id_correction'])
+        self.assertNotIn('data-enter-submit', str(response.context['review_form']['content']))
+
+
+class ProgressIndicatorCaptureTests(CaptureViewMixin, TestCase):
+    """S-06: classification forms render the progress partial and thresholds."""
+
+    def question(self):
+        response, _ = self.classify_with(
+            ClassificationFollowUp(
+                missing_fields=(MissingField.DATE,),
+                entry_type=EntryType.CALENDAR_EVENT,
+                content=PRD_CONTENT,
+                school_item=SchoolItemKind.TEST,
+                member_name='michał',
+            ),
+            member=self.child,
+        )
+        self.assertEqual(response.context['state'], 'question')
+        return response
+
+    def only_progress_form(self, response):
+        forms = progress_forms(response.content.decode())
+        self.assertEqual(len(forms), 1)
+        return forms[0]
+
+    def test_capture_and_follow_up_forms_render_hidden_states_and_default_thresholds(self):
+        pages = {
+            'capture': (self.client.get(CAPTURE_URL), reverse('entries:capture'), ['Rozpoznaj']),
+            'question': (self.question(), reverse('entries:answer'), ['Dalej']),
+        }
+        for name, (response, action, submitters) in pages.items():
+            with self.subTest(page=name):
+                content = response.content.decode()
+                self.assertEqual(assert_progress_regions(self, content), 1)
+                form = self.only_progress_form(response)
+                self.assertEqual(form['attrs']['action'], action)
+                self.assertEqual(form['attrs'].get('data-progress-slow-after'), '10')
+                self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '35')
+                self.assertIn('data-classification-default', form['attrs'])
+                self.assertEqual(classification_submitters(form), submitters)
+                self.assertContains(
+                    response,
+                    '<p class="fn-muted fn-progress-elapsed" data-progress-elapsed '
+                    'aria-hidden="true" hidden>0 s</p>',
+                    html=True,
+                )
+
+    def test_skip_is_not_a_classification_submitter(self):
+        form = self.only_progress_form(self.question())
+
+        labels = [button['text'].strip() for button in form['buttons']]
+        self.assertEqual(labels, ['Dalej', 'Pomiń'])
+        skip = form['buttons'][1]
+        self.assertEqual(skip['attrs'].get('value'), 'skip')
+        self.assertNotIn('data-classification-submit', skip['attrs'])
+
+    @override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)
+    def test_thresholds_follow_the_provider_settings(self):
+        for name, response in (('capture', self.client.get(CAPTURE_URL)), ('question', self.question())):
+            with self.subTest(page=name):
+                form = self.only_progress_form(response)
+                self.assertEqual(form['attrs'].get('data-progress-slow-after'), '6')
+                self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '22')
+
+    @override_settings(
+        CLASSIFICATION_DEADLINE_SECONDS=12.2, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=5.5
+    )
+    def test_fractional_settings_round_up(self):
+        form = self.only_progress_form(self.client.get(CAPTURE_URL))
+
+        self.assertEqual(form['attrs'].get('data-progress-slow-after'), '6')
+        self.assertEqual(form['attrs'].get('data-progress-stalled-after'), '23')
+
+    def test_capture_page_loads_both_scripts_and_the_new_one_resolves(self):
+        response = self.client.get(CAPTURE_URL)
+
+        self.assertIsNotNone(finders.find('js/classification-progress.js'))
+        self.assertContains(response, f'<script src="{PROGRESS_SCRIPT_URL}" defer></script>', html=True)
+        self.assertContains(response, f'<script src="{ENTER_SCRIPT_URL}" defer></script>', html=True)
+
+    def test_saved_panel_has_no_progress_partial_of_its_own(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.TODO.value,
+            content='Kupić zeszyt',
+            created_by=self.parent,
+        )
+
+        response = self.client.get(f'{CAPTURE_URL}?saved={entry.pk}')
+
+        self.assertEqual(response.context['state'], 'saved')
+        self.assertContains(response, 'Dodano wpis')
+        # Only the capture form below the panel carries the indicator.
+        self.assertEqual(assert_progress_regions(self, response.content.decode()), 1)
+        self.assertEqual(self.only_progress_form(response)['attrs']['action'], CAPTURE_URL)
+
+    def test_structured_create_and_edit_forms_have_no_progress_partial(self):
+        entry = Entry.objects.create(
+            family=self.family,
+            entry_type=EntryType.TODO.value,
+            content='Kupić zeszyt',
+            created_by=self.parent,
+        )
+        for url in (reverse('entries:create'), reverse('entries:edit', args=[entry.pk])):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, 'data-classification-progress')
+                self.assertNotContains(response, 'data-progress-state')
+                self.assertNotContains(response, PROGRESS_SCRIPT_URL)
+
+
+class TwoParentCaptureTests(TwoParentFixtureMixin, CaptureViewMixin, TestCase):
+    """S-07: capture naming a parent preselects them; confirm saves the parent."""
+
+    def capture(self, member_name, text='Paweł ma odebrać paczkę'):
+        clock = FakeClock()
+        transport = ScriptedTransport(
+            clock,
+            [
+                model_entry_output(
+                    entry_type='note',
+                    content='Odebrać paczkę',
+                    member_name=member_name,
+                )
+            ],
+        )
+        backend = OpenAIClassificationBackend(
+            client=make_client(transport), model=MODEL, clock=clock, sleep=clock.sleep
+        )
+        with mock.patch(
+            'entries.views.timezone.localdate', return_value=PRD_REFERENCE_DATE
+        ), mock.patch(
+            'entries.classification.openai_backend.build_openai_backend', return_value=backend
+        ):
+            return self.client.post(CAPTURE_URL, {'text': text})
+
+    def test_parent_named_by_classifier_is_preselected_and_saved(self):
+        for member in (self.second_parent, self.parent):
+            with self.subTest(member=member.display_name):
+                Entry.objects.all().delete()
+                review = self.capture(member.display_name)
+
+                self.assertEqual(review.context['state'], 'proposal')
+                form = review.context['review_form']
+                self.assertEqual(form.initial['assigned_member'], member.pk)
+                self.assertContains(
+                    review,
+                    f'<option value="{member.pk}" selected>{member.display_name}</option>',
+                    html=True,
+                )
+
+                data = {
+                    name: '' if value is None else str(value)
+                    for name, value in form.initial.items()
+                }
+                self.client.post(CONFIRM_URL, data)
+
+                entry = Entry.objects.get()
+                self.assertEqual(entry.assigned_member, member)
+                self.assertEqual(entry.created_by, self.parent)
+
+    def test_confirm_rejects_foreign_and_inactive_parent(self):
+        for member in (self.other_family_parent, self.inactive_parent):
+            with self.subTest(member=member.display_name):
+                response = self.client.post(
+                    CONFIRM_URL,
+                    self.confirm_data(
+                        entry_type=EntryType.NOTE.value,
+                        date='',
+                        school_item='',
+                        school_subject='',
+                        assigned_member=str(member.pk),
+                    ),
+                )
+                self.assertEqual(response.context['state'], 'invalid')
+                self.assertIn('assigned_member', response.context['review_form'].errors)
+        self.assertFalse(Entry.objects.exists())
+
+
+class FieldAssociationTests(CaptureViewMixin, TestCase):
+    """Every ``aria-describedby`` ID resolves to exactly one rendered element (S-17)."""
+
+    def test_initial_capture_describes_the_text_by_the_enter_hint(self):
+        response = self.client.get(CAPTURE_URL)
+
+        assert_described_by(self, response, 'id_text', ['id_text-enter-hint'])
+
+    def test_empty_capture_describes_the_text_by_its_error_and_the_enter_hint(self):
+        response = self.client.post(CAPTURE_URL, {'text': '   '})
+
+        self.assertContains(response, 'aria-invalid="true"')
+        assert_described_by(self, response, 'id_text', ['id_text_error', 'id_text-enter-hint'])
+
+    def test_too_long_capture_describes_the_text_by_its_error(self):
+        response = self.client.post(CAPTURE_URL, {'text': 'x' * (MAX_SUBMITTED_TEXT_LENGTH + 1)})
+
+        assert_described_by(self, response, 'id_text', ['id_text_error', 'id_text-enter-hint'])
+
+    def test_classified_too_long_capture_describes_the_text_by_its_error(self):
+        response, _ = self.classify_with(
+            ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG)
+        )
+
+        self.assertEqual(response.context['state'], 'empty')
+        assert_described_by(self, response, 'id_text', ['id_text_error', 'id_text-enter-hint'])
+
+    def test_proposal_describes_the_date_by_the_readable_date(self):
+        with mock.patch('entries.views.timezone.localdate', return_value=PRD_REFERENCE_DATE):
+            response, _ = self.classify_with(self.proposal(), member=self.child)
+
+        assert_described_by(self, response, 'id_date', ['id_date-human'])
+        assert_described_by(self, response, 'id_correction', ['id_correction-enter-hint'])
+        assert_described_by(self, response, 'id_content', [])
+
+    def test_confirm_invalid_references_resolve(self):
+        response = self.client.post(CONFIRM_URL, self.confirm_data(content='', date=''))
+
+        self.assertEqual(response.context['state'], 'invalid')
+        assert_described_by(self, response, 'id_content', ['id_content_error'])
+        assert_described_by(self, response, 'id_date', ['id_date_error'])
+        assert_described_by(self, response, 'id_correction', ['id_correction-enter-hint'])
+
+    def test_unapplied_correction_lists_its_error_and_the_enter_hint(self):
+        response = self.client.post(CONFIRM_URL, self.confirm_data(correction='zmień datę'))
+
+        self.assertEqual(response.context['state'], 'invalid')
+        assert_described_by(
+            self, response, 'id_correction', ['id_correction_error', 'id_correction-enter-hint']
+        )
+
+
+class ErrorTitleTests(CaptureViewMixin, TestCase):
+    """An invalid re-render is recognisable from the page title (S-17)."""
+
+    def test_valid_renders_have_the_plain_title(self):
+        self.assertContains(self.client.get(CAPTURE_URL), '<title>Dodaj wpis | FamilyNotes</title>')
+        response, _ = self.classify_with(self.proposal(), member=self.child)
+        self.assertContains(response, '<title>Dodaj wpis | FamilyNotes</title>')
+
+    def test_invalid_capture_title_starts_with_error(self):
+        response = self.client.post(CAPTURE_URL, {'text': ''})
+
+        self.assertContains(response, '<title>Błąd: Dodaj wpis | FamilyNotes</title>')
+
+    def test_confirm_invalid_title_starts_with_error(self):
+        response = self.client.post(CONFIRM_URL, self.confirm_data(content=''))
+
+        self.assertEqual(response.context['state'], 'invalid')
+        self.assertContains(response, '<title>Błąd: Dodaj wpis | FamilyNotes</title>')

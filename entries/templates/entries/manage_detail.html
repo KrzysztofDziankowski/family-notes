@@ -2,6 +2,9 @@
 
 {% block title %}Wpis{% endblock %}
 
+{# Messages render after the heading below, not in the base block. #}
+{% block messages %}{% endblock %}
+
 {% block content %}
 <h1>Wpis</h1>
 {% include "entries/_manage_messages.html" %}

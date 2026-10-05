@@ -124,6 +124,7 @@ class CategoryRuleTests(SimpleTestCase):
         self.assertEqual(proposal.school_item, SchoolItemKind.TEST)
         self.assertEqual(proposal.member, LUCJA)
         self.assertEqual(proposal.assigned_member_id, LUCJA.pk)
+        self.assertEqual(proposal.school_subject, 'Język angielski')
 
     def test_calendar_categories(self):
         expected = {
@@ -145,6 +146,43 @@ class CategoryRuleTests(SimpleTestCase):
                 self.assertEqual(proposal.date, date)
                 self.assertEqual(proposal.school_item, school_item)
                 self.assertEqual(proposal.member, member)
+
+    def test_calendar_categories_carry_the_subject(self):
+        expected = {
+            'test': 'Biologia',
+            'quiz': 'Matematyka',
+            'class_test': 'Fizyka',
+            'homework': 'Matematyka',
+        }
+        for key, subject in expected.items():
+            with self.subTest(key):
+                proposal = only(propose(key))
+
+                self.assertEqual(proposal.school_subject, subject)
+                self.assertNotIn(subject, repr(proposal))
+
+    def test_over_long_subject_is_left_blank_and_content_unchanged(self):
+        subject = ('Przedmiot ' + 'bardzo długi ' * 10).strip()
+        proposal = only(
+            propose(title='Kartkówka', message=f'30 września, {subject}, Zuzanna')
+        )
+
+        self.assertGreater(len(subject), 100)
+        self.assertEqual(proposal.school_subject, '')
+        self.assertEqual(proposal.content, f'Kartkówka: {subject}')
+        self.assertEqual(proposal.school_item, SchoolItemKind.QUIZ)
+        self.assertEqual(proposal.member, ZUZANNA)
+
+    def test_subject_at_the_length_limit_is_kept(self):
+        subject = 'x' * 100
+        proposal = only(propose(title='Sprawdzian', message=f'7 października, {subject}, Zuzanna'))
+
+        self.assertEqual(proposal.school_subject, subject)
+
+    def test_non_calendar_rules_carry_no_subject(self):
+        for key in ('grade', 'lucky_number', 'late_arrival'):
+            with self.subTest(key):
+                self.assertEqual(only(propose(key)).school_subject, '')
 
     def test_child_note_categories(self):
         expected = {
@@ -463,6 +501,7 @@ class ChildMatchingTests(SimpleTestCase):
 
         self.assertIsNone(proposal.member)
         self.assertEqual(proposal.content, 'Sprawdzian: Biologia — Zuzanna')
+        self.assertEqual(proposal.school_subject, 'Biologia')
         self.assertEqual(proposal.entry_type, EntryType.CALENDAR_EVENT)
         self.assertEqual(proposal.date, datetime.date(2026, 10, 7))
         # A test kind requires a member, so the unassigned event carries none.

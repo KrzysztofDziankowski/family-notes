@@ -1,6 +1,7 @@
 import datetime
 import uuid
 
+from django.template.loader import render_to_string
 from django.test import TestCase
 
 from entries.classification.service import ParentClassification
@@ -14,17 +15,29 @@ from entries.classification.types import (
     UnavailableReason,
 )
 from entries.forms import (
+    BatchEntryCorrectionForm,
+    BatchEntryForm,
     CaptureForm,
     EntryCreateForm,
     EntryEditForm,
     EntryReviewForm,
+    FollowUpAnswerForm,
+    ProposalCorrectionForm,
+    describe_fields,
     review_form_from_classification,
 )
 from entries.models import Entry
 
-from .test_classification_service import FamilyFixtureMixin
+from .field_association_markup import assert_described_by
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 MONDAY = datetime.date(2026, 9, 21)
+SCHOOL_EVENT_KINDS = (
+    SchoolItemKind.HOMEWORK,
+    SchoolItemKind.CLASS_TEST,
+    SchoolItemKind.TEST,
+    SchoolItemKind.QUIZ,
+)
 
 
 class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
@@ -36,6 +49,7 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
             'time': '',
             'assigned_member': str(self.child.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'biologia',
             'submission_key': str(uuid.uuid4()),
         }
         data.update(overrides)
@@ -68,11 +82,63 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('assigned_member', form.errors)
 
-    def test_changed_type_drops_school_item(self):
+    def test_changed_type_with_stale_school_item_is_an_error(self):
         form = self.bound(entry_type=EntryType.NOTE.value, assigned_member='', date='')
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['school_item'], ['Ten element szkolny wymaga rodzaju „Wydarzenie”.']
+        )
+
+    def test_changed_type_with_cleared_school_item_is_valid(self):
+        form = self.bound(
+            entry_type=EntryType.NOTE.value,
+            assigned_member='',
+            date='',
+            school_item='',
+            school_subject='',
+        )
 
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['school_item'], '')
+
+    def test_school_event_kinds_require_a_subject(self):
+        for kind in SCHOOL_EVENT_KINDS:
+            with self.subTest(kind=kind.value):
+                form = self.bound(school_item=kind.value, school_subject='   ')
+
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])
+
+    def test_subject_is_optional_for_other_entries(self):
+        form = self.bound(school_item='', school_subject='')
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['school_subject'], '')
+
+    def test_subject_is_stripped_and_bounded(self):
+        form = self.bound(school_subject='  Matematyka ')
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['school_subject'], 'Matematyka')
+
+        too_long = self.bound(school_subject='x' * 101)
+        self.assertFalse(too_long.is_valid())
+        self.assertIn('school_subject', too_long.errors)
+
+    def test_school_item_and_subject_are_visible_rows(self):
+        form = EntryReviewForm(self.parent)
+
+        self.assertEqual(
+            [row['field'].name for row in form.rows()],
+            [
+                'entry_type', 'content', 'school_item', 'school_subject',
+                'date', 'time', 'assigned_member',
+            ],
+        )
+        self.assertEqual(form['school_item'].label, 'Element szkolny')
+        self.assertEqual(form['school_subject'].label, 'Przedmiot')
+        self.assertIn('Brak', str(form['school_item']))
+        self.assertEqual([f.name for f in form.hidden_fields()], ['submission_key'])
 
     def test_errors_are_polish(self):
         form = self.bound(content='')
@@ -170,6 +236,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
             'time': '08:30',
             'assigned_member': str(self.child.pk),
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': 'biologia',
             'submission_key': str(uuid.uuid4()),
         }
         values.update(overrides)
@@ -194,6 +261,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
             'date': 'Data',
             'time': 'Godzina',
             'assigned_member': 'Dla kogo',
+            'school_subject': 'Przedmiot',
             'school_item': 'Element szkolny',
         }
         for form_class in self.form_classes:
@@ -341,8 +409,8 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('eduvulcan', html.lower())
 
 
-class ReviewFormKeepsSilentClearingTests(FamilyFixtureMixin, TestCase):
-    def test_hidden_school_item_is_cleared_not_rejected(self):
+class ReviewFormStrictSchoolItemTests(FamilyFixtureMixin, TestCase):
+    def test_visible_school_item_mismatch_is_rejected_not_cleared(self):
         form = EntryReviewForm(
             self.parent,
             {
@@ -352,12 +420,288 @@ class ReviewFormKeepsSilentClearingTests(FamilyFixtureMixin, TestCase):
                 'time': '',
                 'assigned_member': '',
                 'school_item': SchoolItemKind.TEST.value,
+                'school_subject': '',
                 'submission_key': str(uuid.uuid4()),
             },
         )
 
-        self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data['school_item'], '')
-        self.assertNotIn('school_item', form.errors)
-        self.assertEqual([f.name for f in form.visible_fields()],
-                         ['entry_type', 'content', 'date', 'time', 'assigned_member'])
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            form.errors['school_item'], ['Ten element szkolny wymaga rodzaju „Wydarzenie”.']
+        )
+        self.assertNotIn('school_subject', form.errors)
+        self.assertEqual(
+            {f.name for f in form.visible_fields()},
+            {
+                'entry_type', 'content', 'date', 'time', 'assigned_member',
+                'school_item', 'school_subject', 'correction',
+            },
+        )
+
+
+class SubjectOnEditTests(FamilyFixtureMixin, TestCase):
+    def entry(self, **fields):
+        values = dict(
+            family=self.family,
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Sprawdzian: Biologia',
+            date=MONDAY,
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+        )
+        values.update(fields)
+        return Entry.objects.create(**values)
+
+    def edit(self, entry, **overrides):
+        data = {
+            'entry_type': entry.entry_type,
+            'content': entry.content,
+            'date': entry.date.isoformat() if entry.date else '',
+            'time': '',
+            'assigned_member': str(entry.assigned_member_id or ''),
+            'school_item': entry.school_item,
+            'school_subject': entry.school_subject,
+        }
+        data.update(overrides)
+        return EntryEditForm(self.parent, data, entry=entry)
+
+    def test_prefills_the_stored_subject(self):
+        entry = self.entry(school_subject='Biologia')
+
+        form = EntryEditForm(self.parent, entry=entry)
+
+        self.assertEqual(form['school_subject'].value(), 'Biologia')
+
+    def test_unrelated_edit_of_subjectless_school_event_is_valid(self):
+        entry = self.entry()
+        cases = {
+            'reassign': {'assigned_member': str(self.other_child.pk)},
+            'move date': {'date': '2026-09-28'},
+            'retitle': {'content': 'Sprawdzian z działu 3'},
+        }
+        for name, overrides in cases.items():
+            with self.subTest(name):
+                form = self.edit(entry, **overrides)
+                self.assertTrue(form.is_valid(), form.errors)
+
+    def test_clearing_a_stored_subject_is_an_error(self):
+        entry = self.entry(school_subject='Biologia')
+
+        form = self.edit(entry, school_subject='  ')
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])
+
+    def test_setting_or_changing_a_school_event_kind_requires_a_subject(self):
+        plain = self.entry(school_item='', content='Wywiadówka')
+        subjectless_test = self.entry()
+        for entry, kind in (
+            (plain, SchoolItemKind.TEST),
+            (plain, SchoolItemKind.HOMEWORK),
+            (subjectless_test, SchoolItemKind.QUIZ),
+            (subjectless_test, SchoolItemKind.CLASS_TEST),
+        ):
+            with self.subTest(entry=entry.content, kind=kind.value):
+                form = self.edit(entry, school_item=kind.value, school_subject='')
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form.errors['school_subject'], ['Podaj przedmiot.'])
+
+
+class EnterSubmitOptInTests(FamilyFixtureMixin, TestCase):
+    """S-05: only the instruction boxes submit on Enter; „Tytuł” stays a newline."""
+
+    def assert_opted_in(self, bound_field, submitter=None):
+        html = str(bound_field)
+        self.assertIn('data-enter-submit=""', html)
+        self.assertIn('enterkeyhint="send"', html)
+        if submitter is None:
+            self.assertNotIn('data-enter-submitter', html)
+        else:
+            self.assertIn(f'data-enter-submitter="{submitter}"', html)
+
+    def test_capture_and_follow_up_boxes_use_the_default_action(self):
+        self.assert_opted_in(CaptureForm()['text'])
+        self.assert_opted_in(FollowUpAnswerForm(self.parent)['answer'])
+
+    def test_correction_boxes_name_their_popraw_button(self):
+        cases = (
+            (EntryReviewForm, None, 'correct-submit'),
+            (ProposalCorrectionForm, None, 'correct-submit'),
+            (BatchEntryForm, 'e3', 'e3-correct-submit'),
+            (BatchEntryCorrectionForm, 'e3', 'e3-correct-submit'),
+        )
+        for form_class, prefix, submitter in cases:
+            with self.subTest(form=form_class.__name__):
+                form = form_class(self.parent, prefix=prefix)
+                self.assert_opted_in(form['correction'], submitter)
+
+    def test_title_boxes_are_not_opted_in(self):
+        for form_class in (EntryReviewForm, EntryCreateForm, EntryEditForm):
+            with self.subTest(form=form_class.__name__):
+                html = str(form_class(self.parent)['content'])
+                self.assertNotIn('data-enter-submit', html)
+                self.assertNotIn('enterkeyhint', html)
+
+
+class TwoParentAssigneeFormTests(TwoParentFixtureMixin, TestCase):
+    """S-07: review, create and edit offer self and the other parent only."""
+
+    def data(self, member, **overrides):
+        values = {
+            'entry_type': EntryType.NOTE.value,
+            'content': 'Odebrać paczkę z poczty',
+            'date': '',
+            'time': '',
+            'assigned_member': str(member.pk) if member is not None else '',
+            'school_item': '',
+            'school_subject': '',
+            'submission_key': str(uuid.uuid4()),
+        }
+        values.update(overrides)
+        return values
+
+    def forms_for(self, member, **overrides):
+        entry = Entry.objects.create(
+            family=self.family, entry_type=EntryType.NOTE.value, content='Stary wpis'
+        )
+        yield EntryReviewForm(self.parent, self.data(member, **overrides))
+        yield EntryCreateForm(self.parent, self.data(member, **overrides))
+        yield EntryEditForm(self.parent, self.data(member, **overrides), entry=entry)
+
+    def test_choices_include_both_parents_and_exclude_foreign_and_inactive(self):
+        for form_class in (EntryReviewForm, EntryCreateForm, EntryEditForm):
+            with self.subTest(form=form_class.__name__):
+                queryset = form_class(self.parent).fields['assigned_member'].queryset
+                self.assertQuerySetEqual(
+                    queryset,
+                    [self.parent, self.child, self.other_child, self.second_parent],
+                )
+
+    def test_self_and_other_parent_are_accepted_for_every_type(self):
+        types = {
+            EntryType.NOTE.value: {},
+            EntryType.TODO.value: {},
+            EntryType.CALENDAR_EVENT.value: {'date': MONDAY.isoformat()},
+        }
+        for member in (self.parent, self.second_parent):
+            for entry_type, extra in types.items():
+                for form in self.forms_for(member, entry_type=entry_type, **extra):
+                    with self.subTest(
+                        member=member.display_name, type=entry_type, form=type(form).__name__
+                    ):
+                        self.assertTrue(form.is_valid(), form.errors)
+                        self.assertEqual(form.cleaned_data['assigned_member'], member)
+
+    def test_foreign_and_inactive_parents_are_rejected_in_polish(self):
+        for member in (self.other_family_parent, self.inactive_parent):
+            for form in self.forms_for(member):
+                with self.subTest(member=member.display_name, form=type(form).__name__):
+                    self.assertFalse(form.is_valid())
+                    self.assertIn(
+                        'Wybierz poprawną wartość', form.errors['assigned_member'][0]
+                    )
+
+    def test_classified_parent_prefills_review_form(self):
+        outcome = ParentClassification(
+            result=ClassificationProposal(
+                entry_type=EntryType.NOTE,
+                content='Odebrać paczkę',
+                member_name=self.second_parent.display_name,
+            ),
+            member=self.second_parent,
+        )
+
+        form, missing = review_form_from_classification(self.parent, outcome, 'tekst')
+
+        self.assertEqual(missing, [])
+        self.assertEqual(form.initial['assigned_member'], self.second_parent.pk)
+        self.assertIn(
+            f'<option value="{self.second_parent.pk}" selected>', str(form['assigned_member'])
+        )
+
+
+class DescribeFieldsTests(FamilyFixtureMixin, TestCase):
+    """``describe_fields`` lists exactly the IDs ``_field.html`` renders (S-17)."""
+
+    def review_data(self, **overrides):
+        data = {
+            'entry_type': EntryType.CALENDAR_EVENT.value,
+            'content': 'Zebranie',
+            'date': '',
+            'time': '',
+            'assigned_member': '',
+            'school_item': '',
+            'school_subject': '',
+            'submission_key': str(uuid.uuid4()),
+        }
+        data.update(overrides)
+        return data
+
+    def render_field(self, form, name, hint=''):
+        describe_fields(form)
+        return render_to_string('entries/_field.html', {'field': form[name], 'hint': hint})
+
+    def test_hint_only(self):
+        form = EntryReviewForm(self.parent, missing={'date': 'Podaj datę.'})
+
+        html = self.render_field(form, 'date', hint='Podaj datę.')
+
+        self.assertIn('aria-invalid="true"', html)
+        assert_described_by(self, html, 'id_date', ['id_date-hint'])
+
+    def test_error_only(self):
+        form = EntryCreateForm(self.parent, self.review_data(content=''))
+        self.assertFalse(form.is_valid())
+
+        html = self.render_field(form, 'content')
+
+        self.assertIn('aria-invalid="true"', html)
+        assert_described_by(self, html, 'id_content', ['id_content_error'])
+
+    def test_missing_and_invalid_field_references_both_hint_and_error(self):
+        form = EntryReviewForm(self.parent, self.review_data(), missing={'date': 'Podaj datę.'})
+        self.assertFalse(form.is_valid())
+        self.assertIn('date', form.errors)
+
+        html = self.render_field(form, 'date', hint='Podaj datę.')
+
+        self.assertIn('Podaj datę.', html)
+        self.assertIn('Wydarzenie musi mieć datę.', html)
+        assert_described_by(self, html, 'id_date', ['id_date-hint', 'id_date_error'])
+
+    def test_two_errors_render_one_error_container(self):
+        form = EntryCreateForm(self.parent, self.review_data(content=''))
+        form.is_valid()
+        form.add_error('content', 'Druga uwaga.')
+
+        html = self.render_field(form, 'content')
+
+        self.assertIn('To pole jest wymagane.', html)
+        self.assertIn('Druga uwaga.', html)
+        assert_described_by(self, html, 'id_content', ['id_content_error'])
+
+    def test_readable_date_is_referenced_when_a_date_is_shown(self):
+        form = EntryReviewForm(self.parent, initial={'date': MONDAY})
+
+        describe_fields(form)
+
+        self.assertIn('aria-describedby="id_date-human"', str(form['date']))
+
+    def test_no_description_without_hint_error_or_date(self):
+        form = EntryReviewForm(self.parent)
+
+        describe_fields(form)
+
+        self.assertNotIn('aria-describedby', str(form['date']))
+        self.assertNotIn('aria-invalid', str(form['content']))
+
+    def test_enter_fields_reference_their_enter_hint_on_valid_and_invalid_renders(self):
+        valid = CaptureForm()
+        describe_fields(valid)
+        self.assertIn('aria-describedby="id_text-enter-hint"', str(valid['text']))
+
+        invalid = CaptureForm({'text': ''})
+        invalid.is_valid()
+        describe_fields(invalid)
+        self.assertIn('aria-describedby="id_text_error id_text-enter-hint"', str(invalid['text']))

@@ -20,8 +20,15 @@ from entries.classification.types import EntryType, SchoolItemKind, UnavailableR
 from entries.models import Entry
 from family_access.models import FamilyMember
 
+from .classification_progress_markup import (
+    assert_progress_regions,
+    classification_submitters,
+    progress_forms,
+)
+from .enter_submit_markup import assert_enter_assets
+from .field_association_markup import assert_described_by
 from .test_capture_views import RecordingHandler
-from .test_classification_service import WRITE_PREFIXES, FamilyFixtureMixin
+from .test_classification_service import WRITE_PREFIXES, FamilyFixtureMixin, TwoParentFixtureMixin
 
 CAPTURE_URL = reverse('entries:capture')
 ANSWER_URL = reverse('entries:answer')
@@ -41,6 +48,7 @@ def output(**overrides):
         grounded=True,
         school_item=SchoolItemKind.QUIZ,
         member_name='Kasia',
+        school_subject='matematyka',
     )
     values.update(overrides)
     return BackendOutput(**values)
@@ -117,7 +125,7 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertContains(response, f'action="{ANSWER_URL}"')
         self.assertContains(response, f'Kiedy odbędzie się „{CONTENT}”?')
         self.assertContains(response, f'Rozpoznano: wydarzenie „{CONTENT}”')
-        self.assertContains(response, '<button type="submit">Dalej</button>', html=True)
+        self.assertContains(response, '<button type="submit" data-classification-submit>Dalej</button>', html=True)
         self.assertContains(response, 'name="action" value="skip"')
         self.assertContains(response, 'formnovalidate')
         self.assertContains(response, 'Zacznij od nowa')
@@ -149,6 +157,46 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertEqual(entry.assigned_member, self.kasia)
         self.assertEqual(entry.content, CONTENT)
         self.assertEqual(entry.school_item, SchoolItemKind.QUIZ.value)
+
+    def test_missing_subject_is_asked_and_the_answer_reaches_review(self):
+        response, data = self.ask(
+            first=output(date=NEXT_FRIDAY, school_subject=None), text='Kasia ma kartkówkę w piątek'
+        )
+
+        self.assertContains(response, f'Z jakiego przedmiotu jest „{CONTENT}”?')
+        self.assertEqual(data['missing'], ['school_subject'])
+        self.assertEqual(data['school_subject'], '')
+
+        response = self.answer(
+            data, output(date=None, school_subject='fizyka'), answer='z fizyki'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        form = response.context['review_form']
+        self.assertEqual(form.initial['school_subject'], 'fizyka')
+        self.assertEqual(form.initial['date'], NEXT_FRIDAY)
+        self.assertFalse(Entry.objects.exists())
+
+    def test_hidden_subject_round_trips_and_tampered_missing_subject_is_dropped(self):
+        _, data = self.ask()
+        self.assertEqual(data['school_subject'], 'matematyka')
+
+        response = self.answer(
+            {**data, 'missing': ['date', 'school_subject']},
+            output(date=NEXT_FRIDAY, school_subject='historia'),
+            answer='w piątek',
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertEqual(response.context['review_form'].initial['school_subject'], 'matematyka')
+
+    def test_over_long_hidden_subject_is_stale(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='w piątek', school_subject='x' * 101)
+
+        self.assertContains(response, 'Nie udało się odczytać wpisu. Zacznij od nowa.')
+        self.assertEqual(self.backend.requests[1:], [])
 
     def test_answer_resolving_to_a_past_date_warns_on_the_proposal(self):
         _, data = self.ask()
@@ -221,6 +269,72 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertEqual(len(self.backend.requests), calls)
         self.assertEqual(response.context['state'], 'proposal')
         self.assertEqual(response.context['review_form'].initial['entry_type'], 'todo')
+
+
+class ShortNameAnswerFlowTests(FollowUpViewMixin, TestCase):
+    """PK-01: a short name that fits two members is asked about, then answered."""
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; keep her out of the way.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+        self.anna = self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+    def ask_ambiguous(self):
+        response, data = self.ask(
+            first=output(date=NEXT_FRIDAY, member_name='Hanna', member_mention='Hania'),
+            text='Hania ma kartkówkę z matematyki w piątek',
+        )
+        self.assertContains(response, f'Której osoby dotyczy „{CONTENT}”?')
+        self.assertEqual(data['assigned_member'], '')
+        self.assertEqual(data['missing'], ['ambiguous_member', 'affected_member'])
+        return data
+
+    def test_unambiguous_short_name_answer_reaches_review_and_saves_that_member(self):
+        data = self.ask_ambiguous()
+
+        response = self.answer(
+            data, output(date=None, member_name=None, member_mention=None), answer='Hanusia'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        form = response.context['review_form']
+        self.assertEqual(form.initial['assigned_member'], self.hanna.pk)
+        self.assertEqual(form.initial['date'], NEXT_FRIDAY)
+
+        self.confirm_from(response)
+
+        entry = Entry.objects.get()
+        self.assertEqual(entry.assigned_member, self.hanna)
+
+    def test_full_name_answer_is_not_asked_again_despite_the_stale_mention(self):
+        data = self.ask_ambiguous()
+
+        response = self.answer(
+            data, output(date=None, member_name='Hanna', member_mention='Hania'), answer='Anna'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertEqual(response.context['review_form'].initial['assigned_member'], self.anna.pk)
+
+        self.confirm_from(response)
+
+        self.assertEqual(Entry.objects.get().assigned_member, self.anna)
+
+    def test_ambiguous_short_name_answer_asks_again(self):
+        data = self.ask_ambiguous()
+
+        response = self.answer(
+            data, output(date=None, member_name='Hanna', member_mention='Hania'), answer='Hania'
+        )
+
+        self.assertEqual(response.context['state'], 'follow_up')
+        form = response.context['review_form']
+        self.assertIsNone(form.initial['assigned_member'])
+        self.assertContains(response, 'Wybierz osobę.')
+        self.assertFalse(Entry.objects.exists())
 
 
 class SkipTests(FollowUpViewMixin, TestCase):
@@ -298,6 +412,21 @@ class AnswerValidationTests(FollowUpViewMixin, TestCase):
         self.assertIn('answer', form.errors)
         self.assertIn('aria-invalid="true"', str(form['answer']))
         self.assertFalse(form.has_stale_fields())
+
+    def test_question_describes_the_answer_by_the_enter_hint(self):
+        response, _ = self.ask()
+
+        assert_described_by(self, response, 'id_answer', ['id_answer-enter-hint'])
+
+    def test_invalid_answer_lists_its_error_and_the_enter_hint(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='   ')
+
+        self.assertIn('aria-invalid="true"', str(response.context['follow_up_form']['answer']))
+        assert_described_by(
+            self, response, 'id_answer', ['id_answer_error', 'id_answer-enter-hint']
+        )
 
     def test_foreign_or_inactive_member_is_a_form_error(self):
         _, data = self.ask()
@@ -401,3 +530,146 @@ class AnswerPrivacyTests(FollowUpViewMixin, TestCase):
         self.assertEqual(writes, [])
         self.assertFalse(Entry.objects.exists())
 
+
+class EnterSubmitQuestionTests(FollowUpViewMixin, TestCase):
+    """S-05: the re-asked question keeps the Enter opt-in and hint."""
+
+    def test_re_asked_question_keeps_the_enter_markup(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='   ')
+
+        self.assertEqual(response.context['state'], 'question')
+        field = str(response.context['follow_up_form']['answer'])
+        self.assertIn('data-enter-submit=""', field)
+        self.assertIn('enterkeyhint="send"', field)
+        self.assertNotIn('data-enter-submitter', field)
+        assert_enter_assets(self, response, ['id_answer'])
+
+    def test_post_without_an_action_is_an_answer_and_skip_stays_a_skip(self):
+        """``requestSubmit()`` posts no button value: that must mean „Dalej”."""
+        _, data = self.ask()
+        self.assertNotIn('action', data)
+        calls = len(self.backend.requests)
+
+        answered = self.answer(data, output(date=NEXT_FRIDAY), answer='w piątek')
+
+        self.assertEqual(len(self.backend.requests), calls + 1)
+        self.assertEqual(self.backend.requests[-1].follow_up_answer, 'w piątek')
+        self.assertEqual(answered.context['state'], 'proposal')
+
+        skipped = self.answer(data, answer='w piątek', action='skip')
+
+        self.assertEqual(len(self.backend.requests), calls + 1)
+        self.assertEqual(skipped.context['state'], 'skipped')
+        self.assertFalse(Entry.objects.exists())
+
+
+class ProgressIndicatorAnswerTests(FollowUpViewMixin, TestCase):
+    """S-06: the answer step keeps the indicator on every form it renders."""
+
+    def test_re_asked_question_keeps_the_indicator_on_dalej_only(self):
+        _, data = self.ask()
+
+        response = self.answer(data, answer='   ')
+
+        self.assertEqual(response.context['state'], 'question')
+        self.assertEqual(assert_progress_regions(self, response.content.decode()), 1)
+        [form] = progress_forms(response.content.decode())
+        self.assertEqual(form['attrs']['action'], ANSWER_URL)
+        self.assertIn('data-classification-default', form['attrs'])
+        self.assertEqual(classification_submitters(form), ['Dalej'])
+
+    def test_answer_and_skip_reviews_mark_only_popraw(self):
+        _, data = self.ask()
+        pages = {
+            'proposal': self.answer(data, output(date=NEXT_FRIDAY), answer='w piątek'),
+            'skipped': self.answer(data, answer='', action='skip'),
+        }
+        for name, response in pages.items():
+            with self.subTest(state=name):
+                self.assertEqual(response.context['state'], name)
+                self.assertEqual(assert_progress_regions(self, response.content.decode()), 1)
+                [form] = progress_forms(response.content.decode())
+                self.assertEqual(form['attrs']['action'], CONFIRM_URL)
+                self.assertNotIn('data-classification-default', form['attrs'])
+                self.assertEqual(classification_submitters(form), ['Popraw'])
+
+
+def parent_event_output(**overrides):
+    """A dated-event draft for a parent; the date is what the follow-up asks."""
+    values = dict(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Wizyta u dentysty',
+        grounded=True,
+        member_name='Paweł',
+    )
+    values.update(overrides)
+    return BackendOutput(**values)
+
+
+class TwoParentFollowUpTests(TwoParentFixtureMixin, FollowUpViewMixin, TestCase):
+    """S-07: an answer or a skip keeps a parent assignee through to the saved entry."""
+
+    def test_answer_keeps_the_parent_and_confirm_saves_it(self):
+        for member in (self.second_parent, self.parent):
+            with self.subTest(member=member.display_name):
+                Entry.objects.all().delete()
+                _, data = self.ask(
+                    first=parent_event_output(member_name=member.display_name),
+                    text=f'{member.display_name} ma wizytę u dentysty',
+                )
+                self.assertEqual(data['assigned_member'], str(member.pk))
+
+                response = self.answer(
+                    data,
+                    parent_event_output(member_name=member.display_name, date=NEXT_FRIDAY),
+                    answer='w piątek',
+                )
+
+                self.assertEqual(response.context['state'], 'proposal')
+                self.assertEqual(
+                    response.context['review_form'].initial['assigned_member'], member.pk
+                )
+                self.confirm_from(response)
+                entry = Entry.objects.get()
+                self.assertEqual(entry.assigned_member, member)
+                self.assertEqual(entry.date, NEXT_FRIDAY)
+
+    def test_answer_naming_the_other_parent_fills_the_missing_member(self):
+        _, data = self.ask(first=output(member_name=None, date=NEXT_FRIDAY))
+
+        response = self.answer(
+            data, output(member_name=None, date=NEXT_FRIDAY), answer='Paweł'
+        )
+
+        self.assertEqual(response.context['state'], 'proposal')
+        self.assertEqual(
+            response.context['review_form'].initial['assigned_member'], self.second_parent.pk
+        )
+        self.confirm_from(response)
+        self.assertEqual(Entry.objects.get().assigned_member, self.second_parent)
+
+    def test_skip_with_a_parent_preselected_saves_the_parent(self):
+        _, data = self.ask(first=parent_event_output())
+
+        response = self.answer(data, answer='', action='skip')
+
+        self.assertEqual(response.context['state'], 'skipped')
+        form = response.context['review_form']
+        self.assertEqual(form.initial['assigned_member'], self.second_parent.pk)
+        self.confirm_from(response)
+        entry = Entry.objects.get()
+        self.assertEqual(entry.entry_type, EntryType.NOTE.value)
+        self.assertEqual(entry.assigned_member, self.second_parent)
+
+    def test_answer_cannot_assign_a_foreign_or_inactive_parent(self):
+        _, data = self.ask(first=parent_event_output())
+        for member in (self.other_family_parent, self.inactive_parent):
+            with self.subTest(member=member.display_name):
+                response = self.answer(
+                    data, answer='w piątek', assigned_member=str(member.pk)
+                )
+                self.assertEqual(response.context['state'], 'question')
+                self.assertIn('assigned_member', response.context['follow_up_form'].errors)
+        self.assertFalse(Entry.objects.exists())

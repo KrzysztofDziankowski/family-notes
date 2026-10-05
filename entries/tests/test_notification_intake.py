@@ -241,3 +241,38 @@ class InboundNotificationAdminTests(AutomationFixtureMixin, TestCase):
 
         self.assertRedirects(response, f"{reverse('admin:login')}?next={url}",
                              fetch_redirect_response=False)
+
+
+class MultiFamilyIntakeTests(TestCase):
+    """S-16: a notification lands in the family of the token, never the session's."""
+
+    def setUp(self):
+        from family_access.context import SESSION_KEY
+
+        self.family_a = Family.objects.create(name='Rodzina testowa')
+        self.family_b = Family.objects.create(name='Inna rodzina')
+        self.user = get_user_model().objects.create_user(username='ewa', email='ewa@example.test')
+        parent_a = FamilyMember.objects.create(
+            user=self.user, family=self.family_a, role=FamilyMember.Role.PARENT, display_name='Ewa',
+        )
+        FamilyMember.objects.create(
+            user=self.user, family=self.family_b, role=FamilyMember.Role.PARENT, display_name='Ewa',
+        )
+        self.token, self.secret = AutomationToken.issue(parent_a, 'Telefon A')
+        self.client.force_login(self.user)
+        session = self.client.session
+        session[SESSION_KEY] = self.family_b.pk
+        session.save()
+
+    def test_token_of_family_a_stores_into_family_a(self):
+        response = self.client.post(
+            URL,
+            data=json.dumps(sample_payload(family=self.family_b.pk)),
+            content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {self.secret}',
+        )
+
+        self.assertEqual(response.status_code, 202)
+        row = InboundNotification.objects.get()
+        self.assertEqual(row.family, self.family_a)
+        self.assertEqual(row.token, self.token)

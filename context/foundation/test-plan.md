@@ -85,7 +85,7 @@ with 28 Python test files spread across product, access, and project packages.
 | production database | PostgreSQL via psycopg | psycopg 3.3 | Phase 1 must verify production-like migration behavior |
 | external API boundary | `unittest.mock` at the transport edge | Python standard library | Keep domain behavior deterministic; do not mock internal policy |
 | e2e | none planned | n/a | Current risks have cheaper integration or smoke-test signals |
-| visual/accessibility | none planned | n/a | Admin look-and-feel is explicitly outside test-budget scope |
+| visual/accessibility | Django HTML audit + token contrast test; manual axe/AT pass per accessibility.md | stdlib `html.parser` (`family_notes/a11y_audit.py`) | WCAG 2.2 AA for the family flows (S-17); admin look-and-feel stays outside test-budget scope |
 
 **Stack grounding tools (current session):**
 - Docs: Context7 — checked Django 5.2 `TestCase`, transaction isolation, test client, and discovery guidance; checked: 2026-10-01.

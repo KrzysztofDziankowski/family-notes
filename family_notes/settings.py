@@ -185,6 +185,10 @@ CACHES = {'default': {
 }}
 
 ACCOUNT_RATE_LIMITS = {'login': '30/m/ip', 'login_failed': '10/m/ip,5/300s/key'}
+# Local self-registration is closed; Google first sign-in still creates the user
+# that a superuser then maps to a family member (family_access.auth_adapters).
+ACCOUNT_ADAPTER = 'family_access.auth_adapters.ClosedSignupAccountAdapter'
+SOCIALACCOUNT_ADAPTER = 'family_access.auth_adapters.ExternalSignInSocialAccountAdapter'
 # nginx overwrites this header; direct runserver development uses REMOTE_ADDR.
 ALLAUTH_TRUSTED_CLIENT_IP_HEADER = 'X-Real-IP' if not DEBUG else None
 
@@ -215,6 +219,8 @@ MIDDLEWARE = [
     'allauth.account.middleware.AccountMiddleware',
     'family_notes.auth_security.AuthCacheFailureMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'family_access.context.FamilyContextMiddleware',
+    'family_access.notices.MembershipNoticeMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -230,6 +236,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'family_access.context_processors.family_context',
             ],
         },
     },
@@ -393,8 +400,8 @@ LOGGING = {
     'handlers': {
         'console': {'class': 'logging.StreamHandler', 'formatter': 'plain'},
     },
-    # Every other logger (family_access, family_notes, django.security, ...)
-    # reaches the console at WARNING. Django's defaults print only with DEBUG
+    # Every other logger (family_notes, django.security, ...) reaches the
+    # console at WARNING. Django's defaults print only with DEBUG
     # on, and handler-less loggers would fall back to a bare stderr line.
     'root': {'handlers': ['console'], 'level': 'WARNING'},
     'loggers': {
@@ -407,6 +414,13 @@ LOGGING = {
         # Printed through the root handler, so root-level capture (privacy
         # tests) still sees it and nothing is printed twice.
         'entries.classification': {
+            'level': 'INFO',
+            'propagate': True,
+        },
+        # Id-only audit lines (membership_event=..., family_context_mismatch)
+        # that the Operator Recovery Runbook searches for. Printed through the
+        # root handler, like entries.classification.
+        'family_access': {
             'level': 'INFO',
             'propagate': True,
         },

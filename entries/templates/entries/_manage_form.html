@@ -1,8 +1,10 @@
+{% load family_context %}
 {% comment %}
 Structured create/edit form. Parameters: form, entry (None when creating).
 {% endcomment %}
 <form method="post" action="{% if entry %}{% url 'entries:edit' entry.pk %}{% else %}{% url 'entries:create' %}{% endif %}" data-state-part="{% if entry %}edit{% else %}create{% endif %}-form" novalidate>
     {% csrf_token %}
+    {% family_context_field %}
     {% if form.non_field_errors %}
         <div class="fn-panel fn-panel--danger" role="alert">
             {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
@@ -10,6 +12,9 @@ Structured create/edit form. Parameters: form, entry (None when creating).
     {% elif form.errors %}
         <div class="fn-panel fn-panel--danger" role="alert">
             <p>Popraw zaznaczone pola.</p>
+            <ul>
+                {% for field in form.visible_fields %}{% if field.errors %}<li><a href="#{{ field.auto_id }}">{{ field.label }}</a></li>{% endif %}{% endfor %}
+            </ul>
         </div>
     {% endif %}
     {% include "entries/_field.html" with field=form.entry_type hint="" %}
@@ -18,6 +23,7 @@ Structured create/edit form. Parameters: form, entry (None when creating).
     {% include "entries/_field.html" with field=form.time hint="" %}
     {% include "entries/_field.html" with field=form.assigned_member hint="" %}
     {% include "entries/_field.html" with field=form.school_item hint="" %}
+    {% include "entries/_field.html" with field=form.school_subject hint="" %}
     {% if form.submission_key %}{{ form.submission_key }}{% endif %}
     <div class="fn-actions">
         <button type="submit">{% if entry %}Zapisz zmiany{% else %}Dodaj wpis{% endif %}</button>

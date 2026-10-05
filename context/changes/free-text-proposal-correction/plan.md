@@ -350,33 +350,33 @@ No schema change. Rollback is a code revert. Saved entries and automation consum
 
 #### Automated
 
-- [ ] 1.1 Correction service tests pass
-- [ ] 1.2 Adapter tests pass, including the unchanged first-classification input
-- [ ] 1.3 Full suite and Django checks pass
+- [x] 1.1 Correction service tests pass — 10c7680
+- [x] 1.2 Adapter tests pass, including the unchanged first-classification input — 10c7680
+- [x] 1.3 Full suite and Django checks pass — 10c7680
 
 #### Manual
 
-- [ ] 1.4 Reading `CORRECTION_INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording that states the preserve-unmentioned rule and the relative-date rules from Assumed Decision 6
+- [x] 1.4 Reading `CORRECTION_INSTRUCTIONS` and `DATE_RULES` confirms natural Polish wording that states the preserve-unmentioned rule and the relative-date rules from Assumed Decision 6
 
 ### Phase 2: Correction step in the capture review
 
 #### Automated
 
-- [ ] 2.1 Correction and capture view tests pass
-- [ ] 2.2 Full suite, Django checks and migration check pass
+- [x] 2.1 Correction and capture view tests pass — 44a727c
+- [x] 2.2 Full suite, Django checks and migration check pass — 44a727c
 
 #### Manual
 
-- [ ] 2.3 With a stubbed or live backend on a phone-width browser, a parent corrects the date of a proposal with „zmień datę na 15 października”, sees the revised proposal with the other fields unchanged, and saves it
+- [x] 2.3 With a stubbed or live backend on a phone-width browser, a parent corrects the date of a proposal with „zmień datę na 15 października”, sees the revised proposal with the other fields unchanged, and saves it
 
 ### Phase 3: States page and live check
 
 #### Automated
 
-- [ ] 3.1 States page and acceptance tests pass
-- [ ] 3.2 Full suite passes
+- [x] 3.1 States page and acceptance tests pass — 62663a8
+- [x] 3.2 Full suite passes — 62663a8
 
 #### Manual
 
-- [ ] 3.3 The `corrected` and `correction_failed` sections on `/entries/_states/` render at 360 px width with nothing clipped or overflowing
+- [x] 3.3 The `corrected` and `correction_failed` sections on `/entries/_states/` render at 360 px width with nothing clipped or overflowing
 - [ ] 3.4 A live run with an OpenAI key: „zmień datę na 15 października” and „to dla Tymka” each change only the named field, within 30 s per step

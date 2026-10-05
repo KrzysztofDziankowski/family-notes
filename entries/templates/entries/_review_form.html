@@ -1,5 +1,7 @@
-<form method="post" action="{% url 'entries:confirm' %}" data-state-part="review">
+{% load family_context %}
+<form method="post" action="{% url 'entries:confirm' %}" data-state-part="review" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
+    {% family_context_field %}
     <h2>Sprawdź wpis</h2>
     {% if form.non_field_errors %}
         <div class="fn-panel fn-panel--danger" role="alert">
@@ -10,14 +12,17 @@
         {% include "entries/_field.html" with field=row.field hint=row.hint %}
         {% if row.field.name == "date" %}
             {% with shown_date=form.display_date %}
-                {% if shown_date %}<p class="fn-muted" data-human-date>{{ shown_date|date:"l, j E Y"|lower }}</p>{% endif %}
+                {% if shown_date %}<p class="fn-muted" id="{{ row.field.auto_id }}-human" data-human-date>{{ shown_date|date:"l, j E Y"|lower }}</p>{% endif %}
             {% endwith %}
         {% endif %}
     {% endfor %}
-    {{ form.school_item }}
+    {% include "entries/_field.html" with field=form.correction hint="" %}
+    {% include "entries/_enter_hint.html" with field=form.correction %}
     {{ form.submission_key }}
     <div class="fn-actions">
         <button type="submit">Zapisz wpis</button>
+        <button type="submit" name="action" value="correct" id="{{ form.correct_submit_id }}" class="secondary" formaction="{% url 'entries:correct' %}" formnovalidate data-classification-submit>Popraw</button>
         <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
     </div>
+    {% include "entries/_classification_progress.html" %}
 </form>

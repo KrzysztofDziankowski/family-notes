@@ -1,5 +1,9 @@
-<form method="post" action="{% url 'entries:capture' %}" data-state-part="capture">
+{% load family_context %}
+<form method="post" action="{% url 'entries:capture' %}" data-state-part="capture" data-classification-default data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
+    {% family_context_field %}
     {% include "entries/_field.html" with field=form.text hint="" %}
-    <button type="submit">Rozpoznaj</button>
+    {% include "entries/_enter_hint.html" with field=form.text %}
+    <button type="submit" data-classification-submit{% if progress_state == "running" or progress_state == "slow" %} aria-busy="true" aria-disabled="true"{% endif %}>Rozpoznaj</button>
+    {% include "entries/_classification_progress.html" %}
 </form>

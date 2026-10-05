@@ -417,53 +417,53 @@ There are no database or data changes, no backfill and no feature flag. Rollback
 
 #### Automated
 
-- [ ] 1.1 View tests prove the capture form and follow-up form render the progress partial with all five hidden `data-progress-state` blocks, the exact Polish copy, the retry button, and the `data-progress-slow-after="10"` / `data-progress-stalled-after="35"` attributes under default settings.
-- [ ] 1.2 A view test with `override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)` proves both thresholds follow the settings (`6` and `22`).
-- [ ] 1.3 View tests prove the review form (proposal, `correction_failed`, confirm-invalid) renders the progress partial, „Popraw” carries `data-classification-submit`, „Zapisz wpis” does not, and the review form has no `data-classification-default`; capture and follow-up forms carry `data-classification-default`, "Pomiń" has no `data-classification-submit`; structured create/edit forms and the saved panel do not render the partial.
-- [ ] 1.11 A markup test proves that in every rendered progress partial no ancestor of `[role=status][data-progress-live]` carries `hidden`, and that the region contains the five hidden state blocks.
-- [ ] 1.4 View tests prove the capture page and DEBUG state gallery include both the `js/classification-progress.js` and S-05 `js/enter-submit.js` script tags, and a test proves the new file resolves through Django's static files finders.
-- [ ] 1.5 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view`.
-- [ ] 1.6 Django checks pass: `uv run python manage.py check`.
+- [x] 1.1 View tests prove the capture form and follow-up form render the progress partial with all five hidden `data-progress-state` blocks, the exact Polish copy, the retry button, and the `data-progress-slow-after="10"` / `data-progress-stalled-after="35"` attributes under default settings. — f2a88eb
+- [x] 1.2 A view test with `override_settings(CLASSIFICATION_DEADLINE_SECONDS=12, CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS=6)` proves both thresholds follow the settings (`6` and `22`). — f2a88eb
+- [x] 1.3 View tests prove the review form (proposal, `correction_failed`, confirm-invalid) renders the progress partial, „Popraw” carries `data-classification-submit`, „Zapisz wpis” does not, and the review form has no `data-classification-default`; capture and follow-up forms carry `data-classification-default`, "Pomiń" has no `data-classification-submit`; structured create/edit forms and the saved panel do not render the partial. — f2a88eb
+- [x] 1.11 A markup test proves that in every rendered progress partial no ancestor of `[role=status][data-progress-live]` carries `hidden`, and that the region contains the five hidden state blocks. — f2a88eb
+- [x] 1.4 View tests prove the capture page and DEBUG state gallery include both the `js/classification-progress.js` and S-05 `js/enter-submit.js` script tags, and a test proves the new file resolves through Django's static files finders. — f2a88eb
+- [x] 1.5 Focused tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_correction_views entries.tests.test_states_view`. — f2a88eb
+- [x] 1.6 Django checks pass: `uv run python manage.py check`. — f2a88eb
 
 #### Manual
 
-- [ ] 1.7 Desktop Chrome with network throttling: after "Rozpoznaj", the spinner and running panel appear immediately, the counter advances, and the slow copy appears after 10 s; the next page then shows the review, question, or unavailable notice.
-- [ ] 1.8 Follow-up: "Dalej" (click and Enter) shows the indicator and Enter sets `aria-busy` on the form; "Pomiń" does not show it; Enter while busy does not post a second time.
-- [ ] 1.9 DevTools offline before submitting: the submission is blocked, the text stays, and the offline copy appears; Enter while still offline is blocked too; going back online, both Enter and tapping "Rozpoznaj" submit.
-- [ ] 1.12 Review form with throttling: „Popraw” (click and Enter in „Popraw opis”) shows the indicator, „Zapisz wpis” does not; after forcing the stalled state (DevTools offline-then-online or a stubbed slow backend), "Spróbuj ponownie" re-posts to `entries:correct` and no entry is saved.
-- [ ] 1.10 Back button after a completed classification: the restored capture page is not busy and no stale panel is visible.
+- [x] 1.7 Desktop Chrome with network throttling: after "Rozpoznaj", the spinner and running panel appear immediately, the counter advances, and the slow copy appears after 10 s; the next page then shows the review, question, or unavailable notice.
+- [x] 1.8 Follow-up: "Dalej" (click and Enter) shows the indicator and Enter sets `aria-busy` on the form; "Pomiń" does not show it; Enter while busy does not post a second time.
+- [x] 1.9 DevTools offline before submitting: the submission is blocked, the text stays, and the offline copy appears; Enter while still offline is blocked too; going back online, both Enter and tapping "Rozpoznaj" submit.
+- [x] 1.12 Review form with throttling: „Popraw” (click and Enter in „Popraw opis”) shows the indicator, „Zapisz wpis” does not; after forcing the stalled state (DevTools offline-then-online or a stubbed slow backend), "Spróbuj ponownie" re-posts to `entries:correct` and no entry is saved.
+- [x] 1.10 Back button after a completed classification: the restored capture page is not busy and no stale panel is visible.
 
 ### Phase 2: Installable PWA Shell
 
 #### Automated
 
-- [ ] 2.1 PWA tests prove `/manifest.webmanifest`, `/sw.js` and `/offline/` return 200 to anonymous users with `application/manifest+json`, `text/javascript` + `Cache-Control: no-cache`, and `Cache-Control: no-cache` respectively.
-- [ ] 2.2 A manifest test proves `id`, `start_url` and `scope` are `/`, `display` is `standalone`, `lang` is `pl`, `orientation` is absent, `theme_color`/`background_color` match the `tokens.css` values, and the 192, 512 and maskable 512 icons resolve through Django's static files finders.
-- [ ] 2.3 A service worker source test proves the non-GET early return, the precache list, the unescaped literal `"/offline/"` and the release-derived cache name are present, and that `cache.put`, `indexedDB`, `push`/`sync`/`notificationclick` event listeners and any `/entries/`, `/api/`, `/account/`, `/accounts/` or `/admin/` URL are absent.
-- [ ] 2.4 An offline page test proves the Polish copy renders and, for an authenticated parent, no username, "Wyloguj" or CSRF token appears.
-- [ ] 2.5 Layout tests prove the login page and parent entry list include the manifest link, `apple-touch-icon` and `js/pwa-register.js` with `data-sw-url="/sw.js"`.
-- [ ] 2.6 Focused tests pass: `uv run python manage.py test family_notes`.
-- [ ] 2.7 Django checks pass: `uv run python manage.py check`.
+- [x] 2.1 PWA tests prove `/manifest.webmanifest`, `/sw.js` and `/offline/` return 200 to anonymous users with `application/manifest+json`, `text/javascript` + `Cache-Control: no-cache`, and `Cache-Control: no-cache` respectively. — 1b3cbe4
+- [x] 2.2 A manifest test proves `id`, `start_url` and `scope` are `/`, `display` is `standalone`, `lang` is `pl`, `orientation` is absent, `theme_color`/`background_color` match the `tokens.css` values, and the 192, 512 and maskable 512 icons resolve through Django's static files finders. — 1b3cbe4
+- [x] 2.3 A service worker source test proves the non-GET early return, the precache list, the unescaped literal `"/offline/"` and the release-derived cache name are present, and that `cache.put`, `indexedDB`, `push`/`sync`/`notificationclick` event listeners and any `/entries/`, `/api/`, `/account/`, `/accounts/` or `/admin/` URL are absent. — 1b3cbe4
+- [x] 2.4 An offline page test proves the Polish copy renders and, for an authenticated parent, no username, "Wyloguj" or CSRF token appears. — 1b3cbe4
+- [x] 2.5 Layout tests prove the login page and parent entry list include the manifest link, `apple-touch-icon` and `js/pwa-register.js` with `data-sw-url="/sw.js"`. — 1b3cbe4
+- [x] 2.6 Focused tests pass: `uv run python manage.py test family_notes`. — 1b3cbe4
+- [x] 2.7 Django checks pass: `uv run python manage.py check`. — 1b3cbe4
 
 #### Manual
 
-- [ ] 2.8 Desktop Chrome DevTools → Application: manifest shows no installability errors, the service worker at `/sw.js` is activated with scope `/`, and Cache Storage holds only the precached offline page, two stylesheets and the icon after browsing entries and running a classification.
-- [ ] 2.9 Desktop Chrome DevTools offline: navigating to `/entries/` shows the styled "Brak połączenia" page; "Spróbuj ponownie" after reconnecting loads the real page.
-- [ ] 2.10 Logging out and in as a child shows the child's own home page with no stale parent content, online and after the offline page.
+- [x] 2.8 Desktop Chrome DevTools → Application: manifest shows no installability errors, the service worker at `/sw.js` is activated with scope `/`, and Cache Storage holds only the precached offline page, two stylesheets and the icon after browsing entries and running a classification.
+- [x] 2.9 Desktop Chrome DevTools offline: navigating to `/entries/` shows the styled "Brak połączenia" page; "Spróbuj ponownie" after reconnecting loads the real page.
+- [x] 2.10 Logging out and in as a child shows the child's own home page with no stale parent content, online and after the offline page.
 
 ### Phase 3: State Gallery and Mobile Verification
 
 #### Automated
 
-- [ ] 3.1 Gallery tests prove the five `progress_*` sections render with their copy, DEBUG gating holds, non-parents are denied, and no rows are written.
-- [ ] 3.2 Full test suite passes: `uv run python manage.py test`.
-- [ ] 3.3 Django checks pass: `uv run python manage.py check`.
-- [ ] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 3.5 Static collection includes the new assets: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/classification-progress.js`, `js/pwa-register.js` and the `pwa/` icons.
+- [x] 3.1 Gallery tests prove the five `progress_*` sections render with their copy, DEBUG gating holds, non-parents are denied, and no rows are written. — 080c179
+- [x] 3.2 Full test suite passes: `uv run python manage.py test`. — 080c179
+- [x] 3.3 Django checks pass: `uv run python manage.py check`. — 080c179
+- [x] 3.4 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 080c179
+- [x] 3.5 Static collection includes the new assets: `DJANGO_STATIC_ROOT=$(mktemp -d) uv run python manage.py collectstatic --noinput` lists `js/classification-progress.js`, `js/pwa-register.js` and the `pwa/` icons. — 080c179
 
 #### Manual
 
-- [ ] 3.6 The five progress gallery states and the offline page are reviewed at 360 px width: no clipping, readable copy, visible spinner, reachable retry button; a screenshot is saved under the change folder.
+- [x] 3.6 The five progress gallery states and the offline page are reviewed at 360 px width: no clipping, readable copy, visible spinner, reachable retry button; a screenshot is saved under the change folder.
 - [ ] 3.7 Chrome on Android against production HTTPS (or USB port-forwarding to `localhost`): FamilyNotes installs from the browser menu, opens standalone from the home-screen icon at the role's home page, and shows the FamilyNotes name and icon.
 - [ ] 3.8 Installed app: signing in with Google and with username/password both return to the standalone window logged in.
 - [ ] 3.9 Installed app: a capture shows the indicator and then the review; switching to airplane mode while waiting may briefly show the connection-lost copy and then Chrome's own error page; pressing Back restores the capture page (not busy, text kept) and resubmitting after reconnecting completes.

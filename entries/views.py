@@ -1,6 +1,8 @@
 import datetime
 import logging
+import math
 import uuid
+from dataclasses import replace
 
 from django.conf import settings
 from django.contrib import messages
@@ -14,12 +16,20 @@ from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from family_access.access import require_active_membership, scope_queryset_to_family
+from family_access.access import scope_queryset_to_family
+from family_access.context import require_family_context, resolve_family_context
 from family_access.models import FamilyMember
 from family_notes.log_safety import exception_summary
 
-from .classification.service import classify_follow_up_answer, classify_for_parent
-from .classification.service import ParentClassification
+from .classification.service import (
+    MAX_PROPOSALS_PER_INSTRUCTION,
+    CorrectionRejection,
+    ParentBatchClassification,
+    ParentClassification,
+    classify_entries_for_parent,
+    classify_follow_up_answer,
+    correct_proposal_for_parent,
+)
 from .classification.types import (
     EntryType,
     MissingField,
@@ -30,14 +40,23 @@ from .classification.types import (
     UnavailableReason,
 )
 from .forms import (
+    CORRECTION_TOO_LONG_ERROR,
+    INACTIVE_MEMBER_SUFFIX,
+    BatchEntryForm,
+    BatchReviewForm,
     CaptureForm,
     EntryCreateForm,
     EntryEditForm,
     EntryReviewForm,
     FollowUpAnswerForm,
+    ProposalCorrectionForm,
+    review_initial_from_classification,
+    batch_review_form_from_classification,
+    describe_fields,
     draft_from_form,
     follow_up_form_from_classification,
     proposal_from_draft,
+    proposal_values_from_form,
     review_form_from_classification,
     skip_review_form,
 )
@@ -49,6 +68,7 @@ from .listing import (
     SECTION_UNDATED,
     UPCOMING,
     EntrySection,
+    group_by_assignee,
     group_by_day,
     normalize_list_mode,
     partition_entries,
@@ -61,6 +81,7 @@ from .services import (
     delete_family_entry,
     parent_family_entries,
     require_parent_membership,
+    save_confirmed_entries,
     save_confirmed_entry,
     update_family_entry,
 )
@@ -68,10 +89,32 @@ from .services import (
 UNAVAILABLE_NOTICE = (
     'Nie udało się teraz rozpoznać wpisu. Możesz zapisać go jako notatkę lub poprawić.'
 )
+TOO_MANY_ENTRIES_NOTICE = (
+    f'Za dużo wpisów w jednym poleceniu (maks. {MAX_PROPOSALS_PER_INSTRUCTION}). '
+    'Podziel polecenie.'
+)
 INPUT_TOO_LONG_ERROR = 'Tekst jest za długi. Skróć go i spróbuj ponownie.'
 SAVE_FAILED_ERROR = 'Nie udało się zapisać wpisu. Sprawdź dane i spróbuj ponownie.'
 SKIPPED_NOTICE = 'Brakujące dane pominięte — wpis zostanie zapisany jako notatka.'
 ANSWER_UNAVAILABLE_NOTICE = 'Nie udało się rozpoznać odpowiedzi. Uzupełnij brakujące pola.'
+CORRECTION_APPLIED_NOTICE = 'Zaktualizowano: {fields}.'
+CORRECTION_FAILED_NOTICE = (
+    'Nie udało się zastosować poprawki. Napisz ją inaczej albo popraw pola ręcznie.'
+)
+BATCH_CORRECTION_NOTICE = 'Wpis {number}: {notice}'
+CORRECTION_SCHOOL_ITEM_NOTICE = (
+    'Ten element szkolny wymaga rodzaju „{label}”. Poprawka nie została zastosowana.'
+)
+# Changed correction fields, in review-form order, mapped to their form field.
+_CORRECTION_FIELD_ORDER = (
+    ('entry_type', 'entry_type'),
+    ('content', 'content'),
+    ('school_item', 'school_item'),
+    ('school_subject', 'school_subject'),
+    ('date', 'date'),
+    ('time', 'time'),
+    ('member_name', 'assigned_member'),
+)
 
 
 logger = logging.getLogger(__name__)
@@ -84,11 +127,44 @@ def _log_rejected_save(error):
 
 
 def _require_parent(request):
-    return require_parent_membership(request.user)
+    """The request's family context when it is an active parent membership."""
+    return require_parent_membership(resolve_family_context(request))
+
+
+# The page reports a stalled request this long after the provider deadline.
+PROGRESS_STALLED_MARGIN_SECONDS = 10
+
+
+def _progress_thresholds():
+    """Client-side progress timing (seconds), derived from the provider limits.
+
+    After one attempt timeout the provider may be retrying, so the page says
+    it takes longer than usual; with no response well past the deadline it
+    offers a retry.
+    """
+    return {
+        'progress_slow_after': math.ceil(settings.CLASSIFICATION_ATTEMPT_TIMEOUT_SECONDS),
+        'progress_stalled_after': (
+            math.ceil(settings.CLASSIFICATION_DEADLINE_SECONDS) + PROGRESS_STALLED_MARGIN_SECONDS
+        ),
+    }
+
+
+def _describe_capture_forms(context):
+    """Describe every form a capture page renders (see ``describe_fields``)."""
+    for key in ('capture_form', 'follow_up_form', 'review_form'):
+        if context.get(key) is not None:
+            describe_fields(context[key])
+    if context.get('batch_form') is not None:
+        for entry_form in context['batch_form'].forms:
+            describe_fields(entry_form)
 
 
 def _render(request, state, **context):
-    return render(request, 'entries/capture.html', {'state': state, **context})
+    _describe_capture_forms(context)
+    return render(
+        request, 'entries/capture.html', {'state': state, **_progress_thresholds(), **context}
+    )
 
 
 @sensitive_post_parameters('text', 'content')
@@ -98,12 +174,12 @@ def capture(request):
     membership = _require_parent(request)
 
     if request.method == 'GET':
-        saved_entry = _saved_entry(membership, request.GET.get('saved', ''))
+        saved_entries = _saved_entries(membership, request.GET.get('saved', ''))
         return _render(
             request,
-            'saved' if saved_entry else 'empty',
+            'saved' if saved_entries else 'empty',
             capture_form=CaptureForm(),
-            saved_entry=saved_entry,
+            saved_entries=saved_entries,
         )
 
     capture_form = CaptureForm(request.POST)
@@ -112,7 +188,15 @@ def capture(request):
 
     text = capture_form.cleaned_data['text']
     today = timezone.localdate()
-    outcome = classify_for_parent(request.user, text, reference_date=today)
+    batch = classify_entries_for_parent(membership, text, reference_date=today)
+    if not batch.is_single:
+        return _render(
+            request,
+            'batch',
+            batch_form=batch_review_form_from_classification(membership, batch, today=today),
+        )
+
+    outcome = batch.single
     result = outcome.result
 
     if isinstance(result, ClassificationUnavailable) and (
@@ -130,12 +214,11 @@ def capture(request):
 
     review_form, _ = review_form_from_classification(membership, outcome, text, today=today)
     state = 'proposal' if isinstance(result, ClassificationProposal) else 'unavailable'
-    return _render(
-        request,
-        state,
-        review_form=review_form,
-        notice=UNAVAILABLE_NOTICE if state == 'unavailable' else '',
-    )
+    notice = ''
+    if state == 'unavailable':
+        too_many = result.reason == UnavailableReason.TOO_MANY_ENTRIES
+        notice = TOO_MANY_ENTRIES_NOTICE if too_many else UNAVAILABLE_NOTICE
+    return _render(request, state, review_form=review_form, notice=notice)
 
 
 @sensitive_post_parameters('text', 'content', 'answer')
@@ -151,7 +234,6 @@ def answer(request):
     skip = request.POST.get('action') == 'skip'
     form = FollowUpAnswerForm(membership, request.POST, skip=skip)
     if not form.is_valid():
-        _mark_invalid_fields(form)
         return _render(request, 'question', follow_up_form=form)
 
     text = form.cleaned_data['text']
@@ -176,7 +258,7 @@ def answer(request):
         )
 
     outcome = classify_follow_up_answer(
-        request.user,
+        membership,
         text,
         draft,
         form.cleaned_data['answer'],
@@ -197,25 +279,98 @@ def answer(request):
     return _render(request, state, review_form=review_form, notice=notice)
 
 
-@sensitive_post_parameters('text', 'content')
+def _correction_notice(form, changed):
+    labels = [
+        str(form.fields[form_field].label).lower()
+        for name, form_field in _CORRECTION_FIELD_ORDER
+        if name in changed
+    ]
+    return CORRECTION_APPLIED_NOTICE.format(fields=', '.join(labels))
+
+
+def _with_fresh_key(form_class, membership, data, **kwargs):
+    """A bound form re-validated with the posted values and a new submission key."""
+    retry_data = data.copy()
+    retry_data['submission_key'] = str(uuid.uuid4())
+    form = form_class(membership, retry_data, **kwargs)
+    form.is_valid()
+    return form
+
+
+@sensitive_post_parameters('text', 'content', 'correction')
+@require_POST
+@login_required
+def correct(request):
+    """Apply the parent's free-text correction to the proposal on screen.
+
+    Nothing is saved here: the revised proposal (or the unchanged one, with a
+    notice) comes back on a review form posted to ``confirm``.
+    """
+    membership = _require_parent(request)
+    form = ProposalCorrectionForm(membership, request.POST)
+    if not form.is_valid():
+        return _render(request, 'invalid', review_form=form)
+
+    today = timezone.localdate()
+    current, member = proposal_values_from_form(form)
+    correction = correct_proposal_for_parent(
+        membership,
+        current,
+        form.cleaned_data['correction'],
+        reference_date=today,
+        current_member=member,
+    )
+    if correction.applied:
+        review_form, _ = review_form_from_classification(
+            membership, correction.outcome, current.content, today=today
+        )
+        state = (
+            'proposal'
+            if isinstance(correction.outcome.result, ClassificationProposal)
+            else 'follow_up'
+        )
+        return _render(
+            request,
+            state,
+            review_form=review_form,
+            notice=_correction_notice(review_form, correction.changed),
+        )
+
+    retry_form = _with_fresh_key(ProposalCorrectionForm, membership, request.POST, today=today)
+    notice = CORRECTION_FAILED_NOTICE
+    if correction.rejection == CorrectionRejection.TOO_LONG:
+        retry_form.add_error('correction', CORRECTION_TOO_LONG_ERROR)
+        notice = ''
+    elif correction.rejection == CorrectionRejection.SCHOOL_ITEM_MISMATCH:
+        label = dict(Entry.ENTRY_TYPE_CHOICES)[correction.school_item.entry_type.value]
+        notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
+    return _render(request, 'correction_failed', review_form=retry_form, notice=notice)
+
+
+@sensitive_post_parameters('text', 'content', 'correction')
 @require_POST
 @login_required
 def confirm(request):
     membership = _require_parent(request)
     review_form = EntryReviewForm(membership, request.POST)
     if not review_form.is_valid():
+        if review_form.has_error('correction'):
+            # An unapplied correction: nothing is saved, and the next save
+            # gets a new key.
+            review_form = _with_fresh_key(EntryReviewForm, membership, request.POST)
         return _render(request, 'invalid', review_form=review_form)
 
     data = review_form.cleaned_data
     try:
         entry, _ = save_confirmed_entry(
-            request.user,
+            membership,
             entry_type=data['entry_type'],
             content=data['content'],
             date=data['date'],
             time=data['time'],
             assigned_member=data['assigned_member'],
             school_item=data['school_item'],
+            school_subject=data['school_subject'],
             submission_key=data['submission_key'],
         )
     except ValidationError as error:
@@ -230,20 +385,156 @@ def confirm(request):
     return redirect(f"{reverse('entries:capture')}?saved={entry.pk}")
 
 
-def _saved_entry(membership, saved):
-    if not saved.isdigit():
-        return None
-    return (
-        scope_queryset_to_family(Entry.objects.select_related('assigned_member'), membership)
-        .filter(pk=int(saved))
-        .first()
+def _with_fresh_batch_keys(data, count):
+    """The posted batch with a new submission key for every proposal."""
+    retry_data = data.copy()
+    for index in range(count):
+        retry_data[f'{BatchReviewForm.prefix(index)}-submission_key'] = str(uuid.uuid4())
+    return retry_data
+
+
+def _render_batch(request, form):
+    return _render(request, 'batch', batch_form=form)
+
+
+# Every posted value may be family text (several prefixed ``content`` and
+# ``correction`` fields), so all parameters are hidden from error reports.
+@sensitive_post_parameters()
+@require_POST
+@login_required
+def confirm_batch(request):
+    """Save the included proposals of a batch all-or-nothing, or correct one.
+
+    ``action=save`` (the default) saves; ``action=correct-<i>`` applies the
+    free-text correction of proposal ``i`` and re-renders the batch.
+    """
+    membership = _require_parent(request)
+    form = BatchReviewForm(membership, request.POST)
+    if form.correcting or form.stale:
+        return _correct_batch_entry(request, membership, form)
+    if not form.is_valid():
+        return _render_batch(request, form)
+
+    try:
+        entries = save_confirmed_entries(membership, form.save_items())
+    except ValidationError as error:
+        _log_rejected_save(error)
+        retry_form = BatchReviewForm(membership, _with_fresh_batch_keys(request.POST, form.count))
+        retry_form.is_valid()
+        retry_form.add_error(SAVE_FAILED_ERROR)
+        return _render_batch(request, retry_form)
+
+    saved = ','.join(str(entry.pk) for entry in entries)
+    return redirect(f"{reverse('entries:capture')}?saved={saved}")
+
+
+# Keeps a posted ID inside the database integer range.
+_MAX_ID_DIGITS = 18
+
+
+def _correct_batch_entry(request, membership, form):
+    """Correct only the targeted proposal; every other one is carried through.
+
+    Nothing is saved. Every proposal gets a new submission key, so the next
+    save is a fresh one.
+    """
+    if form.stale or not form.is_target_valid():
+        return _render_batch(request, form)
+
+    index = form.target
+    target = form.target_form
+    today = timezone.localdate()
+    current, member = proposal_values_from_form(target)
+    correction = correct_proposal_for_parent(
+        membership,
+        current,
+        target.cleaned_data['correction'],
+        reference_date=today,
+        current_member=member,
     )
+
+    retry_form = BatchReviewForm(
+        membership, _with_fresh_batch_keys(request.POST, form.count), today=today
+    )
+    retry_form.is_target_valid()
+    number = index + 1
+    if correction.applied:
+        initial, missing = review_initial_from_classification(correction.outcome, current.content)
+        initial['include'] = target.cleaned_data['include']
+        corrected = BatchEntryForm(
+            membership,
+            prefix=BatchReviewForm.prefix(index),
+            initial=initial,
+            missing=missing,
+            today=today,
+        )
+        retry_form.replace_form(index, corrected)
+        notice = _correction_notice(corrected, correction.changed)
+        retry_form.notices[index] = BATCH_CORRECTION_NOTICE.format(
+            number=number, notice=notice[:1].lower() + notice[1:]
+        )
+        return _render_batch(request, retry_form)
+
+    notice = CORRECTION_FAILED_NOTICE
+    if correction.rejection == CorrectionRejection.TOO_LONG:
+        retry_form.target_form.add_error('correction', CORRECTION_TOO_LONG_ERROR)
+        notice = ''
+    elif correction.rejection == CorrectionRejection.SCHOOL_ITEM_MISMATCH:
+        label = dict(Entry.ENTRY_TYPE_CHOICES)[correction.school_item.entry_type.value]
+        notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
+    if notice:
+        retry_form.notices[index] = BATCH_CORRECTION_NOTICE.format(number=number, notice=notice)
+    return _render_batch(request, retry_form)
+
+
+def _saved_entries(membership, saved):
+    """Up to ``MAX_PROPOSALS_PER_INSTRUCTION`` family entries named in ``saved``.
+
+    ``saved`` is a comma-separated list of IDs, kept in the posted order.
+    Anything else (non-digit parts, too many IDs, other families' entries)
+    is ignored.
+    """
+    parts = saved.split(',') if saved else []
+    if len(parts) > MAX_PROPOSALS_PER_INSTRUCTION:
+        return []
+    ids = list(dict.fromkeys(
+        int(part) for part in parts
+        if part.isascii() and part.isdigit() and len(part) <= _MAX_ID_DIGITS
+    ))
+    if not ids:
+        return []
+    found = scope_queryset_to_family(
+        Entry.objects.select_related('assigned_member'), membership
+    ).in_bulk(ids)
+    return [found[pk] for pk in ids if pk in found]
 
 
 # Fictional kitchen-sink data: never real family members or saved rows.
-STATES_MEMBER_CHOICES = [('', 'Cała rodzina'), ('s1', 'Kasia'), ('s2', 'Tymek')]
+# Children first, then one parent (S-07), in the real form's pk-like order.
+# One table feeds the form choices and the synthetic list rows (S-08 grouping):
+# (choice value, synthetic pk, display name, role).
+STATES_PARENT_NAME = 'Marta'
+STATES_MEMBERS = (
+    ('s1', 900101, 'Kasia', FamilyMember.Role.CHILD),
+    ('s2', 900102, 'Tymek', FamilyMember.Role.CHILD),
+    ('s3', 900103, STATES_PARENT_NAME, FamilyMember.Role.PARENT),
+)
+STATES_MEMBER_CHOICES = [('', 'Cała rodzina')] + [
+    (value, name) for value, _pk, name, _role in STATES_MEMBERS
+]
 # Also the gallery's fictional "today", so the past-date warning is deterministic.
 STATES_DATE = datetime.date(2026, 10, 5)
+
+
+# Progress states (S-06) shown statically in the gallery, with their labels.
+PROGRESS_STATE_LABELS = (
+    ('running', 'trwa'),
+    ('slow', 'dłużej niż zwykle'),
+    ('stalled', 'brak odpowiedzi'),
+    ('offline', 'brak połączenia przed wysłaniem'),
+    ('connection_lost', 'utracone połączenie'),
+)
+PROGRESS_STATES_TEXT = 'Kasia ma jutro sprawdzian z matematyki'
 
 
 def states(request):
@@ -268,6 +559,7 @@ def states(request):
         date=STATES_DATE,
         time=datetime.time(8, 0),
         school_item=SchoolItemKind.TEST,
+        school_subject='historia',
     )
     past_proposal = ClassificationProposal(
         entry_type=EntryType.TODO,
@@ -283,6 +575,7 @@ def states(request):
             'time': '',
             'assigned_member': '',
             'school_item': SchoolItemKind.TEST.value,
+            'school_subject': '',
             'submission_key': str(uuid.uuid4()),
         },
     )
@@ -311,9 +604,105 @@ def states(request):
         entry_type=EntryType.CALENDAR_EVENT,
         content='Sprawdzian z angielskiego',
         school_item=SchoolItemKind.TEST,
+        school_subject='angielski',
+    )
+    # A short name ("Hania") that fits several family members (Hanna, Anna).
+    ambiguous_member_draft = ClassificationFollowUp(
+        missing_fields=(MissingField.AMBIGUOUS_MEMBER,),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Dentysta',
+        date=STATES_DATE + datetime.timedelta(days=1),
+    )
+    subject_draft = ClassificationFollowUp(
+        missing_fields=(MissingField.SCHOOL_SUBJECT,),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Sprawdzian',
+        date=STATES_DATE,
+        school_item=SchoolItemKind.TEST,
     )
     skipped_form = skip_review_form(membership, combined_draft, None, today=STATES_DATE)
     _use_synthetic_members(skipped_form)
+    meeting = ClassificationProposal(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Spotkanie z wychowawczynią',
+        date=STATES_DATE + datetime.timedelta(days=10),
+        time=datetime.time(17, 0),
+    )
+    corrected_form = synthetic_review(meeting)
+    failed_correction_form = synthetic_review(
+        replace(meeting, date=STATES_DATE + datetime.timedelta(days=4))
+    )
+    failed_correction_form.initial['correction'] = 'bla bla'
+
+    def synthetic_batch(*results, reference=STATES_DATE):
+        batch = ParentBatchClassification(
+            items=tuple(ParentClassification(result=result) for result in results)
+        )
+        form = batch_review_form_from_classification(membership, batch, today=reference)
+        for entry_form in form.forms:
+            _use_synthetic_members(entry_form)
+        return form
+
+    def batch_meeting(date, **overrides):
+        values = dict(
+            entry_type=EntryType.CALENDAR_EVENT,
+            content='Spotkanie z wychowawczynią',
+            date=date,
+            time=datetime.time(18, 0),
+        )
+        values.update(overrides)
+        return ClassificationProposal(**values)
+
+    # „dziś, jutro i w przyszłym tygodniu w poniedziałek o 18:00”
+    meeting_dates = (
+        STATES_DATE,
+        STATES_DATE + datetime.timedelta(days=1),
+        STATES_DATE + datetime.timedelta(days=7),
+    )
+    # Said on Sunday: „jutro” and „w przyszłym tygodniu w poniedziałek” are one day.
+    sunday = STATES_DATE - datetime.timedelta(days=1)
+    duplicate_batch = synthetic_batch(
+        batch_meeting(STATES_DATE), batch_meeting(STATES_DATE), reference=sunday
+    )
+    missing_batch = synthetic_batch(
+        batch_meeting(meeting_dates[0]),
+        ClassificationFollowUp(
+            missing_fields=(MissingField.DATE,),
+            entry_type=EntryType.CALENDAR_EVENT,
+            content='Spotkanie z wychowawczynią',
+            time=datetime.time(18, 0),
+        ),
+    )
+    invalid_batch_data = {'count': '2', 'action': 'save'}
+    for index, date in enumerate(meeting_dates[:2]):
+        invalid_batch_data.update({
+            f'e{index}-entry_type': EntryType.CALENDAR_EVENT.value,
+            f'e{index}-content': 'Spotkanie z wychowawczynią',
+            f'e{index}-date': date.isoformat(),
+            f'e{index}-time': '18:00',
+            f'e{index}-submission_key': str(uuid.uuid4()),
+        })
+    invalid_batch = BatchReviewForm(membership, invalid_batch_data)
+    for entry_form in invalid_batch.forms:
+        _use_synthetic_members(entry_form)
+    invalid_batch.is_valid()
+    corrected_batch = synthetic_batch(
+        batch_meeting(meeting_dates[0]),
+        batch_meeting(meeting_dates[1], time=datetime.time(19, 0)),
+        batch_meeting(meeting_dates[2]),
+    )
+    corrected_batch.notices[1] = BATCH_CORRECTION_NOTICE.format(
+        number=2, notice='zaktualizowano: godzina.'
+    )
+    saved_meetings = [
+        Entry(
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Spotkanie z wychowawczynią',
+            date=date,
+            time=datetime.time(18, 0),
+        )
+        for date in meeting_dates
+    ]
 
     sections = [
         {'name': 'empty', 'label': 'Pusty formularz', 'capture_form': CaptureForm()},
@@ -336,9 +725,15 @@ def states(request):
                     entry_type=EntryType.CALENDAR_EVENT,
                     content='Kartkówka z matematyki',
                     school_item=SchoolItemKind.QUIZ,
+                    school_subject='matematyka',
                 ),
                 member_value='s2',
             ),
+        },
+        {
+            'name': 'follow_up_subject',
+            'label': 'Brakujący przedmiot',
+            'review_form': synthetic_review(subject_draft, member_value='s1'),
         },
         {
             'name': 'follow_up_member',
@@ -350,6 +745,7 @@ def states(request):
                     content='Zadanie domowe z polskiego',
                     date=STATES_DATE,
                     school_item=SchoolItemKind.HOMEWORK,
+                    school_subject='polski',
                 )
             ),
         },
@@ -375,6 +771,18 @@ def states(request):
             ),
         },
         {
+            'name': 'question_ambiguous_member',
+            'label': 'Pytanie: zdrobnienie pasuje do kilku osób',
+            'follow_up_form': synthetic_question(
+                ambiguous_member_draft, 'Hania ma jutro dentystę'
+            ),
+        },
+        {
+            'name': 'question_subject',
+            'label': 'Pytanie: brakujący przedmiot',
+            'follow_up_form': synthetic_question(subject_draft, 'Kasia ma dziś sprawdzian'),
+        },
+        {
             'name': 'answer_unavailable',
             'label': 'Odpowiedź nierozpoznana',
             'notice': ANSWER_UNAVAILABLE_NOTICE,
@@ -386,18 +794,85 @@ def states(request):
             'notice': SKIPPED_NOTICE,
             'review_form': skipped_form,
         },
+        {
+            'name': 'corrected',
+            'label': 'Propozycja po poprawce',
+            'notice': CORRECTION_APPLIED_NOTICE.format(fields='data'),
+            'review_form': corrected_form,
+        },
+        {
+            'name': 'correction_failed',
+            'label': 'Poprawka niezastosowana',
+            'notice': CORRECTION_FAILED_NOTICE,
+            'review_form': failed_correction_form,
+        },
         {'name': 'invalid', 'label': 'Błędy w formularzu', 'review_form': invalid_form},
         {
             'name': 'saved',
             'label': 'Zapisano',
-            'saved_entry': saved_entry,
+            'saved_entries': [saved_entry],
             'capture_form': CaptureForm(),
         },
+        {
+            'name': 'batch',
+            'label': 'Kilka wpisów do sprawdzenia',
+            'batch_form': synthetic_batch(*(batch_meeting(date) for date in meeting_dates)),
+        },
+        {
+            'name': 'batch_duplicate',
+            'label': 'Kilka wpisów: dwa takie same (polecenie w niedzielę)',
+            'batch_form': duplicate_batch,
+        },
+        {
+            'name': 'batch_missing',
+            'label': 'Kilka wpisów: brakująca data',
+            'batch_form': missing_batch,
+        },
+        {
+            'name': 'batch_invalid',
+            'label': 'Kilka wpisów: nic nie wybrano',
+            'batch_form': invalid_batch,
+        },
+        {
+            'name': 'batch_corrected',
+            'label': 'Kilka wpisów: jeden po poprawce',
+            'batch_form': corrected_batch,
+        },
+        {
+            'name': 'batch_saved',
+            'label': 'Zapisano kilka wpisów',
+            'saved_entries': saved_meetings,
+            'capture_form': CaptureForm(),
+        },
+        {
+            'name': 'too_many',
+            'label': 'Za dużo wpisów w poleceniu',
+            'notice': TOO_MANY_ENTRIES_NOTICE,
+            'review_form': synthetic_review(
+                ClassificationUnavailable(reason=UnavailableReason.TOO_MANY_ENTRIES),
+                text='Trening codziennie przez dwa tygodnie o 17:00',
+            ),
+        },
+        *(
+            {
+                'name': f'progress_{state}',
+                'label': f'Postęp rozpoznawania: {label}',
+                'capture_form': CaptureForm(initial={'text': PROGRESS_STATES_TEXT}),
+                'progress_state': state,
+            }
+            for state, label in PROGRESS_STATE_LABELS
+        ),
     ]
+    for section in sections:
+        _describe_capture_forms(section)
     return render(
         request,
         'entries/states.html',
-        {'sections': sections, 'manage_sections': _manage_state_sections(membership)},
+        {
+            'sections': sections,
+            'manage_sections': _manage_state_sections(membership),
+            **_progress_thresholds(),
+        },
     )
 
 
@@ -432,37 +907,47 @@ def _list_mode_for(entry, today):
     return PAST if effective_date is not None and effective_date < today else UPCOMING
 
 
-def _managed_entry_or_404(user, pk):
+def _managed_entry_or_404(membership, pk):
     """Resolve an entry in the parent's family; missing and foreign IDs are both 404."""
     try:
-        return with_effective_date(parent_family_entries(user)).get(pk=pk)
+        return with_effective_date(parent_family_entries(membership)).get(pk=pk)
     except Entry.DoesNotExist:
         raise Http404 from None
 
 
-def _mark_invalid_fields(form):
-    """Expose field errors to assistive technology."""
-    for name in form.errors:
-        if name in form.fields:
-            attrs = form.fields[name].widget.attrs
-            attrs['aria-invalid'] = 'true'
-            attrs['aria-describedby'] = f'{form[name].auto_id}-error'
+FAMILY_GROUP_HEADING = 'Cała rodzina'
 
 
-def _index_sections(sections):
+def _assignee_heading(member):
+    if member is None:
+        return FAMILY_GROUP_HEADING
+    if not member.is_active:
+        return f'{member.display_name}{INACTIVE_MEMBER_SUFFIX}'
+    return member.display_name
+
+
+def _index_groups(sections):
+    """Assignee groups (S-08) over the partitioned ``sections``; each is evaluated once."""
     return [
-        {'key': section.key, 'label': SECTION_LABELS[section.key], 'entries': list(section.entries)}
-        for section in sections
+        {
+            'key': group.key,
+            'heading': _assignee_heading(group.member),
+            'sections': [
+                {'key': section.key, 'label': SECTION_LABELS[section.key], 'entries': section.entries}
+                for section in group.sections
+            ],
+        }
+        for group in group_by_assignee(sections)
     ]
 
 
 def _index_context(mode, sections):
-    sections = _index_sections(sections)
+    groups = _index_groups(sections)
     return {
         'mode': mode,
         'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
-        'sections': sections,
-        'is_empty': not any(section['entries'] for section in sections),
+        'groups': groups,
+        'is_empty': not groups,
         'empty_message': EMPTY_LIST_MESSAGES[mode],
     }
 
@@ -472,6 +957,7 @@ def _detail_context(entry, list_mode, delete_open=False):
 
 
 def _form_context(form, *, entry=None):
+    describe_fields(form)
     return {'form': form, 'entry': entry}
 
 
@@ -479,14 +965,15 @@ def _form_context(form, *, entry=None):
 @login_required
 def index(request):
     mode = normalize_list_mode(request.GET.get('view', ''))
-    sections = partition_entries(parent_family_entries(request.user), mode, timezone.localdate())
+    membership = _require_parent(request)
+    sections = partition_entries(parent_family_entries(membership), mode, timezone.localdate())
     return render(request, 'entries/manage_index.html', _index_context(mode, sections))
 
 
 @require_http_methods(['GET'])
 @login_required
 def detail(request, pk):
-    entry = _managed_entry_or_404(request.user, pk)
+    entry = _managed_entry_or_404(_require_parent(request), pk)
     list_mode = _list_mode_for(entry, timezone.localdate())
     return render(request, 'entries/manage_detail.html', _detail_context(entry, list_mode))
 
@@ -505,13 +992,14 @@ def create(request):
         data = form.cleaned_data
         try:
             entry, _ = create_family_entry(
-                request.user,
+                membership,
                 entry_type=data['entry_type'],
                 content=data['content'],
                 date=data['date'],
                 time=data['time'],
                 assigned_member=data['assigned_member'],
                 school_item=data['school_item'],
+                school_subject=data['school_subject'],
                 submission_key=data['submission_key'],
             )
         except ValidationError as error:
@@ -524,7 +1012,6 @@ def create(request):
         else:
             messages.success(request, ENTRY_CREATED_MESSAGE)
             return redirect('entries:detail', pk=entry.pk)
-    _mark_invalid_fields(form)
     return render(request, 'entries/manage_form.html', _form_context(form))
 
 
@@ -533,7 +1020,7 @@ def create(request):
 @login_required
 def edit(request, pk):
     membership = _require_parent(request)
-    entry = _managed_entry_or_404(request.user, pk)
+    entry = _managed_entry_or_404(membership, pk)
     if request.method == 'GET':
         form = EntryEditForm(membership, entry=entry)
         return render(request, 'entries/manage_form.html', _form_context(form, entry=entry))
@@ -543,7 +1030,7 @@ def edit(request, pk):
         data = form.cleaned_data
         try:
             update_family_entry(
-                request.user,
+                membership,
                 entry.pk,
                 entry_type=data['entry_type'],
                 content=data['content'],
@@ -551,6 +1038,7 @@ def edit(request, pk):
                 time=data['time'],
                 assigned_member=data['assigned_member'],
                 school_item=data['school_item'],
+                school_subject=data['school_subject'],
             )
         except Entry.DoesNotExist:
             raise Http404 from None
@@ -560,7 +1048,6 @@ def edit(request, pk):
         else:
             messages.success(request, ENTRY_UPDATED_MESSAGE)
             return redirect('entries:detail', pk=entry.pk)
-    _mark_invalid_fields(form)
     return render(request, 'entries/manage_form.html', _form_context(form, entry=entry))
 
 
@@ -568,7 +1055,7 @@ def edit(request, pk):
 @login_required
 def delete(request, pk):
     try:
-        delete_family_entry(request.user, pk)
+        delete_family_entry(_require_parent(request), pk)
     except Entry.DoesNotExist:
         raise Http404 from None
     messages.success(request, ENTRY_DELETED_MESSAGE)
@@ -593,8 +1080,16 @@ def _synthetic_entry(offset, **fields):
     member = values.pop('member', None)
     entry = Entry(**values)
     if member:
-        entry.assigned_member = FamilyMember(display_name=member)
+        entry.assigned_member = _states_member(member)
     return entry
+
+
+def _states_member(display_name):
+    """Unsaved fictional member from ``STATES_MEMBERS``, with its synthetic pk and role."""
+    for _value, pk, name, role in STATES_MEMBERS:
+        if name == display_name:
+            return FamilyMember(pk=pk, display_name=name, role=role, is_active=True)
+    raise ValueError(f'Unknown gallery member: {display_name}')
 
 
 def _synthetic_list(mode, sections):
@@ -613,6 +1108,7 @@ def _manage_state_sections(membership):
         date=STATES_DATE,
         time=datetime.time(8, 0),
         school_item=SchoolItemKind.TEST.value,
+        school_subject='historia',
         member='Kasia',
     )
     trip = _synthetic_entry(
@@ -632,6 +1128,12 @@ def _manage_state_sections(membership):
         ),
     )
     undated = _synthetic_entry(4, content='Oddać książkę do biblioteki')
+    parent_note = _synthetic_entry(
+        7,
+        entry_type=EntryType.NOTE.value,
+        content='Odebrać paczkę z paczkomatu',
+        member=STATES_PARENT_NAME,
+    )
     past_entry = _synthetic_entry(
         5,
         content='Zapłacić za obiady',
@@ -645,6 +1147,7 @@ def _manage_state_sections(membership):
         date=STATES_DATE + datetime.timedelta(days=1),
         time=datetime.time(9, 50),
         school_item=SchoolItemKind.QUIZ.value,
+        school_subject='matematyka',
         source=Entry.Source.EDUVULCAN,
         member='Tymek',
     )
@@ -666,7 +1169,6 @@ def _manage_state_sections(membership):
     )
     _use_synthetic_members(invalid_form)
     invalid_form.is_valid()
-    _mark_invalid_fields(invalid_form)
 
     edit_form = EntryEditForm(membership, entry=test_entry)
     _use_synthetic_members(edit_form)
@@ -678,7 +1180,7 @@ def _manage_state_sections(membership):
             'label': 'Lista: nadchodzące',
             'list': _synthetic_list(
                 UPCOMING,
-                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, long_note])],
+                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, parent_note, long_note])],
             ),
         },
         {
@@ -755,7 +1257,7 @@ def _child_list_context(mode, sections, today):
 @login_required
 def child_list(request):
     """The signed-in child's own entries, upcoming (default) or past."""
-    entries = child_entries(request.user)
+    entries = child_entries(resolve_family_context(request))
     mode = normalize_list_mode(request.GET.get('view'))
     today = timezone.localdate()
     sections = partition_entries(entries, mode, today)
@@ -768,7 +1270,8 @@ def child_list(request):
 @login_required
 def child_detail(request, pk):
     """One entry assigned to the signed-in child; any other ID is a plain 404."""
-    entry = get_object_or_404(with_effective_date(child_entries(request.user)), pk=pk)
+    entries = child_entries(resolve_family_context(request))
+    entry = get_object_or_404(with_effective_date(entries), pk=pk)
     return render(
         request,
         'entries/child_detail.html',
@@ -777,7 +1280,7 @@ def child_detail(request, pk):
 
 
 def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school_item='',
-                        source=Entry.Source.MANUAL, effective_date=None):
+                        school_subject='', source=Entry.Source.MANUAL, effective_date=None):
     """Unsaved fictional entry for the child gallery; never written."""
     entry = Entry(
         pk=pk,
@@ -786,6 +1289,7 @@ def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school
         date=date,
         time=time,
         school_item=school_item,
+        school_subject=school_subject,
         source=source,
         assigned_member=FamilyMember(display_name=STATES_MEMBER_CHOICES[1][1]),
         updated_at=timezone.make_aware(datetime.datetime.combine(STATES_DATE, datetime.time(7, 0))),
@@ -800,7 +1304,7 @@ def child_states(request):
         raise Http404
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
-    require_active_membership(request.user)
+    require_family_context(request)
 
     day = datetime.timedelta(days=1)
     test = _child_states_entry(
@@ -824,7 +1328,8 @@ def child_states(request):
     quiz = _child_states_entry(
         9005, 'Kartkówka z przyrody', EntryType.CALENDAR_EVENT,
         date=STATES_DATE - 3 * day, time=datetime.time(10, 15),
-        school_item=SchoolItemKind.QUIZ.value, source=Entry.Source.EDUVULCAN,
+        school_item=SchoolItemKind.QUIZ.value, school_subject='przyroda',
+        source=Entry.Source.EDUVULCAN,
     )
     returned = _child_states_entry(
         9006, 'Oddać książkę do biblioteki', EntryType.TODO, date=STATES_DATE - 5 * day,

@@ -1,0 +1,28 @@
+{% comment %}
+Classification progress (S-06). js/classification-progress.js reveals one state
+block at a time; without JavaScript everything stays hidden. The live region is
+always rendered (never under a hidden ancestor), so revealing a block inside it
+is announced. ``progress_state`` shows one block statically (state gallery only).
+{% endcomment %}
+<div class="fn-progress" data-classification-progress>
+    <div role="status" aria-live="polite" data-progress-live data-live-region>
+        <div class="fn-panel fn-panel--notice" data-progress-state="running"{% if progress_state != "running" %} hidden{% endif %}>
+            <p>Rozpoznaję wpis… Zwykle trwa to kilka sekund. Nie zamykaj tej strony.</p>
+        </div>
+        <div class="fn-panel fn-panel--notice" data-progress-state="slow"{% if progress_state != "slow" %} hidden{% endif %}>
+            <p>Trwa to dłużej niż zwykle. Poczekaj jeszcze chwilę.</p>
+        </div>
+        <div class="fn-panel fn-panel--notice" data-progress-state="stalled"{% if progress_state != "stalled" %} hidden{% endif %}>
+            <p>Brak odpowiedzi serwera. Sprawdź połączenie i spróbuj ponownie.</p>
+            <button type="button" class="secondary" data-progress-retry>Spróbuj ponownie</button>
+        </div>
+        <div class="fn-panel fn-panel--notice" data-progress-state="offline"{% if progress_state != "offline" %} hidden{% endif %}>
+            <p>Brak połączenia z internetem. Tekst nie został wysłany — spróbuj ponownie, gdy połączenie wróci.</p>
+        </div>
+        <div class="fn-panel fn-panel--notice" data-progress-state="connection_lost"{% if progress_state != "connection_lost" %} hidden{% endif %}>
+            <p>Utracono połączenie podczas rozpoznawania. Gdy wróci, spróbuj ponownie.</p>
+            <button type="button" class="secondary" data-progress-retry>Spróbuj ponownie</button>
+        </div>
+    </div>
+    <p class="fn-muted fn-progress-elapsed" data-progress-elapsed aria-hidden="true"{% if progress_state != "running" and progress_state != "slow" %} hidden{% endif %}>0 s</p>
+</div>

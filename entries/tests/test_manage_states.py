@@ -61,12 +61,14 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
                               'aria-current="page">Nadchodzące<', 'Bez daty</span>'],
             'list_past': ['data-list-section="past"', 'aria-current="page">Minione<'],
             'list_empty': ['Nie ma nadchodzących wpisów.'],
-            'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian'],
-            'detail_eduvulcan': ['EduVulcan', 'kartkówka'],
+            'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
+                              '<dt>Przedmiot</dt>', 'historia'],
+            'detail_eduvulcan': ['EduVulcan', 'kartkówka', '<dt>Przedmiot</dt>', 'matematyka'],
             'create': ['data-state-part="create-form"', 'name="submission_key"', 'Kasia'],
             'invalid': ['aria-invalid="true"', 'Popraw zaznaczone pola.',
                         'Ten element szkolny wymaga rodzaju'],
-            'edit': ['data-state-part="edit-form"', 'Zapisz zmiany', 'value="s1" selected'],
+            'edit': ['data-state-part="edit-form"', 'Zapisz zmiany', 'value="s1" selected',
+                     'name="school_subject"', 'value="historia"'],
             'delete_open': ['data-state-part="delete" open', 'Usuń na stałe'],
         }
         for name, markers in expectations.items():
@@ -99,3 +101,71 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
 
         self.client.force_login(self.other_family_child.user)
         self.assertEqual(self.client.get(STATES_URL).status_code, 403)
+
+
+class ParentAssigneeGalleryTests(FamilyFixtureMixin, TestCase):
+    """S-07: the gallery shows a fictional parent as an option and as an assignee."""
+
+    @override_settings(DEBUG=True)
+    def test_parent_appears_in_create_options_and_upcoming_list(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        option = '<option value="s3">Marta</option>'
+        for name in ('create', 'invalid'):
+            with self.subTest(state=name):
+                self.assertIn(option, state_html(html, name))
+        upcoming = state_html(html, 'list_upcoming')
+        self.assertIn('Odebrać paczkę z paczkomatu', upcoming)
+        # S-08: the assignee is named by the row's group heading, not the row.
+        group = assignee_group_of(upcoming, 'Odebrać paczkę z paczkomatu')
+        self.assertIn('<h2 class="fn-manage-section-title">Marta</h2>', group)
+
+
+GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
+HEADING_PATTERN = re.compile(r'<h2 class="fn-manage-section-title">([^<]*)</h2>')
+
+
+def assignee_group_of(html, text):
+    """The ``data-assignee-group`` block that contains ``text``."""
+    position = html.index(text)
+    start = html.rindex('data-assignee-group="', 0, position)
+    end = html.find('data-assignee-group="', position)
+    return html[start:end if end != -1 else len(html)]
+
+
+class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
+    """S-08: the gallery lists show assignee groups for the screenshot gate."""
+
+    @override_settings(DEBUG=True)
+    def test_upcoming_state_groups_children_then_parent_then_family(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        upcoming = state_html(html, 'list_upcoming')
+        self.assertEqual(
+            GROUP_PATTERN.findall(upcoming),
+            ['member-900101', 'member-900102', 'member-900103', 'family'],
+        )
+        self.assertEqual(
+            HEADING_PATTERN.findall(upcoming), ['Kasia', 'Tymek', 'Marta', 'Cała rodzina']
+        )
+        for text, heading in (
+            ('Sprawdzian z historii o średniowieczu', 'Kasia'),
+            ('Wycieczka klasowa do muzeum techniki', 'Tymek'),
+            ('Oddać książkę do biblioteki', 'Cała rodzina'),
+        ):
+            with self.subTest(text=text):
+                group = assignee_group_of(upcoming, text)
+                self.assertIn(f'<h2 class="fn-manage-section-title">{heading}</h2>', group)
+        self.assertIn('<h3 class="fn-manage-subsection-title">Bez daty</h3>', upcoming)
+
+    @override_settings(DEBUG=True)
+    def test_past_and_empty_states_keep_their_shape(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        past = state_html(html, 'list_past')
+        self.assertEqual(GROUP_PATTERN.findall(past), ['family'])
+        self.assertNotIn('fn-manage-subsection-title', past)
+        self.assertEqual(GROUP_PATTERN.findall(state_html(html, 'list_empty')), [])

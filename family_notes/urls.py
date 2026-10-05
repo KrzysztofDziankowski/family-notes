@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from entries.health_views import conversion_healthz
-from family_notes.views import healthz, home
+from family_notes.views import healthz, home, offline, service_worker, web_manifest
 
 # Token-authenticated automation API: one namespace, routes owned by their apps.
 automation_api_patterns = (
@@ -38,4 +38,8 @@ urlpatterns = [
     path('entries/', include('entries.urls')),
     path('healthz/', healthz, name='healthz'),
     path('healthz/conversion/', conversion_healthz, name='conversion_healthz'),
+    # Installable web app (S-06): served from the root for a ``/`` scope.
+    path('manifest.webmanifest', web_manifest, name='web_manifest'),
+    path('offline/', offline, name='offline'),
+    path('sw.js', service_worker, name='service_worker'),
 ]

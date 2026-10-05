@@ -1,21 +1,30 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Dodaj wpis{% endblock %}
+{# "Błąd: " makes an invalid re-render audible on page load, without JavaScript (S-17). #}
+{% block title %}{% if capture_form.errors or follow_up_form.errors or review_form.errors or batch_form.has_errors %}Błąd: {% endif %}Dodaj wpis{% endblock %}
 
 {% block content %}
 <h1>Dodaj wpis</h1>
 <p class="fn-muted"><a href="{% url 'entries:index' %}">Wpisy rodziny</a> · <a href="{% url 'entries:create' %}">Nowy wpis bez rozpoznawania</a></p>
 {% if state == "saved" %}
-    {% include "entries/_saved_panel.html" with entry=saved_entry %}
+    {% include "entries/_saved_panel.html" with saved_entries=saved_entries %}
 {% endif %}
 {% if notice %}
     {% include "entries/_notice.html" with message=notice %}
 {% endif %}
 {% if follow_up_form %}
     {% include "entries/_follow_up_form.html" with form=follow_up_form %}
+{% elif batch_form %}
+    {% include "entries/_batch_review_form.html" with form=batch_form %}
 {% elif review_form %}
     {% include "entries/_review_form.html" with form=review_form %}
 {% else %}
     {% include "entries/_capture_form.html" with form=capture_form %}
 {% endif %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'js/enter-submit.js' %}" defer></script>
+<script src="{% static 'js/classification-progress.js' %}" defer></script>
 {% endblock %}

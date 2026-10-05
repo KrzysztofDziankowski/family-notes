@@ -1,7 +1,8 @@
 """Representative acceptance corpus for the classification boundary.
 
-Every case runs the real ``classify_for_parent`` service with the real
-``OpenAIClassificationBackend``. The OpenAI client is a real SDK client whose
+Every case runs the real ``classify_entries_for_parent`` service (the one
+capture calls) with the real ``OpenAIClassificationBackend``; single-entry
+answers are scripted as one-entry lists, as the list schema returns them. The OpenAI client is a real SDK client whose
 HTTP transport is scripted, so request serialization, adapter translation,
 domain validation, and local member resolution are all exercised without
 network access, nondeterminism, or real sleeps. The model does the date
@@ -31,18 +32,23 @@ from django.test import SimpleTestCase, TestCase, override_settings
 
 from entries.classification.backends import BackendOutput, ClassificationBackendError
 from entries.classification.openai_backend import OpenAIClassificationBackend, build_openai_backend
-from entries.classification.service import classify_for_parent
+from entries.classification.service import (
+    classify_entries_for_parent,
+    classify_for_parent,
+    correct_proposal_for_parent,
+)
 from entries.classification.types import (
     ClassificationFollowUp,
     ClassificationProposal,
     ClassificationUnavailable,
     EntryType,
     MissingField,
+    ProposalValues,
     SchoolItemKind,
     UnavailableReason,
 )
 from entries.management.commands import classification_smoke
-from entries.tests.test_classification_service import FamilyFixtureMixin
+from entries.tests.test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 from entries.tests.test_openai_backend import (
     CONNECTION,
     FULL_SETTINGS,
@@ -66,9 +72,60 @@ PRD_CONTENT = 'Sprawdzian z biologii o skórze'
 DEADLINE_SECONDS = 25.0
 PRD_BUDGET_SECONDS = 30.0
 
+# PK-10 / US-10: a meeting proposed for Friday 2026-09-25, corrected on
+# Saturday 2026-09-19 with „zmień datę na 15 października”.
+CORRECTION_TEXT = 'zmień datę na 15 października'
+CORRECTED_DATE = datetime.date(2026, 10, 15)
+MEETING = ProposalValues(
+    entry_type=EntryType.CALENDAR_EVENT,
+    content='Spotkanie z wychowawczynią',
+    date=datetime.date(2026, 9, 25),
+    time=datetime.time(17, 0),
+)
+
 
 def model_output(**fields):
     """A scripted structured-output answer, as the model would return it."""
+    return ok(response_body(json.dumps(model_values(**fields), ensure_ascii=False)))
+
+
+def model_list_output(*entries):
+    """A scripted list answer (``classify_many``); each entry is a ``model_values`` dict."""
+    body = {'entries': [model_values(**entry) for entry in entries]}
+    return ok(response_body(json.dumps(body, ensure_ascii=False)))
+
+
+def model_entry_output(**fields):
+    """``model_output`` wrapped as a one-entry list, as capture now asks for it."""
+    return model_list_output(fields)
+
+
+def as_list_step(step):
+    """A scripted single-object answer re-wrapped as a one-entry list.
+
+    Anything that is not a parsable single answer (errors, refusals,
+    malformed text, timing wrappers' failures) is returned unchanged.
+    """
+    if not isinstance(step[0], str):
+        duration, outcome = step
+        return (duration, as_list_step(outcome))
+    if step[0] != 'response' or step[1] != 200:
+        return step
+    _, code, body, request_id = step
+    content = body['output'][0]['content'][0]
+    if content.get('type') != 'output_text':
+        return step
+    try:
+        value = json.loads(content['text'])
+    except ValueError:
+        return step
+    if not isinstance(value, dict) or 'entry_type' not in value:
+        return step
+    wrapped = json.dumps({'entries': [value]}, ensure_ascii=False)
+    return ('response', code, response_body(wrapped, status=body['status']), request_id)
+
+
+def model_values(**fields):
     values = dict(
         entry_type=None,
         content='',
@@ -78,15 +135,23 @@ def model_output(**fields):
         time=None,
         school_item=None,
         member_name=None,
+        school_subject=None,
+        member_mention=None,
     )
     values.update(fields)
-    return ok(response_body(json.dumps(values, ensure_ascii=False)))
+    return values
 
 
 class AdapterPathMixin(FamilyFixtureMixin):
     """Runs the service through the real adapter over a scripted transport."""
 
     def run_service(self, steps, text=PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE):
+        """The single result of the capture service for a one-entry answer."""
+        batch = self.run_batch([as_list_step(step) for step in steps], text, reference_date)
+        self.assertTrue(batch.is_single)
+        return batch.single
+
+    def run_batch(self, steps, text=PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE):
         self.clock = FakeClock()
         self.transport = ScriptedTransport(self.clock, steps)
         backend = OpenAIClassificationBackend(
@@ -95,8 +160,8 @@ class AdapterPathMixin(FamilyFixtureMixin):
             clock=self.clock,
             sleep=self.clock.sleep,
         )
-        return classify_for_parent(
-            self.parent.user,
+        return classify_entries_for_parent(
+            self.parent,
             text,
             reference_date=reference_date,
             locale='pl-PL',
@@ -120,6 +185,7 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='test',
                     member_name='Michał',
+                    school_subject='biologia',
                 )
             ]
         )
@@ -132,8 +198,10 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                 date=PRD_MONDAY,
                 school_item=SchoolItemKind.TEST,
                 member_name='Michał',
+                school_subject='biologia',
             ),
         )
+        self.assertEqual(outcome.result.school_subject, 'biologia')
         self.assertEqual(outcome.result.date.weekday(), 0)
         self.assertEqual(outcome.member, self.child)
 
@@ -150,6 +218,7 @@ class PrdSchoolEventTests(AdapterPathMixin, TestCase):
                 'dzien_tygodnia': 'sobota',
                 'ustawienia_regionalne': 'pl-PL',
                 'dozwolone_osoby': ['Ewa', 'Michał', 'Ania'],
+                'autor_polecenia': 'Ewa',
                 'polecenie': PRD_INSTRUCTION,
             },
         )
@@ -169,6 +238,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 date_source='Jutro',
                 school_item='quiz',
                 member_name='Ania',
+                school_subject='angielski',
             ),
             EntryType.CALENDAR_EVENT,
         ),
@@ -196,6 +266,7 @@ class PolishRelativeDateTests(AdapterPathMixin, TestCase):
                 date_source='W przyszły piątek',
                 school_item='homework',
                 member_name='Michał',
+                school_subject='polski',
             ),
             EntryType.CALENDAR_EVENT,
         ),
@@ -255,6 +326,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='class_test',
                     member_name='Michał',
+                    school_subject='matematyka',
                 ),
                 EntryType.CALENDAR_EVENT,
                 'child',
@@ -267,6 +339,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='homework',
                     member_name='Ania',
+                    school_subject='przyroda',
                 ),
                 EntryType.CALENDAR_EVENT,
                 'other_child',
@@ -343,6 +416,7 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
                     content='Sprawdzian z biologii',
                     school_item='test',
                     member_name='Michał',
+                    school_subject='biologia',
                 ),
                 (MissingField.DATE,),
             ),
@@ -353,16 +427,28 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
                     date='2026-09-22',
                     date_source='w poniedziałek',
                     school_item='quiz',
+                    school_subject='fizyka',
                 ),
                 (MissingField.AFFECTED_MEMBER,),
             ),
-            'homework without date or member': (
-                dict(entry_type='calendar_event', content='Zadanie domowe', school_item='homework'),
-                (MissingField.DATE, MissingField.AFFECTED_MEMBER),
+            'test without subject': (
+                dict(
+                    entry_type='calendar_event',
+                    content='Sprawdzian',
+                    date='2026-09-22',
+                    date_source='w poniedziałek',
+                    school_item='test',
+                    member_name='Michał',
+                ),
+                (MissingField.SCHOOL_SUBJECT,),
             ),
-            'school test typed as note still needs date and member': (
+            'homework without date, member or subject': (
+                dict(entry_type='calendar_event', content='Zadanie domowe', school_item='homework'),
+                (MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT),
+            ),
+            'school test typed as note still needs date, member and subject': (
                 dict(entry_type='note', content='Sprawdzian', school_item='test'),
-                (MissingField.DATE, MissingField.AFFECTED_MEMBER),
+                (MissingField.DATE, MissingField.AFFECTED_MEMBER, MissingField.SCHOOL_SUBJECT),
             ),
             'substitution without date': (
                 dict(entry_type='note', content='Zastępstwo z WF', school_item='substitution'),
@@ -387,6 +473,7 @@ class MissingFieldFollowUpTests(AdapterPathMixin, TestCase):
             date=PRD_REFERENCE_DATE.isoformat(),
             school_item='quiz',
             member_name='Ania',
+            school_subject='matematyka',
         )
         for date_source in (None, 'w sobotę'):
             with self.subTest(date_source=date_source):
@@ -451,6 +538,352 @@ class AmbiguityAndInventionTests(AdapterPathMixin, TestCase):
 
                 self.assertEqual(outcome.result, ClassificationUnavailable(reason=reason))
                 self.assertIsNone(outcome.member)
+
+
+class ShortNameTests(AdapterPathMixin, TestCase):
+    """PK-01 / US-01: "Hania ma jutro dentystę" in a family with Hanna."""
+
+    INSTRUCTION = 'Hania ma jutro dentystę'
+    TOMORROW = datetime.date(2026, 9, 20)
+
+    def setUp(self):
+        super().setUp()
+        # "Ania" shares the Anna group with "Hania"; keep the corpus family
+        # free of that collision so each case picks its own.
+        self.other_child.display_name = 'Ola'
+        self.other_child.save(update_fields=('display_name',))
+        self.hanna = self._member('hanna', FamilyMember.Role.CHILD, 'Hanna')
+
+    def dentist(self, **fields):
+        values = dict(
+            entry_type='calendar_event',
+            content='Dentysta',
+            date=self.TOMORROW.isoformat(),
+            date_source='jutro',
+            member_mention='Hania',
+        )
+        values.update(fields)
+        return model_output(**values)
+
+    def test_short_name_resolves_to_the_family_member(self):
+        outcome = self.run_service([self.dentist(member_name=None)], text=self.INSTRUCTION)
+
+        self.assertEqual(self.sent_input()['dozwolone_osoby'], ['Ewa', 'Michał', 'Ola', 'Hanna'])
+        self.assertEqual(
+            outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Dentysta',
+                date=self.TOMORROW,
+                member_name='Hanna',
+            ),
+        )
+        self.assertEqual(outcome.member, self.hanna)
+
+    def test_short_name_fitting_two_members_asks_who_is_meant(self):
+        self._member('anna', FamilyMember.Role.CHILD, 'Anna')
+
+        outcome = self.run_service([self.dentist(member_name='Hanna')], text=self.INSTRUCTION)
+
+        self.assertIsInstance(outcome.result, ClassificationFollowUp)
+        self.assertEqual(outcome.result.missing_fields, (MissingField.AMBIGUOUS_MEMBER,))
+        self.assertIsNone(outcome.result.member_name)
+        self.assertEqual(outcome.result.date, self.TOMORROW)
+        self.assertIsNone(outcome.member)
+
+    def test_mentions_of_inactive_or_foreign_members_never_resolve(self):
+        for returned, mention in (('Zosia', 'Zofia'), ('Kuba', 'Jakub')):
+            with self.subTest(mention):
+                outcome = self.run_service(
+                    [self.dentist(member_name=returned, member_mention=mention)],
+                    text=self.INSTRUCTION,
+                )
+
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationUnavailable(reason=UnavailableReason.UNKNOWN_MEMBER),
+                )
+                self.assertIsNone(outcome.member)
+
+
+class TitleKeepsActionOnlyTests(AdapterPathMixin, TestCase):
+    """PK-20 / US-11: "kasia zrobić pranie w piątek" on Sunday 2026-10-04."""
+
+    INSTRUCTION = 'kasia zrobić pranie w piątek'
+    SUNDAY = datetime.date(2026, 10, 4)
+    FRIDAY = datetime.date(2026, 10, 9)
+
+    def setUp(self):
+        super().setUp()
+        self.kasia = self._member('kasia', FamilyMember.Role.CHILD, 'Kasia')
+
+    def laundry(self, **fields):
+        values = dict(
+            entry_type='todo',
+            content='Zrobić pranie',
+            date=self.FRIDAY.isoformat(),
+            date_source='w piątek',
+            member_name='Kasia',
+            member_mention='Kasia',
+        )
+        values.update(fields)
+        return model_output(**values)
+
+    def classify(self, answer, text=INSTRUCTION):
+        return self.run_service([answer], text=text, reference_date=self.SUNDAY)
+
+    def test_owner_example_keeps_only_the_action_for_clean_and_echoing_output(self):
+        for content in (
+            'Zrobić pranie',
+            'zrobić pranie',
+            'Kasia zrobić pranie w piątek',
+            'kasia, zrobić pranie w piątek',
+        ):
+            with self.subTest(content=content):
+                outcome = self.classify(self.laundry(content=content))
+
+                self.assertEqual(self.sent_input()['dzien_tygodnia'], 'niedziela')
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationProposal(
+                        entry_type=EntryType.TODO,
+                        content='Zrobić pranie',
+                        date=self.FRIDAY,
+                        member_name='Kasia',
+                    ),
+                )
+                self.assertEqual(outcome.member, self.kasia)
+
+    def test_ungrounded_date_phrase_stays_in_the_title_and_todo_asks_no_date(self):
+        cases = (
+            # Evidence that is not in the parent's text.
+            (self.INSTRUCTION, 'w sobotę'),
+            # Evidence echoed in the title but absent from the parent's text.
+            ('kasia zrobić pranie', 'w piątek'),
+        )
+        for text, date_source in cases:
+            with self.subTest(text=text, date_source=date_source):
+                outcome = self.classify(
+                    self.laundry(
+                        content='Kasia zrobić pranie w piątek', date_source=date_source
+                    ),
+                    text=text,
+                )
+
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationProposal(
+                        entry_type=EntryType.TODO,
+                        content='Zrobić pranie w piątek',
+                        member_name='Kasia',
+                    ),
+                )
+                self.assertEqual(outcome.member, self.kasia)
+
+    def test_unmatched_leading_name_is_not_stripped(self):
+        text = 'Bartek odebrać paczkę'
+
+        outcome = self.classify(
+            self.laundry(
+                content=text,
+                date=None,
+                date_source=None,
+                member_name=None,
+                member_mention='Bartek',
+            ),
+            text=text,
+        )
+
+        self.assertEqual(
+            outcome.result,
+            ClassificationProposal(entry_type=EntryType.TODO, content=text),
+        )
+        self.assertIsNone(outcome.member)
+
+    def test_school_title_keeps_its_subject(self):
+        outcome = self.classify(
+            self.laundry(
+                entry_type='calendar_event',
+                content='Kartkówka z matematyki w piątek',
+                school_item='quiz',
+                school_subject='matematyka',
+            ),
+            text='Kartkówka z matematyki dla Kasi w piątek',
+        )
+
+        self.assertEqual(
+            outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Kartkówka z matematyki',
+                date=self.FRIDAY,
+                school_item=SchoolItemKind.QUIZ,
+                member_name='Kasia',
+                school_subject='matematyka',
+            ),
+        )
+        self.assertEqual(outcome.member, self.kasia)
+
+
+class FreeTextCorrectionTests(AdapterPathMixin, TestCase):
+    """PK-10 / US-10: a correction changes only the field it names."""
+
+    def correct(self, answer, current=MEETING, correction=CORRECTION_TEXT):
+        self.clock = FakeClock()
+        self.transport = ScriptedTransport(self.clock, [answer])
+        backend = OpenAIClassificationBackend(
+            client=make_client(self.transport),
+            model=MODEL,
+            clock=self.clock,
+            sleep=self.clock.sleep,
+        )
+        return correct_proposal_for_parent(
+            self.parent,
+            current,
+            correction,
+            reference_date=PRD_REFERENCE_DATE,
+            locale='pl-PL',
+            backend=backend,
+        )
+
+    def meeting_answer(self, **fields):
+        values = dict(
+            entry_type='calendar_event',
+            content='Spotkanie z wychowawczynią',
+            date=CORRECTED_DATE.isoformat(),
+            date_source='15 października',
+            time='17:00',
+            changed_fields=['date'],
+        )
+        values.update(fields)
+        return model_output(**values)
+
+    def test_date_correction_flows_into_the_merged_proposal(self):
+        correction = self.correct(self.meeting_answer())
+
+        self.assertEqual(
+            self.sent_input(),
+            {
+                'data_odniesienia': '2026-09-19',
+                'dzien_tygodnia': 'sobota',
+                'ustawienia_regionalne': 'pl-PL',
+                'dozwolone_osoby': ['Ewa', 'Michał', 'Ania'],
+                'autor_polecenia': 'Ewa',
+                'obecna_propozycja': {
+                    'typ': 'calendar_event',
+                    'tytul': 'Spotkanie z wychowawczynią',
+                    'element_szkolny': None,
+                    'przedmiot': None,
+                    'data': '2026-09-25',
+                    'godzina': '17:00',
+                    'osoba': None,
+                },
+                'poprawka': CORRECTION_TEXT,
+            },
+        )
+        self.assertTrue(correction.applied)
+        self.assertEqual(correction.changed, frozenset({'date'}))
+        self.assertEqual(
+            correction.outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Spotkanie z wychowawczynią',
+                date=CORRECTED_DATE,
+                time=datetime.time(17, 0),
+            ),
+        )
+
+    def test_echoed_or_rewritten_fields_outside_changed_fields_are_ignored(self):
+        correction = self.correct(
+            self.meeting_answer(content='Spotkanie 15 października', time='18:00')
+        )
+
+        self.assertEqual(correction.outcome.result.content, 'Spotkanie z wychowawczynią')
+        self.assertEqual(correction.outcome.result.time, datetime.time(17, 0))
+        self.assertEqual(correction.outcome.result.date, CORRECTED_DATE)
+
+    def test_date_not_grounded_in_the_correction_is_not_applied(self):
+        correction = self.correct(self.meeting_answer(date_source='w piątek'))
+
+        self.assertFalse(correction.applied)
+        self.assertIsNone(correction.outcome)
+
+
+# PK-05 / US-05: one instruction on Wednesday 2026-10-07 asks for three
+# meetings at 18:00: today, tomorrow and Monday next week (2026-10-12).
+MULTI_REFERENCE_DATE = datetime.date(2026, 10, 7)
+MULTI_INSTRUCTION = (
+    'Dodaj spotkanie z wychowawczynią dziś, jutro i w przyszłym tygodniu '
+    'w poniedziałek o 18:00'
+)
+MULTI_INSTRUCTION_EN = (
+    'Add a meeting with the class teacher today, tomorrow and next week on '
+    'Monday at 18:00'
+)
+MULTI_DATES = (
+    datetime.date(2026, 10, 7),
+    datetime.date(2026, 10, 8),
+    datetime.date(2026, 10, 12),
+)
+MULTI_SOURCES = ('dziś', 'jutro', 'w przyszłym tygodniu w poniedziałek')
+
+
+class MultiEntryPrdTests(AdapterPathMixin, TestCase):
+    """PK-05 / US-05: one instruction becomes three meeting proposals."""
+
+    def meeting(self, date, date_source, **fields):
+        values = dict(
+            entry_type='calendar_event',
+            content=f'Spotkanie z wychowawczynią {date_source}',
+            date=date.isoformat(),
+            date_source=date_source,
+            time='18:00',
+        )
+        values.update(fields)
+        return values
+
+    def test_prd_example_yields_three_meetings_at_six_pm(self):
+        batch = self.run_batch(
+            [model_list_output(*(self.meeting(d, s) for d, s in zip(MULTI_DATES, MULTI_SOURCES)))],
+            text=MULTI_INSTRUCTION,
+            reference_date=MULTI_REFERENCE_DATE,
+        )
+
+        self.assertEqual(
+            [item.result for item in batch.items],
+            [
+                ClassificationProposal(
+                    entry_type=EntryType.CALENDAR_EVENT,
+                    content='Spotkanie z wychowawczynią',
+                    date=date,
+                    time=datetime.time(18, 0),
+                )
+                for date in MULTI_DATES
+            ],
+        )
+        sent = self.sent_input()
+        self.assertEqual(sent['data_odniesienia'], '2026-10-07')
+        self.assertEqual(sent['dzien_tygodnia'], 'środa')
+        self.assertEqual(sent['polecenie'], MULTI_INSTRUCTION)
+        (body,) = self.transport.bodies()
+        self.assertIn('entries', body['text']['format']['schema']['properties'])
+
+    def test_an_invented_date_is_dropped_for_that_meeting_only(self):
+        batch = self.run_batch(
+            [
+                model_list_output(
+                    self.meeting(MULTI_DATES[0], 'dziś'),
+                    self.meeting(MULTI_DATES[1], 'pojutrze'),
+                )
+            ],
+            text=MULTI_INSTRUCTION,
+            reference_date=MULTI_REFERENCE_DATE,
+        )
+
+        self.assertIsInstance(batch.items[0].result, ClassificationProposal)
+        follow_up = batch.items[1].result
+        self.assertIsInstance(follow_up, ClassificationFollowUp)
+        self.assertEqual(follow_up.missing_fields, (MissingField.DATE,))
 
 
 class ProviderFailureTests(AdapterPathMixin, TestCase):
@@ -548,7 +981,7 @@ class WallClockDeadlineTests(FamilyFixtureMixin, TestCase):
                 wall_started = time.monotonic()
 
                 outcome = classify_for_parent(
-                    self.parent.user,
+                    self.parent,
                     PRD_INSTRUCTION,
                     reference_date=PRD_REFERENCE_DATE,
                     backend=backend,
@@ -575,7 +1008,7 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
     def classify_live(self, text):
         started = time.monotonic()
         outcome = classify_for_parent(
-            self.parent.user, text, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
+            self.parent, text, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
         )
         elapsed = time.monotonic() - started
         self.assertNotEqual(
@@ -585,6 +1018,31 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
         )
         self.assertLess(elapsed, PRD_BUDGET_SECONDS)
         return outcome
+
+    def test_prd_three_meetings_example(self):
+        for text in (MULTI_INSTRUCTION, MULTI_INSTRUCTION_EN):
+            with self.subTest(text=text):
+                started = time.monotonic()
+                batch = classify_entries_for_parent(
+                    self.parent, text, reference_date=MULTI_REFERENCE_DATE, locale='pl-PL'
+                )
+                self.assertLess(time.monotonic() - started, PRD_BUDGET_SECONDS)
+
+                results = [item.result for item in batch.items]
+                self.assertEqual(len(results), 3, results)
+                for result in results:
+                    self.assertIsInstance(result, ClassificationProposal)
+                    self.assertEqual(result.entry_type, EntryType.CALENDAR_EVENT)
+                    self.assertEqual(result.time, datetime.time(18, 0))
+                self.assertEqual(sorted(result.date for result in results), list(MULTI_DATES))
+
+    def test_single_entry_instruction_stays_single(self):
+        batch = classify_entries_for_parent(
+            self.parent, PRD_INSTRUCTION, reference_date=PRD_REFERENCE_DATE, locale='pl-PL'
+        )
+
+        self.assertTrue(batch.is_single)
+        self.assertEqual(batch.single.result.date, PRD_MONDAY)
 
     def test_prd_example(self):
         outcome = self.classify_live(PRD_INSTRUCTION)
@@ -603,6 +1061,45 @@ class LiveProviderEvaluationTests(FamilyFixtureMixin, TestCase):
         outcome = self.classify_live('Bartek ma kartkówkę z chemii we wtorek')
 
         self.assertIsNone(outcome.member)
+
+    def correct_live(self, correction, current=MEETING, current_member=None):
+        started = time.monotonic()
+        result = correct_proposal_for_parent(
+            self.parent,
+            current,
+            correction,
+            reference_date=PRD_REFERENCE_DATE,
+            current_member=current_member,
+            locale='pl-PL',
+        )
+        self.assertLess(time.monotonic() - started, PRD_BUDGET_SECONDS)
+        self.assertTrue(result.applied, result.rejection)
+        return result
+
+    def test_date_correction_changes_only_the_date(self):
+        correction = self.correct_live(CORRECTION_TEXT)
+
+        self.assertEqual(correction.changed, frozenset({'date'}))
+        self.assertEqual(
+            correction.outcome.result,
+            ClassificationProposal(
+                entry_type=EntryType.CALENDAR_EVENT,
+                content='Spotkanie z wychowawczynią',
+                date=CORRECTED_DATE,
+                time=datetime.time(17, 0),
+            ),
+        )
+
+    def test_member_correction_changes_only_the_person(self):
+        tymek = self._member('tymek', FamilyMember.Role.CHILD, 'Tymoteusz')
+
+        correction = self.correct_live('to dla Tymka')
+
+        self.assertEqual(correction.changed, frozenset({'member_name'}))
+        self.assertEqual(correction.outcome.member, tymek)
+        self.assertEqual(correction.outcome.result.date, MEETING.date)
+        self.assertEqual(correction.outcome.result.time, MEETING.time)
+        self.assertEqual(correction.outcome.result.content, MEETING.content)
 
 
 class SmokeCommandTests(SimpleTestCase):
@@ -763,3 +1260,46 @@ class RepositoryHygieneTests(SimpleTestCase):
 
         self.assertIsNotNone(self.KEY_PATTERN.search(f'key = "{fake_key}"'))
         self.assertIsNone(self.KEY_PATTERN.search('flask-sqlalchemy-extension-package'))
+
+
+class SelfReferenceAcceptanceTests(TwoParentFixtureMixin, AdapterPathMixin, TestCase):
+    """S-07 through the real adapter: Ewa (requester), Paweł (other parent), Kasia."""
+
+    TEXT = 'dla mnie: kupić mleko'
+
+    def setUp(self):
+        super().setUp()
+        self.kasia = self._member('kasia', FamilyMember.Role.CHILD, 'Kasia')
+
+    def todo(self, content, member_name):
+        return model_output(entry_type='todo', content=content, member_name=member_name)
+
+    def test_echoed_self_reference_gives_the_requester_and_a_clean_title(self):
+        for content in ('dla mnie: kupić mleko', 'Kupić mleko dla mnie', 'Kupić mleko'):
+            with self.subTest(content=content):
+                outcome = self.run_service([self.todo(content, 'Ewa')], text=self.TEXT)
+
+                self.assertEqual(self.sent_input()['autor_polecenia'], 'Ewa')
+                self.assertEqual(
+                    outcome.result,
+                    ClassificationProposal(
+                        entry_type=EntryType.TODO, content='Kupić mleko', member_name='Ewa'
+                    ),
+                )
+                self.assertEqual(outcome.member, self.parent)
+
+    def test_text_naming_the_other_parent_still_resolves_to_them(self):
+        outcome = self.run_service(
+            [self.todo('Paweł kupić mleko', 'Paweł')], text='Paweł kupić mleko'
+        )
+
+        self.assertEqual(outcome.result.content, 'Kupić mleko')
+        self.assertEqual(outcome.member, self.second_parent)
+
+    def test_self_reference_stays_in_the_title_when_someone_else_is_assigned(self):
+        outcome = self.run_service(
+            [self.todo('dla mnie: kupić mleko', 'Kasia')], text='Kasia, dla mnie: kupić mleko'
+        )
+
+        self.assertEqual(outcome.member, self.kasia)
+        self.assertEqual(outcome.result.content, 'Dla mnie: kupić mleko')

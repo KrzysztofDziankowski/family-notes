@@ -1,9 +1,9 @@
 ---
 change_id: classification-short-names
 title: Parent can assign an entry using a short family-member name
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

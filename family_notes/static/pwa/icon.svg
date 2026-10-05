@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FamilyNotes">
+  <!-- Placeholder "FN" monogram; colours mirror --fn-color-accent and --fn-color-bg in css/tokens.css.
+       PNG exports: icon-192/512 (rounded), icon-maskable-512 (full bleed, glyph at 75 %), apple-touch-icon (180 px, full bleed, 85 %). -->
+  <rect width="512" height="512" rx="96" fill="#2f6f5e"/>
+  <g fill="#f7f8fa">
+    <rect x="96" y="128" width="56" height="256"/>
+    <rect x="96" y="128" width="136" height="56"/>
+    <rect x="96" y="230" width="116" height="54"/>
+    <rect x="264" y="128" width="52" height="256"/>
+    <rect x="364" y="128" width="52" height="256"/>
+    <polygon points="264,128 316,128 416,384 364,384"/>
+  </g>
+</svg>

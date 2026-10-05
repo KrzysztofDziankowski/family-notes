@@ -1,9 +1,9 @@
 ---
 change_id: school-event-details
 title: Parent can review the specific school event type and supply required date, person, and subject
-status: plan_reviewed
+status: implementing
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-05
 archived_at: null
 ---
 

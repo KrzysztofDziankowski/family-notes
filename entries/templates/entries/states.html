@@ -1,16 +1,18 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Stany ekranu{% endblock %}
 
 {% block content %}
 <h1>Stany ekranu „Dodaj wpis”</h1>
 <p class="fn-muted">Strona tylko dla trybu DEBUG. Dane są fikcyjne i nic nie jest zapisywane.</p>
+<p class="fn-muted">Strona offline aplikacji: <a href="{% url 'offline' %}" data-kitchen-link="offline">Brak połączenia</a></p>
 {% for section in sections %}
 <section data-kitchen-state="{{ section.name }}">
     <hr>
     <p class="fn-muted"><small>Stan: {{ section.label }} ({{ section.name }})</small></p>
-    {% if section.saved_entry %}
-        {% include "entries/_saved_panel.html" with entry=section.saved_entry %}
+    {% if section.saved_entries %}
+        {% include "entries/_saved_panel.html" with saved_entries=section.saved_entries %}
     {% endif %}
     {% if section.notice %}
         {% include "entries/_notice.html" with message=section.notice %}
@@ -18,11 +20,14 @@
     {% if section.follow_up_form %}
         {% include "entries/_follow_up_form.html" with form=section.follow_up_form %}
     {% endif %}
+    {% if section.batch_form %}
+        {% include "entries/_batch_review_form.html" with form=section.batch_form %}
+    {% endif %}
     {% if section.review_form %}
         {% include "entries/_review_form.html" with form=section.review_form %}
     {% endif %}
     {% if section.capture_form %}
-        {% include "entries/_capture_form.html" with form=section.capture_form %}
+        {% include "entries/_capture_form.html" with form=section.capture_form progress_state=section.progress_state %}
     {% endif %}
 </section>
 {% endfor %}
@@ -33,7 +38,7 @@
     <hr>
     <p class="fn-muted"><small>Stan: {{ state.label }} ({{ state.name }})</small></p>
     {% if state.list %}
-        {% include "entries/_manage_list.html" with mode=state.list.mode modes=state.list.modes sections=state.list.sections is_empty=state.list.is_empty empty_message=state.list.empty_message %}
+        {% include "entries/_manage_list.html" with mode=state.list.mode modes=state.list.modes groups=state.list.groups is_empty=state.list.is_empty empty_message=state.list.empty_message %}
     {% endif %}
     {% if state.detail %}
         {% include "entries/_manage_detail.html" with entry=state.detail.entry list_mode=state.detail.list_mode delete_open=state.detail.delete_open %}
@@ -44,4 +49,9 @@
 </section>
 {% endfor %}
 {% endif %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'js/enter-submit.js' %}" defer></script>
+<script src="{% static 'js/classification-progress.js' %}" defer></script>
 {% endblock %}

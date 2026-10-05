@@ -206,7 +206,7 @@ Expose role changes to parents and prove the new role governs every access path 
 Use this when a parent reports that another parent demoted or deactivated them and the family wants it reversed.
 
 1. Confirm the request with the affected person and, where possible, the family through an out-of-band channel. The app does not decide family disputes.
-2. Find the events in the application logs by family id: `membership_event=role_changed` (S-15, with old and new role) and `membership_event=deactivated` (S-14). Each line has `family=`, `member=` and `actor=` ids and no names.
+2. Find the events in the application logs by family id: `membership_event=role_changed` (S-15, with old and new role) and `membership_event=member_deactivated` (S-14). Each line has `family=`, `member=` and `actor=` ids and no names.
 3. In Django admin open Family access → Family members, filter by the family, and open the member with that id.
 4. Restore the state: set `Role` back to `Parent` and/or tick `Is active`, then save. Admin edits bypass the in-app `Family` lock, so make one change at a time.
 5. Automation tokens revoked by the demotion or deactivation stay revoked. If the parent needs automation again, issue a new token in Family access → Automation tokens and hand it over securely.
@@ -238,32 +238,32 @@ No schema change, no data backfill and no feature flag. Rollback is to remove th
 
 #### Automated
 
-- [ ] 1.1 Service tests cover promotion and demotion by an active parent, the unchanged-role no-op, and the invalid-role rejection.
-- [ ] 1.2 Escalation tests prove a child cannot change any role (including their own), and that an inactive parent, a parent of another family and a user without a membership are denied with no change.
-- [ ] 1.3 Guard tests prove the last active parent cannot be demoted, self-demotion without `confirm_self` is refused, and self-demotion with confirmation succeeds when another parent remains.
-- [ ] 1.4 Token tests prove demotion revokes every unrevoked token of the member, and that re-promotion leaves those tokens revoked.
-- [ ] 1.5 Tests prove `is_staff` and `is_superuser` are unchanged after every role change.
-- [ ] 1.6 Targeted tests pass: `uv run python manage.py test family_access.tests.test_role_services`.
-- [ ] 1.7 Stale-authority tests demote or deactivate the actor directly in the database after it was resolved, and deactivate the target the same way, and prove the role change is refused (`PermissionDenied` or the Polish inactive-target error) with no change.
+- [x] 1.1 Service tests cover promotion and demotion by an active parent, the unchanged-role no-op, and the invalid-role rejection. — 4f83108
+- [x] 1.2 Escalation tests prove a child cannot change any role (including their own), and that an inactive parent, a parent of another family and a user without a membership are denied with no change. — 4f83108
+- [x] 1.3 Guard tests prove the last active parent cannot be demoted, self-demotion without `confirm_self` is refused, and self-demotion with confirmation succeeds when another parent remains. — 4f83108
+- [x] 1.4 Token tests prove demotion revokes every unrevoked token of the member, and that re-promotion leaves those tokens revoked. — 4f83108
+- [x] 1.5 Tests prove `is_staff` and `is_superuser` are unchanged after every role change. — 4f83108
+- [x] 1.6 Targeted tests pass: `uv run python manage.py test family_access.tests.test_role_services`. — 4f83108
+- [x] 1.7 Stale-authority tests demote or deactivate the actor directly in the database after it was resolved, and deactivate the target the same way, and prove the role change is refused (`PermissionDenied` or the Polish inactive-target error) with no change. — 4f83108
 
 ### Phase 2: Role-Change UI and Effective-Access Regression
 
 #### Automated
 
-- [ ] 2.1 View tests cover the role route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user, with no database change on denial.
-- [ ] 2.2 Foreign and nonexistent member ids return the same status and show no foreign content.
-- [ ] 2.3 Effective-access tests prove the next-request behavior after demotion and promotion across web views, the automation API and home routing.
-- [ ] 2.4 Accessibility audit cases pass for the promotion, demotion, self-demotion, last-parent and guard-error states: `uv run python manage.py test family_access.tests.test_membership_accessibility`.
-- [ ] 2.5 State-gallery tests prove the new role states render under DEBUG only and write no rows.
-- [ ] 2.12 Regression tests prove a demoted parent appears in the EduVulcan child snapshot and is matched by display name.
-- [ ] 2.13 Notice tests prove a parent demoted or deactivated by another parent sees the matching Polish notice exactly once on the next request, a self-demoted parent does not see it, and a promotion shows no notice.
-- [ ] 2.6 Full tests pass: `uv run python manage.py test`.
-- [ ] 2.7 Django checks pass: `uv run python manage.py check`.
-- [ ] 2.8 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 2.1 View tests cover the role route for a parent, a child, an inactive parent, a parent of another family, a user without a membership, and an anonymous user, with no database change on denial. — 1fed84a
+- [x] 2.2 Foreign and nonexistent member ids return the same status and show no foreign content. — 1fed84a
+- [x] 2.3 Effective-access tests prove the next-request behavior after demotion and promotion across web views, the automation API and home routing. — 1fed84a
+- [x] 2.4 Accessibility audit cases pass for the promotion, demotion, self-demotion, last-parent and guard-error states: `uv run python manage.py test family_access.tests.test_membership_accessibility`. — 1fed84a
+- [x] 2.5 State-gallery tests prove the new role states render under DEBUG only and write no rows. — 1fed84a
+- [x] 2.12 Regression tests prove a demoted parent appears in the EduVulcan child snapshot and is matched by display name. — 1fed84a
+- [x] 2.13 Notice tests prove a parent demoted or deactivated by another parent sees the matching Polish notice exactly once on the next request, a self-demoted parent does not see it, and a promotion shows no notice. — 1fed84a
+- [x] 2.6 Full tests pass: `uv run python manage.py test`. — 1fed84a
+- [x] 2.7 Django checks pass: `uv run python manage.py check`. — 1fed84a
+- [x] 2.8 Migration drift check passes: `uv run python manage.py makemigrations --check --dry-run`. — 1fed84a
 
 #### Manual
 
-- [ ] 2.9 At 360px width a parent promotes a seeded child, sees that child reach the parent index, then demotes them back.
-- [ ] 2.10 The last-parent explanation and the self-demotion confirmation are clear and usable without JavaScript.
-- [ ] 2.11 A keyboard-only pass on the role-change form follows the `context/foundation/accessibility.md` checklist.
-- [ ] 2.14 A reviewer follows the Operator Recovery Runbook on a seeded demoted parent and restores their parent role in Django admin.
+- [x] 2.9 At 360px width a parent promotes a seeded child, sees that child reach the parent index, then demotes them back.
+- [x] 2.10 The last-parent explanation and the self-demotion confirmation are clear and usable without JavaScript.
+- [x] 2.11 A keyboard-only pass on the role-change form follows the `context/foundation/accessibility.md` checklist.
+- [x] 2.14 A reviewer follows the Operator Recovery Runbook on a seeded demoted parent and restores their parent role in Django admin.

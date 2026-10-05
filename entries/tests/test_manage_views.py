@@ -10,8 +10,10 @@ import uuid
 
 from django.contrib.messages import constants
 from django.contrib.messages.storage.base import Message
+from django.db import connection
 from django.template.loader import render_to_string
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -19,13 +21,27 @@ from entries.classification.types import EntryType, SchoolItemKind
 from entries.models import Entry
 from family_access.models import FamilyMember
 
-from .test_classification_service import FamilyFixtureMixin
+from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
 
 INDEX_URL = reverse('entries:index')
 CREATE_URL = reverse('entries:create')
 FOREIGN_SENTINEL = 'SENTINEL-OBCA-RODZINA-4b2d'
 ROW_PATTERN = re.compile(r'data-entry-row="(\d+)"')
 SECTION_PATTERN = re.compile(r'data-list-section="(\w+)"')
+GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
+
+
+def group_html(html, key):
+    """The rendered ``data-assignee-group`` block with ``key``."""
+    start = html.index(f'data-assignee-group="{key}"')
+    end = html.find('data-assignee-group="', start + 1)
+    return html[start:end if end != -1 else len(html)]
+
+
+def group_heading(html, key):
+    return re.search(
+        r'<h2 class="fn-manage-section-title">([^<]*)</h2>', group_html(html, key)
+    ).group(1)
 
 
 def detail_url(pk):
@@ -70,6 +86,7 @@ class ManageViewMixin(FamilyFixtureMixin):
             'time': '17:30',
             'assigned_member': str(self.child.pk),
             'school_item': '',
+            'school_subject': '',
         }
         data.update(overrides)
         return data
@@ -197,6 +214,12 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         self.assertContains(response, 'Michał')
         self.assertContains(response, 'Bez daty</span>')
         self.assertContains(response, ', 08:00')
+        # S-08: the assignee name sits in the group heading, not in the row.
+        html = response.content.decode()
+        self.assertEqual(group_heading(html, f'member-{self.child.pk}'), 'Michał')
+        row = group_html(html, f'member-{self.child.pk}')
+        self.assertIn(f'data-entry-row="{self.tomorrow.pk}"', row)
+        self.assertNotIn('<span>Michał</span>', row)
 
 
 class EmptyIndexTests(ManageViewMixin, TestCase):
@@ -237,6 +260,33 @@ class DetailTests(ManageViewMixin, TestCase):
                 self.assertContains(response, text)
         self.assertNotContains(response, str(entry.submission_key))
         self.assertNotContains(response, 'Ewa')
+
+    def test_detail_shows_subject_only_when_set(self):
+        with_subject = self.entry(
+            'Kartkówka',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(2),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.QUIZ.value,
+            school_subject='Geografia',
+        )
+        legacy = self.entry(
+            'Sprawdzian',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(2),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+        )
+
+        shown = self.client.get(detail_url(with_subject.pk))
+        hidden = self.client.get(detail_url(legacy.pk))
+
+        self.assertContains(shown, '<dt>Przedmiot</dt>', html=True)
+        self.assertContains(shown, '<dd>Geografia</dd>', html=True)
+        self.assertEqual(hidden.status_code, 200)
+        self.assertContains(hidden, 'Element szkolny')
+        self.assertNotContains(hidden, 'Przedmiot')
 
     def test_detail_hides_creator_and_submission_key_of_a_manual_entry(self):
         creator = self._member('parent2', FamilyMember.Role.PARENT, 'Tomasz')
@@ -294,6 +344,31 @@ class CreateTests(ManageViewMixin, TestCase):
         self.assertEqual(entry.assigned_member, self.child)
         self.assertContains(self.client.get(detail_url(entry.pk)), 'Dodano wpis.')
 
+    def test_create_persists_the_subject_of_a_school_event(self):
+        data = self.form_data(
+            school_item=SchoolItemKind.HOMEWORK.value,
+            school_subject='  Chemia ',
+            submission_key=str(uuid.uuid4()),
+        )
+
+        response = self.client.post(CREATE_URL, data)
+
+        entry = Entry.objects.get()
+        self.assertRedirects(response, detail_url(entry.pk), fetch_redirect_response=False)
+        self.assertEqual(entry.school_subject, 'Chemia')
+
+    def test_create_school_event_without_subject_is_an_error(self):
+        data = self.form_data(
+            school_item=SchoolItemKind.QUIZ.value, submission_key=str(uuid.uuid4())
+        )
+
+        response = self.client.post(CREATE_URL, data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Podaj przedmiot.')
+        self.assertContains(response, 'id="id_school_subject_error"')
+        self.assertFalse(Entry.objects.exists())
+
     def test_resubmitted_create_form_saves_one_entry(self):
         data = self.form_data(submission_key=str(uuid.uuid4()))
 
@@ -320,14 +395,37 @@ class CreateTests(ManageViewMixin, TestCase):
         self.assertContains(response, 'To pole jest wymagane.')
         self.assertContains(response, 'Ten element szkolny wymaga rodzaju')
         self.assertContains(response, 'aria-invalid="true"')
-        self.assertContains(response, 'id="id_content-error"')
+        self.assertContains(response, 'id="id_content_error"')
+
+    def test_invalid_create_has_an_error_title_and_a_linked_summary(self):
+        data = self.form_data(
+            content='',
+            school_item=SchoolItemKind.HOMEWORK.value,
+            entry_type=EntryType.NOTE.value,
+            submission_key=str(uuid.uuid4()),
+        )
+
+        response = self.client.post(CREATE_URL, data)
+
+        self.assertContains(response, '<title>Błąd: Nowy wpis | FamilyNotes</title>')
+        html = response.content.decode()
+        summary = html[html.index('Popraw zaznaczone pola.'):html.index('</div>', html.index('Popraw zaznaczone pola.'))]
+        self.assertIn('<a href="#id_content">Tytuł</a>', summary)
+        self.assertIn('<a href="#id_school_item">Element szkolny</a>', summary)
+        self.assertLess(summary.index('#id_content'), summary.index('#id_school_item'))
+        self.assertNotIn('#id_date', summary)
+
+    def test_valid_create_form_title_has_no_error_prefix(self):
+        response = self.client.get(CREATE_URL)
+
+        self.assertContains(response, '<title>Nowy wpis | FamilyNotes</title>')
 
     def test_create_form_offers_every_editable_field_and_a_submission_key(self):
         """2.6"""
         response = self.client.get(CREATE_URL)
 
         for name in ('entry_type', 'content', 'date', 'time', 'assigned_member',
-                     'school_item', 'submission_key'):
+                     'school_item', 'school_subject', 'submission_key'):
             with self.subTest(field=name):
                 self.assertContains(response, f'name="{name}"')
         self.assertContains(response, f'href="{reverse("entries:capture")}"')
@@ -342,13 +440,18 @@ class EditTests(ManageViewMixin, TestCase):
 
         response = self.client.post(
             edit_url(entry.pk),
-            self.form_data(school_item=SchoolItemKind.TEST.value, content='Poprawiony'),
+            self.form_data(
+                school_item=SchoolItemKind.TEST.value,
+                school_subject=' Fizyka ',
+                content='Poprawiony',
+            ),
         )
 
         self.assertRedirects(response, detail_url(entry.pk))
         entry.refresh_from_db()
         self.assertEqual(entry.content, 'Poprawiony')
         self.assertEqual(entry.school_item, SchoolItemKind.TEST.value)
+        self.assertEqual(entry.school_subject, 'Fizyka')
         self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
         self.assertIsNone(entry.created_by)
         self.assertEqual(entry.submission_key, key)
@@ -365,6 +468,64 @@ class EditTests(ManageViewMixin, TestCase):
         self.assertNotContains(response, 'name="submission_key"')
         self.assertContains(response, f'action="{edit_url(entry.pk)}"')
         self.assertContains(response, f'href="{detail_url(entry.pk)}"')
+
+    def test_edit_form_shows_the_stored_subject(self):
+        entry = self.entry(
+            'Kartkówka',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(1),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.QUIZ.value,
+            school_subject='Historia',
+        )
+
+        response = self.client.get(edit_url(entry.pk))
+
+        self.assertContains(response, '<label for="id_school_subject">Przedmiot</label>', html=True)
+        self.assertContains(response, 'value="Historia"')
+
+    def test_unrelated_edit_of_subjectless_eduvulcan_school_event_saves(self):
+        entry = self.entry(
+            'Sprawdzian: Biologia',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(4),
+            assigned_member=self.child,
+            school_item=SchoolItemKind.TEST.value,
+            source=Entry.Source.EDUVULCAN,
+            created_by=None,
+        )
+
+        response = self.client.post(
+            edit_url(entry.pk),
+            self.form_data(
+                content='Sprawdzian: Biologia',
+                date=self.days(5).isoformat(),
+                assigned_member=str(self.other_child.pk),
+                school_item=SchoolItemKind.TEST.value,
+            ),
+        )
+
+        self.assertRedirects(response, detail_url(entry.pk))
+        entry.refresh_from_db()
+        self.assertEqual(entry.assigned_member, self.other_child)
+        self.assertEqual(entry.school_subject, '')
+
+    def test_setting_a_school_event_kind_without_subject_is_an_error(self):
+        entry = self.entry(
+            'Wywiadówka',
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            date=self.days(4),
+            assigned_member=self.child,
+        )
+
+        response = self.client.post(
+            edit_url(entry.pk), self.form_data(school_item=SchoolItemKind.TEST.value)
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Podaj przedmiot.')
+        entry.refresh_from_db()
+        self.assertEqual(entry.school_item, '')
 
     def test_editing_title_keeps_deactivated_assignee(self):
         entry = self.entry('Oddać książkę', assigned_member=self.inactive_child)
@@ -397,6 +558,8 @@ class EditTests(ManageViewMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'aria-invalid="true"')
+        self.assertContains(response, '<title>Błąd: Edytuj wpis | FamilyNotes</title>')
+        self.assertContains(response, '<a href="#id_assigned_member">Dla kogo</a>')
         entry.refresh_from_db()
         self.assertEqual(entry.content, 'Bez zmian')
 
@@ -436,6 +599,21 @@ class DeleteTests(ManageViewMixin, TestCase):
 class ManagementTemplateTests(ManageViewMixin, TestCase):
     """2.6: create, capture, edit and delete actions are reachable."""
 
+    def test_edit_links_carry_visually_hidden_entry_context(self):
+        self.entry('Oddać książkę do biblioteki', date=self.days(1))
+        long = self.entry('Bardzo długi opis ' * 10, date=self.days(2))
+
+        response = self.client.get(INDEX_URL)
+
+        self.assertContains(
+            response,
+            'Edytuj<span class="fn-visually-hidden">: Oddać książkę do biblioteki</span></a>',
+        )
+        self.assertContains(
+            response,
+            f'Edytuj<span class="fn-visually-hidden">: {long.content[:59]}…</span></a>',
+        )
+
     def test_index_exposes_structured_create_and_capture(self):
         response = self.client.get(INDEX_URL)
 
@@ -456,7 +634,12 @@ class ManagementTemplateTests(ManageViewMixin, TestCase):
         delete_form = html[html.index(f'action="{delete_url(entry.pk)}"') - 40:]
         self.assertIn('method="post"', delete_form)
         self.assertIn('csrfmiddlewaretoken', delete_form)
-        self.assertNotIn('<script', html)
+        # The delete disclosure needs no JavaScript: the page loads only the
+        # site-wide service-worker registration (S-06), nothing of its own.
+        main = html[html.index('<main'):html.index('</main>')]
+        self.assertNotIn('<script', main)
+        self.assertEqual(html.count('<script'), 1)
+        self.assertIn('js/pwa-register.js', html)
 
     def test_parent_navigation_links_to_the_index(self):
         for url in (reverse('account_status'), reverse('entries:capture')):
@@ -484,3 +667,216 @@ class MessagesPartialTests(TestCase):
                 self.assertIn(panel_class, html)
                 self.assertIn(role, html)
                 self.assertIn('Komunikat', html)
+
+
+class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
+    """S-07: parent-assigned entries are created, listed and shown with their parent."""
+
+    def test_index_and_detail_show_the_parent_assignee(self):
+        mine = self.entry('Odebrać paczkę', date=self.days(1), assigned_member=self.parent)
+        theirs = self.entry('Umówić mechanika', date=self.days(2), assigned_member=self.second_parent)
+
+        index = self.client.get(INDEX_URL)
+
+        self.assertEqual(self.rendered_rows(index), [mine.pk, theirs.pk])
+        self.assertContains(index, 'Ewa')
+        self.assertContains(index, 'Paweł')
+        # S-08: each parent-assigned row sits under its parent's group heading.
+        html = index.content.decode()
+        for entry, member in ((mine, self.parent), (theirs, self.second_parent)):
+            with self.subTest(heading=member.display_name):
+                key = f'member-{member.pk}'
+                self.assertEqual(group_heading(html, key), member.display_name)
+                self.assertIn(f'data-entry-row="{entry.pk}"', group_html(html, key))
+        for entry, name in ((mine, 'Ewa'), (theirs, 'Paweł')):
+            with self.subTest(name=name):
+                detail = self.client.get(detail_url(entry.pk))
+                self.assertEqual(detail.status_code, 200)
+                self.assertContains(detail, name)
+                self.assertNotContains(detail, 'Cała rodzina')
+
+    def test_create_and_edit_through_the_views_save_a_parent(self):
+        for member in (self.parent, self.second_parent):
+            with self.subTest(member=member.display_name):
+                Entry.objects.all().delete()
+                self.client.post(
+                    CREATE_URL,
+                    self.form_data(
+                        entry_type=EntryType.NOTE.value,
+                        date='',
+                        time='',
+                        assigned_member=str(member.pk),
+                        submission_key=str(uuid.uuid4()),
+                    ),
+                )
+                entry = Entry.objects.get()
+                self.assertEqual(entry.assigned_member, member)
+
+                other = self.second_parent if member == self.parent else self.parent
+                self.client.post(
+                    edit_url(entry.pk),
+                    self.form_data(
+                        entry_type=EntryType.NOTE.value,
+                        date='',
+                        time='',
+                        assigned_member=str(other.pk),
+                    ),
+                )
+                entry.refresh_from_db()
+                self.assertEqual(entry.assigned_member, other)
+
+    def test_anonymous_cannot_read_a_parent_assigned_entry(self):
+        entry = self.entry('Odebrać paczkę', assigned_member=self.second_parent)
+        self.client.logout()
+
+        for url in (INDEX_URL, detail_url(entry.pk)):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 302)
+                self.assertIn(reverse('account_login'), response['Location'])
+
+
+class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
+    """S-08: the parent index groups entries by assignee in both modes."""
+
+    def setUp(self):
+        super().setUp()
+        e = self.entry
+        # Created out of group order: the order comes from roles and member pks.
+        self.family_today = e('Rodzina dziś', date=self.today)
+        self.pawel_tomorrow = e('Paweł jutro', date=self.days(1), assigned_member=self.second_parent)
+        self.ewa_undated = e('Ewa bez daty', assigned_member=self.parent)
+        self.ania_tomorrow = e('Ania jutro', date=self.days(1), assigned_member=self.other_child)
+        self.michal_next_week = e('Michał za tydzień', date=self.days(7), assigned_member=self.child)
+        self.michal_today = e(
+            'Michał dziś', date=self.today, time=datetime.time(8), assigned_member=self.child
+        )
+        self.michal_undated = e('Michał bez daty', assigned_member=self.child)
+        self.zosia_today = e('Zosia dziś', date=self.today, assigned_member=self.inactive_child)
+        self.family_undated = e('Rodzina bez daty')
+        self.michal_yesterday = e('Michał wczoraj', date=self.days(-1), assigned_member=self.child)
+        self.michal_last_week = e('Michał tydzień temu', date=self.days(-7), assigned_member=self.child)
+        self.jolanta_yesterday = e(
+            'Jolanta wczoraj', date=self.days(-1), assigned_member=self.inactive_parent
+        )
+        self.family_yesterday = e('Rodzina wczoraj', date=self.days(-1))
+        self.foreign = e(
+            FOREIGN_SENTINEL,
+            family=self.other_family,
+            date=self.today,
+            assigned_member=self.other_family_child,
+        )
+
+    def key(self, member):
+        return f'member-{member.pk}'
+
+    def test_upcoming_groups_children_then_parents_then_family(self):
+        html = self.client.get(INDEX_URL).content.decode()
+
+        self.assertEqual(
+            GROUP_PATTERN.findall(html),
+            [
+                self.key(self.child),
+                self.key(self.other_child),
+                self.key(self.inactive_child),
+                self.key(self.parent),
+                self.key(self.second_parent),
+                'family',
+            ],
+        )
+        self.assertEqual(
+            [group_heading(html, key) for key in GROUP_PATTERN.findall(html)],
+            ['Michał', 'Ania', 'Zosia (nieaktywne konto)', 'Ewa', 'Paweł', 'Cała rodzina'],
+        )
+
+    def test_past_groups_children_then_parents_then_family(self):
+        html = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
+
+        self.assertEqual(
+            GROUP_PATTERN.findall(html),
+            [self.key(self.child), self.key(self.inactive_parent), 'family'],
+        )
+        self.assertEqual(
+            group_heading(html, self.key(self.inactive_parent)), 'Jolanta (nieaktywne konto)'
+        )
+
+    def test_rows_keep_the_mode_order_inside_a_group(self):
+        upcoming = group_html(self.client.get(INDEX_URL).content.decode(), self.key(self.child))
+        past = group_html(
+            self.client.get(INDEX_URL, {'view': 'past'}).content.decode(), self.key(self.child)
+        )
+
+        self.assertEqual(
+            [int(pk) for pk in ROW_PATTERN.findall(upcoming)],
+            [self.michal_today.pk, self.michal_next_week.pk, self.michal_undated.pk],
+        )
+        self.assertEqual(SECTION_PATTERN.findall(upcoming), ['dated', 'undated'])
+        self.assertIn('<h3 class="fn-manage-subsection-title">Z datą</h3>', upcoming)
+        self.assertIn('<h3 class="fn-manage-subsection-title">Bez daty</h3>', upcoming)
+        self.assertEqual(
+            [int(pk) for pk in ROW_PATTERN.findall(past)],
+            [self.michal_yesterday.pk, self.michal_last_week.pk],
+        )
+        self.assertEqual(SECTION_PATTERN.findall(past), ['past'])
+        self.assertNotIn('fn-manage-subsection-title', past)
+
+    def test_group_with_only_undated_rows_has_no_dated_section(self):
+        html = self.client.get(INDEX_URL).content.decode()
+
+        self.assertEqual(SECTION_PATTERN.findall(group_html(html, self.key(self.parent))), ['undated'])
+
+    def test_each_own_family_entry_renders_exactly_once(self):
+        expected = {
+            'upcoming': {
+                self.family_today, self.pawel_tomorrow, self.ewa_undated, self.ania_tomorrow,
+                self.michal_next_week, self.michal_today, self.michal_undated,
+                self.zosia_today, self.family_undated,
+            },
+            'past': {
+                self.michal_yesterday, self.michal_last_week, self.jolanta_yesterday,
+                self.family_yesterday,
+            },
+        }
+        for mode, entries in expected.items():
+            with self.subTest(mode=mode):
+                response = self.client.get(INDEX_URL, {'view': mode})
+                rows = self.rendered_rows(response)
+                self.assertEqual(sorted(rows), sorted(entry.pk for entry in entries))
+                self.assertNotContains(response, FOREIGN_SENTINEL)
+                self.assertNotIn(self.key(self.other_family_child), GROUP_PATTERN.findall(
+                    response.content.decode()
+                ))
+
+    def test_reassigned_entry_moves_to_the_new_group(self):
+        self.client.post(
+            edit_url(self.family_undated.pk),
+            self.form_data(
+                entry_type=EntryType.TODO.value,
+                content='Rodzina bez daty',
+                date='',
+                time='',
+                assigned_member=str(self.other_child.pk),
+            ),
+        )
+
+        html = self.client.get(INDEX_URL).content.decode()
+
+        self.assertIn(
+            f'data-entry-row="{self.family_undated.pk}"', group_html(html, self.key(self.other_child))
+        )
+        self.assertNotIn(
+            f'data-entry-row="{self.family_undated.pk}"', group_html(html, 'family')
+        )
+
+    def test_grouping_adds_no_queries_per_row(self):
+        with self.assertNumQueries(self._index_queries()):
+            self.client.get(INDEX_URL)
+        for index in range(5):
+            self.entry(f'Dodatkowy {index}', date=self.days(2), assigned_member=self.second_parent)
+        with self.assertNumQueries(self._index_queries()):
+            self.client.get(INDEX_URL)
+
+    def _index_queries(self):
+        with CaptureQueriesContext(connection) as queries:
+            self.client.get(INDEX_URL)
+        return len(queries.captured_queries)

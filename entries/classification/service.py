@@ -9,11 +9,20 @@ invocation, validation, and local member resolution in one auditable place:
    called.
 2. Select candidates: load only active members of the parent's family.
 3. Invoke: send the backend only the instruction, the candidates' display
-   names, the reference date, and the locale. No database IDs are sent.
+   names, the reference date, and the locale. For the parent's own capture
+   and correction, the requesting parent's display name (already one of the
+   candidates) is sent too, so "dla mnie" can be mapped to them; follow-up
+   answers and automated classification never send it. No database IDs are
+   sent.
 4. Validate and resolve: validate the output against the same allow-list,
    then map a returned name to exactly one loaded membership locally.
    Duplicate names become an ``AMBIGUOUS_MEMBER`` follow-up; unknown,
-   inactive, and cross-family names become ``UNKNOWN_MEMBER``.
+   inactive, and cross-family names become ``UNKNOWN_MEMBER``. Before
+   validation, the person as the parent named them (``member_mention``, which
+   may be a diminutive such as "Hania") is matched against the same
+   candidates: one match selects that member, several matches become an
+   ``AMBIGUOUS_MEMBER`` follow-up, and no match leaves the model's name to the
+   allow-list.
 
 The service performs only reads and returns transient objects; it never
 creates, updates, or deletes database rows.
@@ -21,6 +30,16 @@ creates, updates, or deletes database rows.
 ``classify_follow_up_answer`` handles the parent's answer to a follow-up
 question under the same rules. Only the values the draft was missing are
 taken from the answer's classification; everything else stays as drafted.
+
+``classify_entries_for_parent`` is the capture entry point: one instruction
+may request several entries („dziś, jutro i w poniedziałek”). Every output
+goes through the same per-output pipeline as ``classify_for_parent``
+(``_finish_parent_output``), so single and batch results cannot diverge.
+
+``correct_proposal_for_parent`` applies a parent's free-text correction to
+the proposal on screen under the same rules. Only the fields the backend
+lists as changed are taken from its output; everything else, including the
+parent's manual edits, is kept.
 
 ``classify_for_family`` is the automated counterpart used for EduVulcan
 notifications. It impersonates no user: the caller passes a snapshot of the
@@ -33,20 +52,27 @@ so the caller can retry instead of saving the note straight away.
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Optional, Sequence
+from typing import FrozenSet, Optional, Sequence, Tuple
 
 from django.core.exceptions import PermissionDenied
 from django.views.decorators.debug import sensitive_variables
 
-from family_access.access import get_active_membership, is_parent, scope_queryset_to_family
+from family_access.access import is_parent, scope_queryset_to_family
 from family_access.models import FamilyMember
 
 from ..eduvulcan.children import match_child
 from ..eduvulcan.types import ChildSnapshot
-from .backends import BackendOutput, BackendRequest, ClassificationBackend
+from .backends import (
+    CORRECTABLE_FIELDS,
+    BackendOutput,
+    BackendRequest,
+    ClassificationBackend,
+    MultiEntryClassificationBackend,
+)
 from .follow_up import follow_up_question
+from .names import match_mention
 from .types import (
     ClassificationError,
     ClassificationFollowUp,
@@ -55,6 +81,9 @@ from .types import (
     ClassificationUnavailable,
     EntryType,
     MissingField,
+    ProposalValues,
+    SCHOOL_SUBJECT_MAX_LENGTH,
+    SchoolItemKind,
     UnavailableReason,
 )
 from .validation import classify_output, normalize_member_name
@@ -64,6 +93,10 @@ DEFAULT_LOCALE = 'pl-PL'
 MAX_SUBMITTED_TEXT_LENGTH = 2000
 # Upper bound on a parent's answer to a follow-up question.
 MAX_FOLLOW_UP_ANSWER_LENGTH = 500
+# Upper bound on a free-text correction of the proposal on screen.
+MAX_CORRECTION_LENGTH = 500
+# Upper bound on the proposals one instruction may produce.
+MAX_PROPOSALS_PER_INSTRUCTION = 10
 _MEMBER_FIELDS = frozenset(
     {MissingField.AFFECTED_MEMBER, MissingField.AMBIGUOUS_MEMBER}
 )
@@ -83,23 +116,22 @@ class ParentClassification:
 
 @sensitive_variables('submitted_text')
 def classify_for_parent(
-    user,
+    membership,
     submitted_text: str,
     *,
     reference_date: datetime.date,
     locale: str = DEFAULT_LOCALE,
     backend: Optional[ClassificationBackend] = None,
 ) -> ParentClassification:
-    """Classify ``submitted_text`` on behalf of an authenticated active parent.
+    """Classify ``submitted_text`` for ``membership``, the request's family context.
 
-    Raises ``PermissionDenied`` for anonymous users, users without an active
-    membership in an active family, and non-parent members; the backend is
+    Raises ``PermissionDenied`` when there is no context membership, when it
+    or its family is inactive, and for non-parent members; the backend is
     never built or called in those cases. When ``backend`` is omitted the
     configured OpenAI backend is built after authorization, and a disabled
     configuration yields an unavailable result. ``reference_date`` may be a
     ``datetime``; only its date part is used.
     """
-    membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
@@ -115,6 +147,7 @@ def classify_for_parent(
         allowed_member_names=tuple(member.display_name for member in candidates),
         reference_date=reference_date,
         locale=locale,
+        requester_name=membership.display_name,
     )
 
     try:
@@ -122,13 +155,256 @@ def classify_for_parent(
     except ClassificationError as error:
         return ParentClassification(result=error.to_result())
 
-    result = classify_output(request, output)
+    return _finish_parent_output(request, output, candidates)
+
+
+@dataclass(frozen=True)
+class ParentBatchClassification:
+    """The transient results for one instruction, in model order.
+
+    A one-item batch is exactly what ``classify_for_parent`` returns for the
+    same output, including unavailable results.
+    """
+
+    items: Tuple[ParentClassification, ...]
+
+    @property
+    def is_single(self) -> bool:
+        return len(self.items) == 1
+
+    @property
+    def single(self) -> ParentClassification:
+        if not self.is_single:
+            raise ValueError('The batch holds several results.')
+        return self.items[0]
+
+
+def _single(result: ClassificationResult) -> ParentBatchClassification:
+    return ParentBatchClassification(items=(ParentClassification(result=result),))
+
+
+# An output without a type: validation turns it into the general note.
+_NO_ENTRY_TYPE = BackendOutput(entry_type=None, content='', grounded=False)
+
+
+@sensitive_variables('submitted_text')
+def classify_entries_for_parent(
+    membership,
+    submitted_text: str,
+    *,
+    reference_date: datetime.date,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ParentBatchClassification:
+    """Classify an instruction that may request up to ten entries.
+
+    Authorization, the length limit, candidates, and privacy match
+    ``classify_for_parent``. The backend's ``classify_many`` is used when it
+    has one; otherwise its single output is a one-item batch. More than
+    ``MAX_PROPOSALS_PER_INSTRUCTION`` outputs give one ``TOO_MANY_ENTRIES``
+    result. With several outputs, an output without a type or any output
+    that fails validation turns the whole instruction into one general note
+    holding the full text, so no proposal built from rejected output reaches
+    the parent. No rows are written.
+    """
+    if not is_parent(membership):
+        raise PermissionDenied('An active parent membership is required.')
+    if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
+        return _single(ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG))
+
+    candidates = _active_family_members(membership)
+    if isinstance(reference_date, datetime.datetime):
+        reference_date = reference_date.date()
+    request = BackendRequest(
+        submitted_text=submitted_text,
+        allowed_member_names=tuple(member.display_name for member in candidates),
+        reference_date=reference_date,
+        locale=locale,
+        requester_name=membership.display_name,
+    )
+
+    try:
+        outputs = _invoke_backend_many(request, backend)
+    except ClassificationError as error:
+        return _single(error.to_result())
+
+    if not outputs:
+        outputs = (_NO_ENTRY_TYPE,)
+    if len(outputs) > MAX_PROPOSALS_PER_INSTRUCTION:
+        return _single(ClassificationUnavailable(reason=UnavailableReason.TOO_MANY_ENTRIES))
+    if len(outputs) == 1:
+        return ParentBatchClassification(
+            items=(_finish_parent_output(request, outputs[0], candidates),)
+        )
+
+    general_note = ParentBatchClassification(
+        items=(_finish_parent_output(request, _NO_ENTRY_TYPE, candidates),)
+    )
+    if any(output.entry_type is None for output in outputs):
+        return general_note
+    items = tuple(_finish_parent_output(request, output, candidates) for output in outputs)
+    if any(isinstance(item.result, ClassificationUnavailable) for item in items):
+        return general_note
+    return ParentBatchClassification(items=items)
+
+
+def _finish_parent_output(
+    request: BackendRequest, output: BackendOutput, candidates: Sequence[FamilyMember]
+) -> ParentClassification:
+    """The shared per-output parent pipeline.
+
+    The parent's mention is matched first, then the output is validated (a
+    school event needs its subject), then the member is resolved locally.
+    Every parent path (single, batch, correction) ends here.
+    """
+    output = _apply_member_mention(output, candidates)
+    result = classify_output(request, output, require_school_subject=True)
     return _resolve_member(result, candidates)
+
+
+class CorrectionRejection(str, Enum):
+    """Why a free-text correction was not applied; safe to log."""
+
+    TOO_LONG = 'too_long'
+    NOT_APPLIED = 'not_applied'
+    SCHOOL_ITEM_MISMATCH = 'school_item_mismatch'
+
+
+@dataclass(frozen=True)
+class ProposalCorrection:
+    """The outcome of a free-text correction of the proposal on screen.
+
+    When ``applied`` is true, ``outcome`` is the corrected proposal or a
+    follow-up with highlighted fields, and ``changed`` names the corrected
+    fields. Otherwise ``outcome`` is ``None``, ``rejection`` says why, and the
+    caller re-renders the values the parent already has. ``school_item`` is
+    the merged school item that did not fit the merged entry type, set only
+    for ``SCHOOL_ITEM_MISMATCH``.
+    """
+
+    outcome: Optional[ParentClassification]
+    changed: FrozenSet[str] = frozenset()
+    applied: bool = False
+    rejection: Optional[CorrectionRejection] = None
+    school_item: Optional[SchoolItemKind] = None
+
+
+def _not_applied(
+    rejection: CorrectionRejection, school_item: Optional[SchoolItemKind] = None
+) -> ProposalCorrection:
+    return ProposalCorrection(outcome=None, rejection=rejection, school_item=school_item)
+
+
+@sensitive_variables('correction', 'current')
+def correct_proposal_for_parent(
+    membership,
+    current: ProposalValues,
+    correction: str,
+    *,
+    reference_date: datetime.date,
+    current_member: Optional[FamilyMember] = None,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ProposalCorrection:
+    """Apply a free-text ``correction`` to the proposal on screen.
+
+    Authorization, candidates, and privacy match ``classify_for_parent``. The
+    backend is called once with the current values and the correction, never
+    the original instruction. Only the fields it lists in ``changed_fields``
+    are taken from its output; every other value stays exactly as ``current``
+    (including the parent's manual edits). The merged values are validated
+    once. A provider failure, ungrounded or empty output, an unknown person,
+    or a school item that does not fit the merged entry type leaves the
+    proposal unchanged (``applied=False``). ``current_member`` is trusted only
+    when it is an active member of the parent's family. No rows are written.
+    """
+    if not is_parent(membership):
+        raise PermissionDenied('An active parent membership is required.')
+    if (
+        len(correction) > MAX_CORRECTION_LENGTH
+        or len(current.content) > MAX_SUBMITTED_TEXT_LENGTH
+    ):
+        return _not_applied(CorrectionRejection.TOO_LONG)
+
+    candidates = _active_family_members(membership)
+    if isinstance(reference_date, datetime.datetime):
+        reference_date = reference_date.date()
+    member_name = _trusted_member_name(current.member_name, current_member, candidates)
+    current = replace(current, member_name=member_name)
+    request = BackendRequest(
+        submitted_text=correction,
+        allowed_member_names=tuple(member.display_name for member in candidates),
+        reference_date=reference_date,
+        locale=locale,
+        current_proposal=current,
+        correction_text=correction,
+        requester_name=membership.display_name,
+    )
+
+    try:
+        output = _invoke_backend(request, backend)
+    except ClassificationError:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+
+    changed = frozenset(output.changed_fields or ()) & frozenset(CORRECTABLE_FIELDS)
+    if not output.grounded or not changed:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    if 'entry_type' in changed and output.entry_type is None:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+
+    merged = _merge_correction(current, output, changed)
+    if merged.school_subject is not None and len(merged.school_subject) > SCHOOL_SUBJECT_MAX_LENGTH:
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    if merged.school_item is not None and merged.school_item.entry_type != merged.entry_type:
+        # Never drop a school item silently: the parent decides.
+        return _not_applied(CorrectionRejection.SCHOOL_ITEM_MISMATCH, merged.school_item)
+    if 'member_name' in changed:
+        merged = _apply_member_mention(merged, candidates)
+        if merged.member_mention and merged.member_name is None and not merged.member_ambiguous:
+            # The parent named someone who is not in the family.
+            return _not_applied(CorrectionRejection.NOT_APPLIED)
+
+    outcome = _finish_parent_output(request, merged, candidates)
+    if isinstance(outcome.result, ClassificationUnavailable):
+        return _not_applied(CorrectionRejection.NOT_APPLIED)
+    return ProposalCorrection(outcome=outcome, changed=changed, applied=True)
+
+
+def _merge_correction(
+    current: ProposalValues, output: BackendOutput, changed: FrozenSet[str]
+) -> BackendOutput:
+    """Current values, with only the ``changed`` fields taken from ``output``.
+
+    The person (and the parent's mention of them) comes from the output only
+    when the correction changes it, so a stray mention cannot reassign the
+    current member.
+    """
+
+    def pick(name):
+        return getattr(output, name) if name in changed else getattr(current, name)
+
+    member_changed = 'member_name' in changed
+    member_name = output.member_name if member_changed else current.member_name
+    school_subject = pick('school_subject')
+    if 'school_subject' in changed:
+        school_subject = (school_subject or '').strip() or None
+    return BackendOutput(
+        entry_type=pick('entry_type'),
+        content=pick('content'),
+        grounded=output.grounded,
+        date=pick('date'),
+        time=pick('time'),
+        school_item=pick('school_item'),
+        member_name=normalize_member_name(member_name or '') or None,
+        school_subject=school_subject,
+        member_mention=output.member_mention if member_changed else None,
+        member_ambiguous=False,
+    )
 
 
 @sensitive_variables('submitted_text', 'answer')
 def classify_follow_up_answer(
-    user,
+    membership,
     submitted_text: str,
     draft: ClassificationFollowUp,
     answer: str,
@@ -145,11 +421,14 @@ def classify_follow_up_answer(
     question, and the answer. Its output is merged into the draft before a
     single validation: only the fields listed in ``draft.missing_fields`` (and
     ``grounded``) come from the output, so a changed title, type, or echoed
-    name cannot override or veto the draft. ``draft_member`` is the draft's
+    name cannot override or veto the draft. When the member was missing, the
+    answer text itself is matched against the candidates first, so a parent
+    answering "Hanna" is never asked again because the model echoed the
+    instruction's "Hania"; only otherwise is the model's mention used.
+    ``draft_member`` is the draft's
     resolved member; it is dropped unless it is an active member of the
     parent's family. Raises ``ValueError`` if ``draft`` has no missing fields.
     """
-    membership = get_active_membership(user)
     if not is_parent(membership):
         raise PermissionDenied('An active parent membership is required.')
     if (
@@ -178,7 +457,9 @@ def classify_follow_up_answer(
         return ParentClassification(result=error.to_result())
 
     merged = _merge_answer(draft, _known_member_name(draft, draft_member, candidates), output)
-    result = classify_output(request, merged)
+    if set(draft.missing_fields) & _MEMBER_FIELDS:
+        merged = _resolve_answer_member(merged, answer, candidates)
+    result = classify_output(request, merged, require_school_subject=True)
     return _resolve_member(result, candidates)
 
 
@@ -188,12 +469,25 @@ def _known_member_name(
     candidates: Sequence[FamilyMember],
 ) -> Optional[str]:
     """The draft's member name, trusted only for a current family candidate."""
-    if draft_member is None:
-        return draft.member_name
+    return _trusted_member_name(draft.member_name, draft_member, candidates)
+
+
+def _trusted_member_name(
+    member_name: Optional[str],
+    member: Optional[FamilyMember],
+    candidates: Sequence[FamilyMember],
+) -> Optional[str]:
+    """``member``'s current display name if it is a family candidate.
+
+    Without a resolved member the given name is kept (validation still checks
+    it against the allow-list).
+    """
+    if member is None:
+        return member_name
     for candidate in candidates:
-        if candidate.pk == draft_member.pk:
+        if candidate.pk == member.pk:
             return candidate.display_name
-    # A stale or foreign member is dropped, never replaced by the draft name.
+    # A stale or foreign member is dropped, never replaced by the given name.
     return None
 
 
@@ -212,6 +506,56 @@ def _merge_answer(
         time=draft.time,
         school_item=draft.school_item,
         member_name=output.member_name if missing & _MEMBER_FIELDS else member_name,
+        school_subject=(
+            output.school_subject
+            if MissingField.SCHOOL_SUBJECT in missing
+            else draft.school_subject
+        ),
+        member_mention=output.member_mention if missing & _MEMBER_FIELDS else None,
+    )
+
+
+def _resolve_answer_member(
+    output: BackendOutput, answer: str, candidates: Sequence[FamilyMember]
+) -> BackendOutput:
+    """The member named by the answer itself, else the model's mention."""
+    matches = _match_candidates(answer, candidates)
+    if len(matches) == 1:
+        return replace(
+            output,
+            member_name=matches[0].display_name,
+            member_mention=None,
+            member_ambiguous=False,
+        )
+    return _apply_member_mention(output, candidates)
+
+
+def _apply_member_mention(
+    output: BackendOutput, candidates: Sequence[FamilyMember]
+) -> BackendOutput:
+    """Resolve the parent's mention against the active family candidates.
+
+    The parent's words win over the model's ``member_name``: a mention that
+    fits exactly one candidate selects that candidate, one that fits several
+    clears the name and flags ambiguity for validation, and one that fits
+    nobody leaves ``output`` to the exact allow-list check. Only family
+    candidates can ever be selected.
+    """
+    if not output.member_mention:
+        return output
+    matches = _match_candidates(output.member_mention, candidates)
+    if len(matches) == 1:
+        return replace(output, member_name=matches[0].display_name)
+    if len(matches) > 1:
+        return replace(output, member_name=None, member_ambiguous=True)
+    return output
+
+
+def _match_candidates(
+    mention: str, candidates: Sequence[FamilyMember]
+) -> Sequence[FamilyMember]:
+    return match_mention(
+        mention.strip(), candidates, display_name=lambda member: member.display_name
     )
 
 
@@ -235,6 +579,24 @@ def _invoke_backend(
         backend = build_openai_backend(max_retries=max_retries)
     try:
         return backend.classify(request)
+    finally:
+        if owns_backend:
+            backend.close()
+
+
+def _invoke_backend_many(
+    request: BackendRequest, backend: Optional[ClassificationBackend]
+) -> Tuple[BackendOutput, ...]:
+    """Like ``_invoke_backend``, but returns every entry the backend splits out."""
+    owns_backend = backend is None
+    if owns_backend:
+        from .openai_backend import build_openai_backend
+
+        backend = build_openai_backend()
+    try:
+        if isinstance(backend, MultiEntryClassificationBackend):
+            return tuple(backend.classify_many(request))
+        return (backend.classify(request),)
     finally:
         if owns_backend:
             backend.close()
@@ -363,7 +725,8 @@ def classify_for_family(
 
     if output.entry_type is None:
         return general_note()
-    result = classify_output(request, output)
+    # Automation cannot answer a question, so a missing subject is never asked.
+    result = classify_output(request, output, require_school_subject=False)
     if isinstance(result, ClassificationUnavailable):
         return general_note(reason=result.reason)
     if not isinstance(result, ClassificationProposal):

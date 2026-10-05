@@ -383,52 +383,52 @@ No schema or data changes. Rollback is reverting the template, CSS and test file
 
 #### Automated
 
-- [ ] 1.1 Field association tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entry_forms`
-- [ ] 1.2 State gallery tests still pass: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states`
-- [ ] 1.3 Django checks pass: `uv run python manage.py check`
-- [ ] 1.4 No model changes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 Field association tests pass: `uv run python manage.py test entries.tests.test_capture_views entries.tests.test_follow_up_views entries.tests.test_manage_views entries.tests.test_entry_forms` — 462fcba
+- [x] 1.2 State gallery tests still pass: `uv run python manage.py test entries.tests.test_states_view entries.tests.test_manage_states` — 462fcba
+- [x] 1.3 Django checks pass: `uv run python manage.py check` — 462fcba
+- [x] 1.4 No model changes: `uv run python manage.py makemigrations --check --dry-run` — 462fcba
 
 #### Manual
 
 - [ ] 1.5 In the browser, submitting an empty capture form shows the Polish error under the field, and the accessibility inspector shows the textarea described by that error text.
-- [ ] 1.6 On the review step with a past date, the date input's accessible description includes the warning and the readable weekday date.
+- [x] 1.6 On the review step with a past date, the date input's accessible description includes the warning and the readable weekday date.
 
 ### Phase 2: Layout, Focus and Contrast Tokens
 
 #### Automated
 
-- [ ] 2.1 Layout and title tests pass: `uv run python manage.py test family_notes.tests entries.tests.test_manage_views entries.tests.test_capture_views`
-- [ ] 2.2 Child and gallery views still pass: `uv run python manage.py test entries.tests.test_child_views entries.tests.test_child_states_view entries.tests.test_states_view entries.tests.test_manage_states`
-- [ ] 2.3 Django checks pass: `uv run python manage.py check`
+- [x] 2.1 Layout and title tests pass: `uv run python manage.py test family_notes.tests entries.tests.test_manage_views entries.tests.test_capture_views` — 8a7dc23
+- [x] 2.2 Child and gallery views still pass: `uv run python manage.py test entries.tests.test_child_views entries.tests.test_child_states_view entries.tests.test_states_view entries.tests.test_manage_states` — 8a7dc23
+- [x] 2.3 Django checks pass: `uv run python manage.py check` — 8a7dc23
 
 #### Manual
 
 - [ ] 2.4 Pressing Tab once on any covered page reveals "Przejdź do treści", and activating it moves focus into the main content.
-- [ ] 2.5 Tabbing through the capture, follow-up, management list, edit form and child list shows a clearly visible focus outline on every link, button (including "Wyloguj", "Pomiń" and "Dodaj wpis z tekstu"), select, textarea and the "Usuń wpis" disclosure.
-- [ ] 2.6 Input, select and textarea boundaries are clearly visible on the light background, and the page looks otherwise unchanged.
+- [x] 2.5 Tabbing through the capture, follow-up, management list, edit form and child list shows a clearly visible focus outline on every link, button (including "Wyloguj", "Pomiń" and "Dodaj wpis z tekstu"), select, textarea and the "Usuń wpis" disclosure.
+- [x] 2.6 Input, select and textarea boundaries are clearly visible on the light background, and the page looks otherwise unchanged.
 
 ### Phase 3: Automated Accessibility Audit and Written Criteria
 
 #### Automated
 
-- [ ] 3.1 Audit tests pass: `uv run python manage.py test entries.tests.test_accessibility family_notes.test_accessibility`
-- [ ] 3.2 Token contrast test passes: `uv run python manage.py test family_notes.test_tokens_contrast`
-- [ ] 3.3 Deliberate break detected: temporarily restoring `id="{{ field.auto_id }}-error"` in `_field.html` makes `entries.tests.test_accessibility` fail, and reverting makes it pass
-- [ ] 3.4 Full suite passes: `uv run python manage.py test`
-- [ ] 3.5 Django checks pass: `uv run python manage.py check`
-- [ ] 3.6 No model changes: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 3.1 Audit tests pass: `uv run python manage.py test entries.tests.test_accessibility family_notes.test_accessibility` — bd3617e
+- [x] 3.2 Token contrast test passes: `uv run python manage.py test family_notes.test_tokens_contrast` — bd3617e
+- [x] 3.3 Deliberate break detected: temporarily restoring `id="{{ field.auto_id }}-error"` in `_field.html` makes `entries.tests.test_accessibility` fail, and reverting makes it pass — bd3617e
+- [x] 3.4 Full suite passes: `uv run python manage.py test` — bd3617e
+- [x] 3.5 Django checks pass: `uv run python manage.py check` — bd3617e
+- [x] 3.6 No model changes: `uv run python manage.py makemigrations --check --dry-run` — bd3617e
 
 #### Manual
 
-- [ ] 3.7 `context/foundation/accessibility.md` reads clearly and matches the Decisions, and the AGENTS.md bullet points to it
+- [x] 3.7 `context/foundation/accessibility.md` reads clearly and matches the Decisions, and the AGENTS.md bullet points to it
 
 ### Phase 4: Assistive-Technology Verification Pass
 
 #### Manual
 
-- [ ] 4.1 axe DevTools reports no serious or critical violations on each covered page (login, capture states including correction, batch review and progress states, follow-up, parent list/detail/create/edit, child list/detail, account status, 403, 404, `/offline/`)
-- [ ] 4.2 Keyboard only: every covered flow, including delete via the disclosure, skip on the follow-up question and Enter-to-submit in capture, follow-up and „Popraw opis”, completes without a mouse, with visible focus and no focus trap
+- [x] 4.1 axe DevTools reports no serious or critical violations on each covered page (login, capture states including correction, batch review and progress states, follow-up, parent list/detail/create/edit, child list/detail, account status, 403, 404, `/offline/`)
+- [x] 4.2 Keyboard only: every covered flow, including delete via the disclosure, skip on the follow-up question and Enter-to-submit in capture, follow-up and „Popraw opis”, completes without a mouse, with visible focus and no focus trap
 - [ ] 4.3 NVDA + Firefox: page title, headings, field labels, errors, hints (including the Enter hint) and the saved/notice panels are announced in Polish, Enter in focus mode submits the opted-in boxes, the progress running and slow states are each announced once, and invalid re-renders are recognisable from the "Błąd:" title
 - [ ] 4.4 VoiceOver on iOS Safari and TalkBack on Android Chrome: capture → review → confirm and the child list/detail flows complete with correctly announced controls, the TalkBack send key submits, progress running/slow states are announced, and the `/offline/` page reads correctly
-- [ ] 4.5 At 200% zoom and at 320 CSS px width, all covered pages reflow without horizontal scrolling or clipped content, and targets meet 24×24 px or the spacing exception
+- [x] 4.5 At 200% zoom and at 320 CSS px width, all covered pages reflow without horizontal scrolling or clipped content, and targets meet 24×24 px or the spacing exception
 - [ ] 4.6 `a11y-verification.md` is filled in for every flow and matrix column
