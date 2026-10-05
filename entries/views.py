@@ -68,10 +68,10 @@ from .listing import (
     SECTION_UNDATED,
     UPCOMING,
     EntrySection,
-    group_by_assignee,
     group_by_day,
     normalize_list_mode,
     partition_entries,
+    split_by_assignee,
     with_effective_date,
 )
 from .models import Entry
@@ -883,11 +883,9 @@ def _use_synthetic_members(form):
 # --- Parent family entry management (S-02) ---
 
 LIST_MODE_LABELS = {UPCOMING: 'Nadchodzące', PAST: 'Minione'}
-SECTION_LABELS = {
-    SECTION_DATED: 'Z datą',
-    SECTION_UNDATED: 'Bez daty',
-    SECTION_PAST: 'Minione',
-}
+# Day group of the undated upcoming section, shown last (parent and child lists).
+UNDATED_DAY_KEY = 'undated'
+UNDATED_DAY_HEADING = 'Bez daty'
 EMPTY_LIST_MESSAGES = {
     UPCOMING: 'Nie ma nadchodzących wpisów.',
     PAST: 'Nie ma minionych wpisów.',
@@ -926,28 +924,47 @@ def _assignee_heading(member):
     return member.display_name
 
 
-def _index_groups(sections):
-    """Assignee groups (S-08) over the partitioned ``sections``; each is evaluated once."""
-    return [
-        {
-            'key': group.key,
-            'heading': _assignee_heading(group.member),
-            'sections': [
-                {'key': section.key, 'label': SECTION_LABELS[section.key], 'entries': section.entries}
-                for section in group.sections
-            ],
-        }
-        for group in group_by_assignee(sections)
-    ]
+def _index_days(sections, today):
+    """Day groups over the partitioned ``sections`` (each evaluated once), as in
+    the child list; inside a day, assignee sub-groups in S-08 order. The undated
+    upcoming section becomes one final "Bez daty" day."""
+    days = []
+    for section in sections:
+        entries = list(section.entries)
+        if not entries:
+            continue
+        if section.key == SECTION_UNDATED:
+            day_rows = [(UNDATED_DAY_KEY, UNDATED_DAY_HEADING, entries)]
+        else:
+            day_rows = [
+                (rows[0].effective_date.isoformat(), heading, rows)
+                for heading, rows in group_by_day(entries, today)
+            ]
+        days.extend(
+            {
+                'key': key,
+                'heading': heading,
+                'groups': [
+                    {
+                        'key': group.key,
+                        'heading': _assignee_heading(group.member),
+                        'entries': group.entries,
+                    }
+                    for group in split_by_assignee(rows)
+                ],
+            }
+            for key, heading, rows in day_rows
+        )
+    return days
 
 
-def _index_context(mode, sections):
-    groups = _index_groups(sections)
+def _index_context(mode, sections, today):
+    days = _index_days(sections, today)
     return {
         'mode': mode,
         'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
-        'groups': groups,
-        'is_empty': not groups,
+        'days': days,
+        'is_empty': not days,
         'empty_message': EMPTY_LIST_MESSAGES[mode],
     }
 
@@ -966,8 +983,9 @@ def _form_context(form, *, entry=None):
 def index(request):
     mode = normalize_list_mode(request.GET.get('view', ''))
     membership = _require_parent(request)
-    sections = partition_entries(parent_family_entries(membership), mode, timezone.localdate())
-    return render(request, 'entries/manage_index.html', _index_context(mode, sections))
+    today = timezone.localdate()
+    sections = partition_entries(parent_family_entries(membership), mode, today)
+    return render(request, 'entries/manage_index.html', _index_context(mode, sections, today))
 
 
 @require_http_methods(['GET'])
@@ -1079,6 +1097,7 @@ def _synthetic_entry(offset, **fields):
     values.update(fields)
     member = values.pop('member', None)
     entry = Entry(**values)
+    entry.effective_date = entry.date
     if member:
         entry.assigned_member = _states_member(member)
     return entry
@@ -1096,6 +1115,7 @@ def _synthetic_list(mode, sections):
     return _index_context(
         mode,
         [EntrySection(key, entries) for key, entries in sections],
+        STATES_DATE,
     )
 
 
@@ -1126,13 +1146,23 @@ def _manage_state_sections(membership):
             + 'Konstantynopolitańczykowianeczka' * 3
             + ' oraz opis, który musi się zawinąć na wąskim ekranie telefonu.'
         ),
+        member='Tymek',
     )
     undated = _synthetic_entry(4, content='Oddać książkę do biblioteki')
     parent_note = _synthetic_entry(
         7,
         entry_type=EntryType.NOTE.value,
         content='Odebrać paczkę z paczkomatu',
+        date=STATES_DATE,
+        time=datetime.time(16, 0),
         member=STATES_PARENT_NAME,
+    )
+    family_meeting = _synthetic_entry(
+        8,
+        entry_type=EntryType.CALENDAR_EVENT.value,
+        content='Zebranie z wychowawczynią',
+        date=STATES_DATE,
+        time=datetime.time(17, 30),
     )
     past_entry = _synthetic_entry(
         5,
@@ -1180,7 +1210,10 @@ def _manage_state_sections(membership):
             'label': 'Lista: nadchodzące',
             'list': _synthetic_list(
                 UPCOMING,
-                [(SECTION_DATED, [test_entry, trip]), (SECTION_UNDATED, [undated, parent_note, long_note])],
+                [
+                    (SECTION_DATED, [test_entry, parent_note, family_meeting, trip]),
+                    (SECTION_UNDATED, [long_note, undated]),
+                ],
             ),
         },
         {
@@ -1230,14 +1263,14 @@ def _child_list_context(mode, sections, today):
     """Template context for the child list body; ``sections`` are evaluated here.
 
     Dated sections become day groups headed relative to ``today``; the undated
-    section is one group under "Bez daty"."""
+    section is one group under ``UNDATED_DAY_HEADING``."""
     child_sections = []
     for section in sections:
         entries = list(section.entries)
         if not entries:
             continue
         if section.key == SECTION_UNDATED:
-            groups = [{'heading': 'Bez daty', 'entries': entries}]
+            groups = [{'heading': UNDATED_DAY_HEADING, 'entries': entries}]
         else:
             groups = [
                 {'heading': heading, 'entries': rows}

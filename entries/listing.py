@@ -42,12 +42,12 @@ GROUP_FAMILY = 'family'
 
 
 class AssigneeGroup(NamedTuple):
-    """One assignee's rows: ``member`` is ``None`` for the family-wide group;
-    ``sections`` are the non-empty ``EntrySection``s (rows as lists)."""
+    """One assignee's rows within a day: ``member`` is ``None`` for the
+    family-wide group; ``entries`` keeps the input row order."""
 
     key: str
     member: object
-    sections: list
+    entries: list
 
 
 def normalize_list_mode(value):
@@ -167,30 +167,19 @@ def _assignee_group_order(member):
     return (0 if member.role == FamilyMember.Role.CHILD else 1, member.pk)
 
 
-def group_by_assignee(sections):
-    """Split ordered ``sections`` (from ``partition_entries``) into assignee groups.
+def split_by_assignee(entries):
+    """Split one day's ordered ``entries`` into assignee sub-groups (S-08 order).
 
-    Each section is evaluated once. Returns ``AssigneeGroup``s ordered children
-    (active or not) by pk, then parents by pk, then the ``GROUP_FAMILY`` group of
-    unassigned entries. A group keeps only its non-empty sections, in input
-    section order, and each section keeps the input row order. Every row lands
-    in exactly one group. Rows need ``assigned_member`` loaded (use
-    ``select_related``) to avoid a query per row.
+    Returns ``AssigneeGroup``s ordered children (active or not) by pk, then
+    parents by pk, then the ``GROUP_FAMILY`` group of unassigned entries. Each
+    group keeps the input row order, and every row lands in exactly one group.
+    Rows need ``assigned_member`` loaded (use ``select_related``) to avoid a
+    query per row.
     """
     buckets = {}
-    for section in sections:
-        for entry in section.entries:
-            member = entry.assigned_member
-            key = GROUP_FAMILY if member is None else f'member-{member.pk}'
-            bucket = buckets.setdefault(key, (member, {}))
-            bucket[1].setdefault(section.key, []).append(entry)
-    section_keys = [section.key for section in sections]
+    for entry in entries:
+        member = entry.assigned_member
+        key = GROUP_FAMILY if member is None else f'member-{member.pk}'
+        buckets.setdefault(key, (member, []))[1].append(entry)
     ordered = sorted(buckets.items(), key=lambda item: _assignee_group_order(item[1][0]))
-    return [
-        AssigneeGroup(
-            key,
-            member,
-            [EntrySection(name, rows[name]) for name in section_keys if name in rows],
-        )
-        for key, (member, rows) in ordered
-    ]
+    return [AssigneeGroup(key, member, rows) for key, (member, rows) in ordered]

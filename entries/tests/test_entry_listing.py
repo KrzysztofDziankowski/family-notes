@@ -18,12 +18,11 @@ from entries.listing import (
     SECTION_PAST,
     SECTION_UNDATED,
     UPCOMING,
-    EntrySection,
     day_heading,
-    group_by_assignee,
     group_by_day,
     normalize_list_mode,
     partition_entries,
+    split_by_assignee,
 )
 from entries.models import Entry
 
@@ -317,8 +316,8 @@ class GroupByDayTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(group_by_day([], TODAY), [])
 
 
-class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
-    """S-08: assignee groups over partitioned sections (children, parents, family)."""
+class SplitByAssigneeTests(TwoParentFixtureMixin, TestCase):
+    """S-08: one day's rows split into assignee sub-groups (children, parents, family)."""
 
     def _entry(self, content, member=None, date=None, time=None):
         return Entry.objects.create(
@@ -330,56 +329,51 @@ class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
             assigned_member=member,
         )
 
-    def _sections(self, mode):
-        return partition_entries(
+    def _rows(self, mode, section=0):
+        sections = partition_entries(
             Entry.objects.select_related('assigned_member'), mode, TODAY
         )
+        return list(sections[section].entries)
 
     def _shape(self, groups):
-        return [
-            (group.key, [(s.key, [e.content for e in s.entries]) for s in group.sections])
-            for group in groups
-        ]
+        return [(group.key, [e.content for e in group.entries]) for group in groups]
 
     def _key(self, member):
         return f'member-{member.pk}'
 
-    def test_mixed_assignees_group_children_then_parents_then_family(self):
+    def test_one_day_splits_children_then_parents_then_family(self):
         # Created out of group order, so the order comes from roles and pks.
-        self._entry('family-tomorrow', date=TOMORROW)
-        self._entry('pawel-undated', self.second_parent)
-        self._entry('ewa-today', self.parent, date=TODAY)
-        self._entry('ania-today', self.other_child, date=TODAY, time=datetime.time(8, 0))
-        self._entry('michal-tomorrow', self.child, date=TOMORROW)
-        self._entry('michal-today', self.child, date=TODAY, time=datetime.time(9, 0))
-        self._entry('michal-undated', self.child)
-        self._entry('family-undated')
-        self._entry('michal-yesterday', self.child, date=YESTERDAY)
-        self._entry('pawel-yesterday', self.second_parent, date=YESTERDAY)
-        self._entry('family-yesterday', date=YESTERDAY)
+        self._entry('family-9', date=TODAY, time=datetime.time(9, 0))
+        self._entry('pawel-7', self.second_parent, date=TODAY, time=datetime.time(7, 0))
+        self._entry('ewa-12', self.parent, date=TODAY, time=datetime.time(12, 0))
+        self._entry('ania-8', self.other_child, date=TODAY, time=datetime.time(8, 0))
+        self._entry('michal-10', self.child, date=TODAY, time=datetime.time(10, 0))
+        self._entry('michal-6', self.child, date=TODAY, time=datetime.time(6, 0))
+        self._entry('family-untimed', date=TODAY)
 
         self.assertEqual(
-            self._shape(group_by_assignee(self._sections(UPCOMING))),
+            self._shape(split_by_assignee(self._rows(UPCOMING))),
             [
-                (self._key(self.child), [
-                    (SECTION_DATED, ['michal-today', 'michal-tomorrow']),
-                    (SECTION_UNDATED, ['michal-undated']),
-                ]),
-                (self._key(self.other_child), [(SECTION_DATED, ['ania-today'])]),
-                (self._key(self.parent), [(SECTION_DATED, ['ewa-today'])]),
-                (self._key(self.second_parent), [(SECTION_UNDATED, ['pawel-undated'])]),
-                (GROUP_FAMILY, [
-                    (SECTION_DATED, ['family-tomorrow']),
-                    (SECTION_UNDATED, ['family-undated']),
-                ]),
+                (self._key(self.child), ['michal-6', 'michal-10']),
+                (self._key(self.other_child), ['ania-8']),
+                (self._key(self.parent), ['ewa-12']),
+                (self._key(self.second_parent), ['pawel-7']),
+                (GROUP_FAMILY, ['family-9', 'family-untimed']),
             ],
         )
+
+    def test_past_rows_keep_their_descending_order_inside_a_group(self):
+        self._entry('family-early', date=YESTERDAY, time=datetime.time(7, 0))
+        self._entry('pawel', self.second_parent, date=YESTERDAY)
+        self._entry('family-late', date=YESTERDAY, time=datetime.time(19, 0))
+        self._entry('michal', self.child, date=YESTERDAY, time=datetime.time(12, 0))
+
         self.assertEqual(
-            self._shape(group_by_assignee(self._sections(PAST))),
+            self._shape(split_by_assignee(self._rows(PAST))),
             [
-                (self._key(self.child), [(SECTION_PAST, ['michal-yesterday'])]),
-                (self._key(self.second_parent), [(SECTION_PAST, ['pawel-yesterday'])]),
-                (GROUP_FAMILY, [(SECTION_PAST, ['family-yesterday'])]),
+                (self._key(self.child), ['michal']),
+                (self._key(self.second_parent), ['pawel']),
+                (GROUP_FAMILY, ['family-late', 'family-early']),
             ],
         )
 
@@ -387,7 +381,7 @@ class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
         self._entry('michal', self.child)
         self._entry('family')
 
-        groups = group_by_assignee(self._sections(UPCOMING))
+        groups = split_by_assignee(self._rows(UPCOMING, section=1))
 
         self.assertEqual([group.member for group in groups], [self.child, None])
 
@@ -397,7 +391,7 @@ class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
         self._entry('jolanta', self.inactive_parent)
         self._entry('michal', self.child)
 
-        groups = group_by_assignee(self._sections(UPCOMING))
+        groups = split_by_assignee(self._rows(UPCOMING, section=1))
 
         self.assertEqual(
             [group.key for group in groups],
@@ -409,59 +403,42 @@ class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
             ],
         )
 
-    def test_group_with_only_undated_rows_omits_the_empty_dated_section(self):
-        self._entry('ania-undated', self.other_child)
-        self._entry('michal-today', self.child, date=TODAY)
+    def test_unassigned_entry_alone_forms_the_family_group(self):
+        self._entry('family', date=TODAY)
 
         self.assertEqual(
-            self._shape(group_by_assignee(self._sections(UPCOMING))),
-            [
-                (self._key(self.child), [(SECTION_DATED, ['michal-today'])]),
-                (self._key(self.other_child), [(SECTION_UNDATED, ['ania-undated'])]),
-            ],
+            self._shape(split_by_assignee(self._rows(UPCOMING))), [(GROUP_FAMILY, ['family'])]
         )
 
     def test_empty_input_has_no_groups(self):
-        self.assertEqual(group_by_assignee(self._sections(UPCOMING)), [])
-        self.assertEqual(group_by_assignee([]), [])
+        self.assertEqual(split_by_assignee([]), [])
 
-    def test_order_within_groups_matches_partition_and_rows_appear_once(self):
+    def test_order_within_groups_matches_input_and_rows_appear_once(self):
         members = [self.child, None, self.second_parent, self.other_child, self.parent]
         for index in range(15):
             member = members[index % len(members)]
-            day = TODAY + datetime.timedelta(days=(7 - index) % 4)
-            self._entry(f'dated-{index}', member, date=day, time=datetime.time(8 + index % 3, 0))
-            self._entry(f'undated-{index}', member)
-            self._entry(f'past-{index}', member, date=YESTERDAY - datetime.timedelta(days=index % 3))
+            self._entry(f'today-{index}', member, date=TODAY, time=datetime.time(8 + index % 3, 0))
 
-        for mode in (UPCOMING, PAST):
-            with self.subTest(mode=mode):
-                sections = self._sections(mode)
-                expected = {s.key: [e.pk for e in s.entries] for s in sections}
-                groups = group_by_assignee(self._sections(mode))
+        rows = self._rows(UPCOMING)
+        groups = split_by_assignee(rows)
 
-                grouped = [e.pk for g in groups for s in g.sections for e in s.entries]
-                self.assertEqual(len(grouped), len(set(grouped)))
-                self.assertEqual(
-                    sorted(grouped), sorted(pk for pks in expected.values() for pk in pks)
-                )
-                for group in groups:
-                    for section in group.sections:
-                        pks = [e.pk for e in section.entries]
-                        self.assertEqual(
-                            pks, [pk for pk in expected[section.key] if pk in set(pks)]
-                        )
-                        assignees = {e.assigned_member_id for e in section.entries}
-                        self.assertEqual(len(assignees), 1)
+        grouped = [e.pk for g in groups for e in g.entries]
+        self.assertEqual(sorted(grouped), sorted(e.pk for e in rows))
+        self.assertEqual(len(grouped), len(set(grouped)))
+        expected = [e.pk for e in rows]
+        for group in groups:
+            pks = [e.pk for e in group.entries]
+            self.assertEqual(pks, [pk for pk in expected if pk in set(pks)])
+            self.assertEqual(len({e.assigned_member_id for e in group.entries}), 1)
 
-    def test_sections_are_evaluated_once_without_extra_queries(self):
+    def test_split_adds_no_queries(self):
         self._entry('michal', self.child, date=TODAY)
-        self._entry('ewa', self.parent)
-        self._entry('family')
-        sections = self._sections(UPCOMING)
+        self._entry('ewa', self.parent, date=TODAY)
+        self._entry('family', date=TODAY)
+        rows = self._rows(UPCOMING)
 
-        with self.assertNumQueries(len(sections)):
-            group_by_assignee(sections)
+        with self.assertNumQueries(0):
+            split_by_assignee(rows)
 
     def test_helper_does_not_scope_by_family(self):
         Entry.objects.create(
@@ -472,7 +449,7 @@ class GroupByAssigneeTests(TwoParentFixtureMixin, TestCase):
         )
         rows = list(Entry.objects.select_related('assigned_member'))
 
-        groups = group_by_assignee([EntrySection(SECTION_UNDATED, rows)])
+        groups = split_by_assignee(rows)
 
         self.assertEqual(
             [group.key for group in groups], [self._key(self.other_family_child)]

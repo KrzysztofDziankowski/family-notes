@@ -1,22 +1,23 @@
 {% comment %}
-Parent family entry list body. Parameters: mode, modes, groups, is_empty, empty_message.
-groups: list of {key, heading, sections}, one per assignee (children, parents, then
-"Cała rodzina"); each section is {key, label, entries} and is never empty. Section labels
-are shown only in upcoming mode, where "Z datą" and "Bez daty" can both appear.
+Parent family entry list body. Parameters: mode, modes, days, is_empty, empty_message.
+days: list of {key, heading, groups}, one per day as in the child list (key is the ISO date
+or "undated" for the final "Bez daty" group in upcoming mode); each day's groups are
+{key, heading, entries}, one per assignee (children, parents, then "Cała rodzina"), never
+empty. Rows hide the date and assignee: the day and assignee headings carry them.
 {% endcomment %}
 {% include "entries/_list_modes.html" with url_name="entries:index" %}
 {% if is_empty %}
     <p class="fn-empty fn-muted" data-state-part="empty-{{ mode }}">{{ empty_message }}</p>
 {% else %}
-    {% for group in groups %}
-    <section data-assignee-group="{{ group.key }}">
-        <h2 class="fn-manage-section-title">{{ group.heading }}</h2>
-        {% for section in group.sections %}
-        <section data-list-section="{{ section.key }}">
-            {% if mode == "upcoming" %}<h3 class="fn-manage-subsection-title">{{ section.label }}</h3>{% endif %}
+    {% for day in days %}
+    <section data-day-group="{{ day.key }}">
+        <h2 class="fn-day-heading">{{ day.heading }}</h2>
+        {% for group in day.groups %}
+        <section data-assignee-group="{{ group.key }}">
+            <h3 class="fn-manage-subsection-title">{{ group.heading }}</h3>
             <ul class="fn-entry-list">
-                {% for entry in section.entries %}
-                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" edit_url_name="entries:edit" hide_assignee=True %}
+                {% for entry in group.entries %}
+                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" edit_url_name="entries:edit" hide_assignee=True hide_date=True %}
                 {% endfor %}
             </ul>
         </section>

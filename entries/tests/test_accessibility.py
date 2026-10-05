@@ -6,6 +6,7 @@ See ``context/foundation/accessibility.md``; a new product page adds a case here
 """
 
 import datetime
+import re
 import uuid
 from unittest import mock
 
@@ -274,11 +275,23 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
             with self.subTest(name):
                 assert_accessible(self, self.client.get(reverse('entries:index'), {'view': view}))
         self.entry('Zebranie', days=2, assigned_member=self.child)
+        self.entry('Odebrać paczkę', days=2, assigned_member=self.parent)
+        self.entry('Wynieść śmieci', days=2)
         self.entry('Kupić blok')
         self.entry('Zapłacić za obiady', days=-3, assigned_member=self.parent)
-        for view in ('upcoming', 'past'):
+        self.entry('Oddać bilety', days=-3)
+        # S-08: h1 page title, h2 per day, h3 per assignee within the day.
+        expected_headings = {
+            'upcoming': ['h1', 'h2', 'h3', 'h3', 'h3', 'h2', 'h3'],
+            'past': ['h1', 'h2', 'h3', 'h3'],
+        }
+        for view, headings in expected_headings.items():
             with self.subTest(view=view):
-                assert_accessible(self, self.client.get(reverse('entries:index'), {'view': view}))
+                response = self.client.get(reverse('entries:index'), {'view': view})
+                assert_accessible(self, response)
+                html = response.content.decode()
+                main = html[html.index('<main'):html.index('</main>')]
+                self.assertEqual(re.findall(r'<(h[1-6])\b', main), headings)
 
     def test_detail_and_open_delete_disclosure(self):
         entry = self.entry('Zebranie', days=2, assigned_member=self.child)

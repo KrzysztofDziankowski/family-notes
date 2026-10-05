@@ -57,9 +57,10 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         expectations = {
-            'list_upcoming': ['data-list-section="dated"', 'data-list-section="undated"',
-                              'aria-current="page">Nadchodzące<', 'Bez daty</span>'],
-            'list_past': ['data-list-section="past"', 'aria-current="page">Minione<'],
+            'list_upcoming': ['data-day-group="2026-10-05"', 'data-day-group="undated"',
+                              'aria-current="page">Nadchodzące<',
+                              '<h2 class="fn-day-heading">Bez daty</h2>'],
+            'list_past': ['data-day-group="2026-09-21"', 'aria-current="page">Minione<'],
             'list_empty': ['Nie ma nadchodzących wpisów.'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
                               '<dt>Przedmiot</dt>', 'historia'],
@@ -117,48 +118,69 @@ class ParentAssigneeGalleryTests(FamilyFixtureMixin, TestCase):
                 self.assertIn(option, state_html(html, name))
         upcoming = state_html(html, 'list_upcoming')
         self.assertIn('Odebrać paczkę z paczkomatu', upcoming)
-        # S-08: the assignee is named by the row's group heading, not the row.
+        # S-08: the assignee is named by the row's sub-heading, not the row.
         group = assignee_group_of(upcoming, 'Odebrać paczkę z paczkomatu')
-        self.assertIn('<h2 class="fn-manage-section-title">Marta</h2>', group)
+        self.assertIn('<h3 class="fn-manage-subsection-title">Marta</h3>', group)
 
 
+DAY_PATTERN = re.compile(r'data-day-group="([\w-]+)"')
+DAY_HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading">([^<]*)</h2>')
 GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
-HEADING_PATTERN = re.compile(r'<h2 class="fn-manage-section-title">([^<]*)</h2>')
+HEADING_PATTERN = re.compile(r'<h3 class="fn-manage-subsection-title">([^<]*)</h3>')
+
+
+def _enclosing_block(html, marker, text):
+    position = html.index(text)
+    start = html.rindex(marker, 0, position)
+    end = html.find(marker, position)
+    return html[start:end if end != -1 else len(html)]
 
 
 def assignee_group_of(html, text):
     """The ``data-assignee-group`` block that contains ``text``."""
-    position = html.index(text)
-    start = html.rindex('data-assignee-group="', 0, position)
-    end = html.find('data-assignee-group="', position)
-    return html[start:end if end != -1 else len(html)]
+    return _enclosing_block(html, 'data-assignee-group="', text)
+
+
+def day_group_of(html, text):
+    """The ``data-day-group`` block that contains ``text``."""
+    return _enclosing_block(html, 'data-day-group="', text)
 
 
 class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
-    """S-08: the gallery lists show assignee groups for the screenshot gate."""
+    """S-08: the gallery lists group by day, then by assignee, for the screenshot gate."""
 
     @override_settings(DEBUG=True)
-    def test_upcoming_state_groups_children_then_parent_then_family(self):
+    def test_upcoming_state_groups_days_then_children_parent_family(self):
         self.client.force_login(self.parent.user)
         html = self.client.get(STATES_URL).content.decode()
 
         upcoming = state_html(html, 'list_upcoming')
+        self.assertEqual(DAY_PATTERN.findall(upcoming), ['2026-10-05', '2026-10-07', 'undated'])
+        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming), ['Dziś', 'Środa', 'Bez daty'])
         self.assertEqual(
             GROUP_PATTERN.findall(upcoming),
-            ['member-900101', 'member-900102', 'member-900103', 'family'],
+            ['member-900101', 'member-900103', 'family', 'member-900102', 'member-900102', 'family'],
         )
         self.assertEqual(
-            HEADING_PATTERN.findall(upcoming), ['Kasia', 'Tymek', 'Marta', 'Cała rodzina']
+            HEADING_PATTERN.findall(upcoming),
+            ['Kasia', 'Marta', 'Cała rodzina', 'Tymek', 'Tymek', 'Cała rodzina'],
         )
-        for text, heading in (
-            ('Sprawdzian z historii o średniowieczu', 'Kasia'),
-            ('Wycieczka klasowa do muzeum techniki', 'Tymek'),
-            ('Oddać książkę do biblioteki', 'Cała rodzina'),
+        for text, day, heading in (
+            ('Sprawdzian z historii o średniowieczu', 'Dziś', 'Kasia'),
+            ('Odebrać paczkę z paczkomatu', 'Dziś', 'Marta'),
+            ('Zebranie z wychowawczynią', 'Dziś', 'Cała rodzina'),
+            ('Wycieczka klasowa do muzeum techniki', 'Środa', 'Tymek'),
+            ('Oddać książkę do biblioteki', 'Bez daty', 'Cała rodzina'),
         ):
             with self.subTest(text=text):
-                group = assignee_group_of(upcoming, text)
-                self.assertIn(f'<h2 class="fn-manage-section-title">{heading}</h2>', group)
-        self.assertIn('<h3 class="fn-manage-subsection-title">Bez daty</h3>', upcoming)
+                self.assertIn(
+                    f'<h2 class="fn-day-heading">{day}</h2>', day_group_of(upcoming, text)
+                )
+                self.assertIn(
+                    f'<h3 class="fn-manage-subsection-title">{heading}</h3>',
+                    assignee_group_of(upcoming, text),
+                )
+        self.assertNotIn('fn-manage-section-title', upcoming)
 
     @override_settings(DEBUG=True)
     def test_past_and_empty_states_keep_their_shape(self):
@@ -166,6 +188,9 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         past = state_html(html, 'list_past')
+        self.assertEqual(DAY_PATTERN.findall(past), ['2026-09-21'])
         self.assertEqual(GROUP_PATTERN.findall(past), ['family'])
-        self.assertNotIn('fn-manage-subsection-title', past)
-        self.assertEqual(GROUP_PATTERN.findall(state_html(html, 'list_empty')), [])
+        self.assertEqual(HEADING_PATTERN.findall(past), ['Cała rodzina'])
+        empty = state_html(html, 'list_empty')
+        self.assertEqual(DAY_PATTERN.findall(empty), [])
+        self.assertEqual(GROUP_PATTERN.findall(empty), [])

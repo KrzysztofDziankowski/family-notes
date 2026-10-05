@@ -310,7 +310,7 @@ main[tabindex="-1"]:focus {
   margin: var(--fn-space-3) 0 var(--fn-space-2);
 }
 
-/* Section label inside an assignee group of the parent list (S-08). */
+/* Assignee sub-heading inside a day group of the parent list (S-08). */
 .fn-manage-subsection-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -390,7 +390,7 @@ main[tabindex="-1"]:focus {
   margin-bottom: var(--fn-space-3);
 }
 
-/* Child view (S-03) */
+/* Day heading: child view (S-03) and parent list (S-08) */
 .fn-day-heading {
   font-size: 1rem;
   color: var(--fn-color-text-strong);

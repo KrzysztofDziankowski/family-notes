@@ -34,6 +34,10 @@
 - S-14: any parent may reactivate a deactivated parent after a confirmation.
 - S-15: one parent may still demote another; the demoted parent sees a notice, and the operator has a recovery runbook.
 
+## Post-implementation decisions (2026-10-05)
+
+- S-08: parent list groups by day first (like the child view), then by assignee within each day.
+
 ## Still open
 
 - **Activation:** M-2 can be adopted into `roadmap.md` only after M-1 `first-family-capture-loop` is finished or abandoned.

@@ -245,14 +245,20 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(response, '<span>09:00</span>', html=True)
         self.assertNotContains(response, 'Bez daty')
 
-    def test_parent_list_keeps_full_dates_on_rows(self):
+    def test_parent_list_uses_the_same_day_headings(self):
+        # Owner request 2026-10-05 (S-08): the parent list groups by day like
+        # the child view, so its rows also show only the time. Only this
+        # class's fixed-date rows stay, so the headings are deterministic.
+        Entry.objects.exclude(assigned_member=self.child).delete()
         self.client.force_login(self.parent.user)
 
         response = self.client.get(PARENT_LIST_URL)
+        past = self.client.get(PARENT_LIST_URL, {'view': 'past'})
 
-        self.assertNotContains(response, 'fn-day-heading')
-        self.assertContains(response, 'poniedziałek, 28 września 2026, 08:15')
-        self.assertContains(response, 'wtorek, 29 września 2026')
+        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Bez daty'])
+        self.assertEqual(self.headings(past), ['Wczoraj', 'Piątek, 18 września'])
+        self.assertContains(response, '<span>08:15</span>', html=True)
+        self.assertNotContains(response, 'września')
 
 
 class ChildDetailTests(ChildViewFixtureMixin, TestCase):
