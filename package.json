@@ -1,0 +1,11 @@
+{
+  "name": "family-notes-e2e",
+  "private": true,
+  "description": "Playwright E2E tests only; the app itself is Django (see pyproject.toml).",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

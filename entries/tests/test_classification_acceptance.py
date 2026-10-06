@@ -1234,9 +1234,15 @@ class RepositoryHygieneTests(SimpleTestCase):
         self.assertEqual(sorted(set(findings)), [])
 
     def test_no_payload_or_family_text_fixtures_are_committed(self):
-        # Harness configuration is not a captured family/provider fixture.
-        # contents() still scans these files for payloads and provider keys.
-        hook_configs = {'.codex/hooks.json', '.claude/settings.json'}
+        # Harness and E2E tooling configuration is not a captured family/provider
+        # fixture. contents() still scans these files for payloads and provider keys.
+        hook_configs = {
+            '.codex/hooks.json',
+            '.claude/settings.json',
+            '.playwright/cli.config.json',
+            'package-lock.json',
+            'package.json',
+        }
         fixture_files = [
             relative
             for relative in self.paths
