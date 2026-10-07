@@ -193,20 +193,20 @@ Migration only alters choices and a check constraint; existing rows keep valid k
 
 #### Automated
 
-- [x] 1.1 Matching unit tests pass: `uv run python manage.py test entries.tests.test_eduvulcan_dedup`
-- [x] 1.2 Unit tests cover: both user examples in both arrival orders, equal-rank re-send, homework not merged with exams, unassigned exam merge with child suffix, grade duplicate same capture day vs different day, timetable change duplicate, manual entry ignored, different subject/date/child not matched
-- [x] 1.3 Upgrade service tests pass (rejects manual entries and non-exam kinds): `uv run python manage.py test entries.tests.test_entry_service`
-- [x] 1.4 Migration check is clean: `uv run python manage.py makemigrations --check --dry-run`
-- [x] 1.5 Django checks pass: `uv run python manage.py check`
+- [x] 1.1 Matching unit tests pass: `uv run python manage.py test entries.tests.test_eduvulcan_dedup` — fc8c939
+- [x] 1.2 Unit tests cover: both user examples in both arrival orders, equal-rank re-send, homework not merged with exams, unassigned exam merge with child suffix, grade duplicate same capture day vs different day, timetable change duplicate, manual entry ignored, different subject/date/child not matched — fc8c939
+- [x] 1.3 Upgrade service tests pass (rejects manual entries and non-exam kinds): `uv run python manage.py test entries.tests.test_entry_service` — fc8c939
+- [x] 1.4 Migration check is clean: `uv run python manage.py makemigrations --check --dry-run` — fc8c939
+- [x] 1.5 Django checks pass: `uv run python manage.py check` — fc8c939
 
 ### Phase 2: Conversion Integration
 
 #### Automated
 
-- [ ] 2.1 Conversion dedup tests pass: `uv run python manage.py test entries.tests.test_conversion_dedup`
-- [ ] 2.2 Tests cover: Kartkówka→Sprawdzian leaves one entry "Sprawdzian: Biologia" with `school_item=test`; Praca klasowa→Kartkówka leaves "Praca klasowa: Biologia"; exact re-send on a later day with a new notification id yields one entry and a `duplicate` output; retry of a merged notification creates nothing new; parent-deleted entry is recreated by a re-send; manual entry with identical text is untouched and does not block creation; another family's identical entry does not block creation
-- [ ] 2.3 Full EduVulcan suites stay green: `uv run python manage.py test entries`
-- [ ] 2.4 Migration check and Django checks pass: `uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check`
+- [x] 2.1 Conversion dedup tests pass: `uv run python manage.py test entries.tests.test_conversion_dedup`
+- [x] 2.2 Tests cover: Kartkówka→Sprawdzian leaves one entry "Sprawdzian: Biologia" with `school_item=test`; Praca klasowa→Kartkówka leaves "Praca klasowa: Biologia"; exact re-send on a later day with a new notification id yields one entry and a `duplicate` output; retry of a merged notification creates nothing new; parent-deleted entry is recreated by a re-send; manual entry with identical text is untouched and does not block creation; another family's identical entry does not block creation
+- [x] 2.3 Full EduVulcan suites stay green: `uv run python manage.py test entries`
+- [x] 2.4 Migration check and Django checks pass: `uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check`
 
 #### Manual
 
