@@ -471,6 +471,21 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'family_notes' / 'static']
 STATIC_ROOT = Path(os.getenv('DJANGO_STATIC_ROOT', BASE_DIR / 'staticfiles'))
 
+# Outside DEBUG, collectstatic writes content-hashed copies (tokens.3f9a1c.css) and
+# {% static %} links to them, so a release that changes a file changes its URL and
+# browsers cannot keep a stale copy under nginx's static expiry. DEBUG (local
+# runserver, the test suite, E2E) keeps plain names and needs no collectstatic.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if DEBUG
+            else 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+        ),
+    },
+}
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
