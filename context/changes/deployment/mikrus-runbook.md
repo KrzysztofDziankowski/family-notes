@@ -510,6 +510,17 @@ server {
 }
 ```
 
+Static files are content-hashed outside DEBUG (`ManifestStaticFilesStorage`):
+`collectstatic` writes `css/tokens.<hash>.css` next to `css/tokens.css` plus
+`staticfiles.json`, and pages link only to the hashed names. A release that
+changes CSS therefore changes its URL, so `expires` cannot leave browsers on the
+previous release's styles. Old hashed files stay in the shared static root
+(`collectstatic` runs without `--clear`), so pages already open keep working.
+After a `rollback`, the older code reads the newest `staticfiles.json` in that
+shared root: it gets the newer CSS, as before hashing, and a file the newer
+release removed raises a server error until `collectstatic` runs from the
+rolled-back release.
+
 Enable only the intended site and validate before reloading:
 
 ```bash
