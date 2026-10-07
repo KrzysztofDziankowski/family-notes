@@ -453,9 +453,29 @@ main[tabindex="-1"]:focus {
   font-size: 0.875em;
 }
 
-@media (min-width: 64rem) {
+/* Seven columns are narrow (about 10rem each inside the 1200px container): the day box tightens its type and row padding
+   so ordinary words such as "października" fit on one line. */
+@media (min-width: 80rem) {
   .fn-calendar {
     grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  /* Pico raises the root size to 20px here, so 0.75rem is 15px. */
+  .fn-calendar-day {
+    font-size: 0.75rem;
+  }
+
+  .fn-calendar-day .fn-day-heading {
+    font-size: 1em;
+  }
+
+  .fn-calendar-day .fn-manage-subsection-title {
+    font-size: 0.875em;
+  }
+
+  .fn-calendar-day .fn-entry-row {
+    padding: var(--fn-space-1) var(--fn-space-2);
+    font-size: 1em;
   }
 }
 

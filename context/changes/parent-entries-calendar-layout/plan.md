@@ -246,12 +246,12 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Automated
 
-- [x] 2.1 Template tests assert exactly 14 ordered day boxes for each window.
-- [x] 2.2 Tests assert relative full-date headings, a regular weekday heading, and a cross-year heading.
-- [x] 2.3 Tests assert populated-day assignee grouping and exactly-once entry rendering.
-- [x] 2.4 Tests assert `Brak wpisów` for empty dates.
-- [x] 2.5 Accessibility tests preserve one h1, sequential h2/h3 hierarchy, labelled lists, and Polish navigation labels.
-- [x] 2.6 Token/style tests reject literal colors and horizontal-overflow regressions.
+- [x] 2.1 Template tests assert exactly 14 ordered day boxes for each window. — 08b463c
+- [x] 2.2 Tests assert relative full-date headings, a regular weekday heading, and a cross-year heading. — 08b463c
+- [x] 2.3 Tests assert populated-day assignee grouping and exactly-once entry rendering. — 08b463c
+- [x] 2.4 Tests assert `Brak wpisów` for empty dates. — 08b463c
+- [x] 2.5 Accessibility tests preserve one h1, sequential h2/h3 hierarchy, labelled lists, and Polish navigation labels. — 08b463c
+- [x] 2.6 Token/style tests reject literal colors and horizontal-overflow regressions. — 08b463c
 
 #### Manual
 
@@ -264,11 +264,11 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Automated
 
-- [ ] 3.1 Focused parent list, state-gallery, and accessibility tests pass.
-- [ ] 3.2 Relevant listing, family-isolation, access, and token/style tests pass.
-- [ ] 3.3 `uv run python manage.py check` passes.
-- [ ] 3.4 `uv run python manage.py makemigrations --check --dry-run` reports no model changes.
-- [ ] 3.5 The focused Playwright grouping test passes when the existing E2E environment is available.
+- [x] 3.1 Focused parent list, state-gallery, and accessibility tests pass.
+- [x] 3.2 Relevant listing, family-isolation, access, and token/style tests pass.
+- [x] 3.3 `uv run python manage.py check` passes.
+- [x] 3.4 `uv run python manage.py makemigrations --check --dry-run` reports no model changes.
+- [x] 3.5 The focused Playwright grouping test passes when the existing E2E environment is available.
 
 #### Manual
 
