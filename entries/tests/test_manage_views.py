@@ -31,6 +31,7 @@ ROW_PATTERN = re.compile(r'data-entry-row="(\d+)"')
 DAY_PATTERN = re.compile(r'data-day-group="([\w-]+)"')
 GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
 DAY_HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading">([^<]*)</h2>')
+EMPTY_DAY = '>Brak wpisów</p>'
 GROUP_HEADING_PATTERN = re.compile(r'<h3 class="fn-manage-subsection-title">([^<]*)</h3>')
 
 
@@ -256,19 +257,77 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
 
 
 class EmptyIndexTests(ManageViewMixin, TestCase):
-    def test_each_mode_has_a_distinct_empty_state(self):
+    def test_empty_fortnight_still_renders_fourteen_empty_day_boxes(self):
         self.entry(FOREIGN_SENTINEL, family=self.other_family, date=self.today)
+        for view, offsets in (('upcoming', range(14)), ('past', range(-14, 0))):
+            with self.subTest(view=view):
+                response = self.client.get(INDEX_URL, {'view': view})
+                html = response.content.decode()
+
+                self.assertEqual(
+                    DAY_PATTERN.findall(html),
+                    [self.days(offset).isoformat() for offset in offsets],
+                )
+                self.assertEqual(html.count(EMPTY_DAY), 14)
+                self.assertEqual(html.count('fn-calendar-day fn-calendar-day--empty'), 14)
+                self.assertNotContains(response, 'data-entry-row')
+                self.assertNotContains(response, FOREIGN_SENTINEL)
+                self.assertNotContains(response, 'fn-empty')
+                self.assertContains(response, f'data-state-part="calendar-{view}"')
+
+
+class CalendarPresentationTests(ManageViewMixin, TestCase):
+    def test_only_dates_without_entries_show_brak_wpisow(self):
+        first = self.entry('Pierwszy', date=self.days(1), assigned_member=self.child)
+        second = self.entry('Drugi', date=self.days(1))
+        later = self.entry('Później', date=self.days(9))
+
+        html = self.client.get(INDEX_URL).content.decode()
+
+        for offset in range(14):
+            with self.subTest(offset=offset):
+                day = day_html(html, self.days(offset).isoformat())
+                populated = offset in (1, 9)
+                self.assertEqual(EMPTY_DAY in day, not populated)
+                self.assertEqual(
+                    f'fn-calendar-day--empty" data-day-group="{self.days(offset).isoformat()}"' in html,
+                    not populated,
+                )
+        rows = ROW_PATTERN.findall(html)
+        for entry in (first, second, later):
+            with self.subTest(entry=entry.content):
+                self.assertEqual(rows.count(str(entry.pk)), 1)
+        self.assertEqual(
+            GROUP_PATTERN.findall(day_html(html, self.days(1).isoformat())),
+            [f'member-{self.child.pk}', 'family'],
+        )
+
+    def test_assignee_lists_are_labelled_with_day_and_assignee(self):
+        self.entry('Pierwszy', date=self.days(1), assigned_member=self.child)
+
+        html = self.client.get(INDEX_URL).content.decode()
+
+        heading = parent_day_heading(self.days(1), self.today)
+        self.assertIn(
+            f'<ul class="fn-entry-list" aria-label="{heading}, Michał">',
+            day_html(html, self.days(1).isoformat()),
+        )
+
+    def test_navigation_uses_polish_labels_and_omits_the_boundary_link(self):
         upcoming = self.client.get(INDEX_URL)
+        later = self.client.get(INDEX_URL, {'start': self.days(14).isoformat()})
         past = self.client.get(INDEX_URL, {'view': 'past'})
 
-        self.assertContains(upcoming, 'Nie ma nadchodzących wpisów.')
-        self.assertContains(past, 'Nie ma minionych wpisów.')
-        self.assertNotContains(upcoming, 'data-entry-row')
-        self.assertNotContains(past, 'data-entry-row')
+        self.assertContains(upcoming, 'aria-label="Nawigacja kalendarza"')
+        self.assertContains(upcoming, '>Następne 2 tygodnie</a>')
+        self.assertNotContains(upcoming, 'Poprzednie 2 tygodnie')
         self.assertContains(
-            upcoming, '<p class="fn-empty fn-muted" data-state-part="empty-upcoming">'
+            later,
+            f'<a href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}">'
+            'Poprzednie 2 tygodnie</a>',
         )
-        self.assertContains(past, '<p class="fn-empty fn-muted" data-state-part="empty-past">')
+        self.assertContains(past, '>Poprzednie 2 tygodnie</a>')
+        self.assertNotContains(past, 'Następne 2 tygodnie')
 
 
 class CalendarWindowTests(ManageViewMixin, TestCase):

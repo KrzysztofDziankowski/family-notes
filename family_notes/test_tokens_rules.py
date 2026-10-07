@@ -56,3 +56,35 @@ class TokensRuleTests(SimpleTestCase):
             ':root input:is([type="date"], [type="time"]):focus-within'
         )
         self.assertEqual(declarations.get('outline'), '2px solid var(--fn-color-focus)')
+
+    def media_blocks(self):
+        """``{media query: css body}`` for each top-level ``@media`` block."""
+        return dict(re.findall(r'@media\s*([^{]+?)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}', self.css))
+
+    def outside_media(self, selector):
+        css = re.sub(r'@media[^{]+\{(?:[^{}]*\{[^{}]*\})*\s*\}', '', self.css)
+        return TokensRuleTests.declarations_for(type('Rules', (), {'css': css})(), selector)
+
+    def test_parent_calendar_is_one_column_then_seven_without_overflow(self):
+        # parent-entries-calendar-layout: one column down to 320 CSS px, seven equal columns
+        # (two chronological rows) when wide; minmax(0, 1fr) and min-width: 0 stop long
+        # entry text from widening the grid (SC 1.4.10).
+        self.assertEqual(
+            self.outside_media('.fn-calendar').get('grid-template-columns'), 'minmax(0, 1fr)'
+        )
+        wide = [body for query, body in self.media_blocks().items() if '.fn-calendar {' in body]
+        self.assertEqual(len(wide), 1)
+        self.assertIn('grid-template-columns: repeat(7, minmax(0, 1fr));', wide[0])
+        day = self.outside_media('.fn-calendar-day')
+        self.assertEqual(day.get('min-width'), '0')
+        self.assertEqual(day.get('overflow-wrap'), 'anywhere')
+
+    def test_parent_calendar_rules_use_tokens_not_literal_colours(self):
+        literal = re.compile(r'#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(')
+        for selector in ('.fn-calendar', '.fn-calendar-day', '.fn-calendar-day--empty',
+                         '.fn-calendar-empty', '.fn-calendar-nav ul', '.fn-calendar-nav li'):
+            declarations = self.outside_media(selector)
+            with self.subTest(selector):
+                self.assertTrue(declarations)
+                for name, value in declarations.items():
+                    self.assertIsNone(literal.search(value), f'{name}: {value}')

@@ -61,7 +61,7 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
                               'aria-current="page">Nadchodzące<',
                               '<h2 class="fn-day-heading">Czwartek, 8 października</h2>'],
             'list_past': ['data-day-group="2026-09-21"', 'aria-current="page">Minione<'],
-            'list_empty': ['Nie ma nadchodzących wpisów.'],
+            'list_empty': ['>Brak wpisów</p>', 'data-state-part="calendar-upcoming"'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
                               '<dt>Przedmiot</dt>', 'historia'],
             'detail_eduvulcan': ['EduVulcan', 'kartkówka', '<dt>Przedmiot</dt>', 'matematyka'],
@@ -202,5 +202,24 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         self.assertTrue(day_group_of(past, 'data-assignee-group="family"').startswith('data-day-group="2026-09-21"'))
         self.assertEqual(HEADING_PATTERN.findall(past), ['Cała rodzina'])
         empty = state_html(html, 'list_empty')
-        self.assertEqual(DAY_PATTERN.findall(empty), [])
+        self.assertEqual(
+            DAY_PATTERN.findall(empty), [f'2026-10-{day:02}' for day in range(5, 19)]
+        )
+        self.assertEqual(empty.count('>Brak wpisów</p>'), 14)
         self.assertEqual(GROUP_PATTERN.findall(empty), [])
+
+    @override_settings(DEBUG=True)
+    def test_calendar_states_show_empty_days_and_both_navigation_directions(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        upcoming = state_html(html, 'list_upcoming')
+        past = state_html(html, 'list_past')
+        # Mixed fortnight: populated 5, 7, 8 October; the other eleven days are empty.
+        self.assertEqual(upcoming.count('>Brak wpisów</p>'), 11)
+        self.assertEqual(past.count('>Brak wpisów</p>'), 13)
+        self.assertIn('?view=upcoming&amp;start=2026-10-19">Następne 2 tygodnie</a>', upcoming)
+        self.assertNotIn('Poprzednie 2 tygodnie', upcoming)
+        self.assertIn('?view=past&amp;start=2026-09-07">Poprzednie 2 tygodnie</a>', past)
+        self.assertNotIn('Następne 2 tygodnie', past)
+        self.assertIn('/entries/900002/?view=upcoming&amp;start=2026-10-05"', upcoming)

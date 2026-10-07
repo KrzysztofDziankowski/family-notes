@@ -231,11 +231,11 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Automated
 
-- [x] 1.1 Parent view tests prove both default 14-day ranges and exact inclusive boundaries.
-- [x] 1.2 Tests cover valid, malformed, and out-of-mode `start` values.
-- [x] 1.3 Tests prove navigation shifts by 14 days and cannot cross today's mode boundary.
-- [x] 1.4 Tests prove family isolation and existing role/access behavior remain unchanged.
-- [x] 1.5 Tests prove detail and back links preserve `view` and `start`.
+- [x] 1.1 Parent view tests prove both default 14-day ranges and exact inclusive boundaries. — b3d4265
+- [x] 1.2 Tests cover valid, malformed, and out-of-mode `start` values. — b3d4265
+- [x] 1.3 Tests prove navigation shifts by 14 days and cannot cross today's mode boundary. — b3d4265
+- [x] 1.4 Tests prove family isolation and existing role/access behavior remain unchanged. — b3d4265
+- [x] 1.5 Tests prove detail and back links preserve `view` and `start`. — b3d4265
 
 #### Manual
 
@@ -246,12 +246,12 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Automated
 
-- [ ] 2.1 Template tests assert exactly 14 ordered day boxes for each window.
-- [ ] 2.2 Tests assert relative full-date headings, a regular weekday heading, and a cross-year heading.
-- [ ] 2.3 Tests assert populated-day assignee grouping and exactly-once entry rendering.
-- [ ] 2.4 Tests assert `Brak wpisów` for empty dates.
-- [ ] 2.5 Accessibility tests preserve one h1, sequential h2/h3 hierarchy, labelled lists, and Polish navigation labels.
-- [ ] 2.6 Token/style tests reject literal colors and horizontal-overflow regressions.
+- [x] 2.1 Template tests assert exactly 14 ordered day boxes for each window.
+- [x] 2.2 Tests assert relative full-date headings, a regular weekday heading, and a cross-year heading.
+- [x] 2.3 Tests assert populated-day assignee grouping and exactly-once entry rendering.
+- [x] 2.4 Tests assert `Brak wpisów` for empty dates.
+- [x] 2.5 Accessibility tests preserve one h1, sequential h2/h3 hierarchy, labelled lists, and Polish navigation labels.
+- [x] 2.6 Token/style tests reject literal colors and horizontal-overflow regressions.
 
 #### Manual
 

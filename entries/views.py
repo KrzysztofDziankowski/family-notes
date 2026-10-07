@@ -886,12 +886,7 @@ def _use_synthetic_members(form):
 
 LIST_MODE_LABELS = {UPCOMING: 'Nadchodzące', PAST: 'Minione'}
 # Day group of the undated upcoming section, shown last (parent and child lists).
-UNDATED_DAY_KEY = 'undated'
 UNDATED_DAY_HEADING = 'Bez daty'
-EMPTY_LIST_MESSAGES = {
-    UPCOMING: 'Nie ma nadchodzących wpisów.',
-    PAST: 'Nie ma minionych wpisów.',
-}
 CALENDAR_WINDOW_DAYS = 14
 ENTRY_CREATED_MESSAGE = 'Dodano wpis.'
 ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
@@ -1008,8 +1003,6 @@ def _index_context(mode, entries, today, start=None):
         'mode': mode,
         'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
         'days': days,
-        'is_empty': not any(day['groups'] for day in days),
-        'empty_message': EMPTY_LIST_MESSAGES[mode],
         'start': start,
         'detail_query': detail_query,
         **_calendar_navigation(mode, start, today),
@@ -1183,13 +1176,8 @@ def _states_member(display_name):
     raise ValueError(f'Unknown gallery member: {display_name}')
 
 
-def _synthetic_list(mode, sections):
-    entries = [entry for _key, rows in sections for entry in rows]
-    return _index_context(
-        mode,
-        entries,
-        STATES_DATE,
-    )
+def _synthetic_list(mode, entries):
+    return _index_context(mode, entries, STATES_DATE)
 
 
 def _manage_state_sections(membership):
@@ -1284,20 +1272,18 @@ def _manage_state_sections(membership):
             'label': 'Lista: nadchodzące',
             'list': _synthetic_list(
                 UPCOMING,
-                [
-                    (SECTION_DATED, [test_entry, parent_note, family_meeting, long_note, trip, library_task]),
-                ],
+                [test_entry, parent_note, family_meeting, long_note, trip, library_task],
             ),
         },
         {
             'name': 'list_past',
             'label': 'Lista: minione',
-            'list': _synthetic_list(PAST, [(SECTION_PAST, [past_entry])]),
+            'list': _synthetic_list(PAST, [past_entry]),
         },
         {
             'name': 'list_empty',
             'label': 'Lista: pusta',
-            'list': _synthetic_list(UPCOMING, [(SECTION_DATED, []), (SECTION_UNDATED, [])]),
+            'list': _synthetic_list(UPCOMING, []),
         },
         {
             'name': 'detail_manual',
