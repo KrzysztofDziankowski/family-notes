@@ -909,17 +909,28 @@ def _default_window_start(mode, today):
 def _calendar_window(mode, value, today):
     """Return a valid inclusive parent-calendar window for ``mode``."""
     default_start = _default_window_start(mode, today)
+    step = datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
     try:
         start = datetime.date.fromisoformat(value) if value else default_start
     except (TypeError, ValueError):
         start = default_start
     if value and start.isoformat() != value:
         start = default_start
+    # The window and both neighbouring windows must stay inside the date range.
+    if not datetime.date.min + step <= start <= datetime.date.max - 2 * step:
+        start = default_start
     end = start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
     if (mode == UPCOMING and start < today) or (mode == PAST and end >= today):
         start = default_start
         end = start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
     return start, end
+
+
+def _window_containing(mode, day, today):
+    """Start of the ``mode`` fortnight (on the default 14-day grid) that contains ``day``."""
+    default_start = _default_window_start(mode, today)
+    offset = (day - default_start).days // CALENDAR_WINDOW_DAYS * CALENDAR_WINDOW_DAYS
+    return default_start + datetime.timedelta(days=offset)
 
 
 def _calendar_query(mode, start):
@@ -1003,14 +1014,13 @@ def _index_context(mode, entries, today, start=None):
         'mode': mode,
         'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
         'days': days,
-        'start': start,
         'detail_query': detail_query,
         **_calendar_navigation(mode, start, today),
     }
 
 
-def _detail_context(entry, list_mode, list_start=None, delete_open=False):
-    list_start = list_start or _default_window_start(list_mode, timezone.localdate())
+def _detail_context(entry, list_mode, list_start=None, delete_open=False, today=None):
+    list_start = list_start or _default_window_start(list_mode, today or timezone.localdate())
     return {
         'entry': entry,
         'list_mode': list_mode,
@@ -1034,11 +1044,9 @@ def index(request):
     start, end = _calendar_window(mode, request.GET.get('start'), today)
     rows = with_effective_date(parent_family_entries(membership)).exclude(
         school_item=SchoolItemKind.LUCKY_NUMBER.value
-    ).filter(effective_date__range=(start, end)).select_related('assigned_member')
-    if mode == PAST:
-        rows = rows.order_by('effective_date', F('time').desc(nulls_last=True), '-pk')
-    else:
-        rows = rows.order_by('effective_date', F('time').asc(nulls_last=True), 'pk')
+    ).filter(effective_date__range=(start, end)).order_by(
+        'effective_date', F('time').asc(nulls_last=True), 'pk'
+    )
     return render(request, 'entries/manage_index.html', _index_context(mode, list(rows), today, start))
 
 
@@ -1049,8 +1057,11 @@ def detail(request, pk):
     today = timezone.localdate()
     entry_mode = _list_mode_for(entry, today)
     requested_mode = request.GET.get('view')
-    list_mode = normalize_list_mode(requested_mode) if requested_mode else entry_mode
-    list_start, _ = _calendar_window(list_mode, request.GET.get('start'), today)
+    list_mode = requested_mode if requested_mode in LIST_MODES else entry_mode
+    requested_start = request.GET.get('start')
+    if not requested_start and list_mode == entry_mode and entry.effective_date:
+        requested_start = _window_containing(list_mode, entry.effective_date, today).isoformat()
+    list_start, _ = _calendar_window(list_mode, requested_start, today)
     return render(
         request,
         'entries/manage_detail.html',
@@ -1288,12 +1299,12 @@ def _manage_state_sections(membership):
         {
             'name': 'detail_manual',
             'label': 'Szczegóły: wpis ręczny',
-            'detail': _detail_context(test_entry, UPCOMING),
+            'detail': _detail_context(test_entry, UPCOMING, today=STATES_DATE),
         },
         {
             'name': 'detail_eduvulcan',
             'label': 'Szczegóły: wpis z EduVulcan',
-            'detail': _detail_context(eduvulcan_entry, UPCOMING),
+            'detail': _detail_context(eduvulcan_entry, UPCOMING, today=STATES_DATE),
         },
         {'name': 'create', 'label': 'Nowy wpis', 'form': _form_context(create_form)},
         {'name': 'invalid', 'label': 'Błędy w formularzu', 'form': _form_context(invalid_form)},
@@ -1305,7 +1316,7 @@ def _manage_state_sections(membership):
         {
             'name': 'delete_open',
             'label': 'Otwarte potwierdzenie usunięcia',
-            'detail': _detail_context(past_entry, PAST, delete_open=True),
+            'detail': _detail_context(past_entry, PAST, delete_open=True, today=STATES_DATE),
         },
     ]
 

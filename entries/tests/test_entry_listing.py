@@ -288,6 +288,15 @@ class ParentDayHeadingTests(TestCase):
             'Piątek, 1 stycznia 2027',
         )
 
+    def test_relative_day_in_another_year_includes_the_year(self):
+        new_year = datetime.date(2027, 1, 1)
+        self.assertEqual(
+            parent_day_heading(new_year, datetime.date(2026, 12, 31)), 'Jutro, 1 stycznia 2027'
+        )
+        self.assertEqual(
+            parent_day_heading(datetime.date(2026, 12, 31), new_year), 'Wczoraj, 31 grudnia 2026'
+        )
+
     def test_uses_polish_locale_regardless_of_active_language(self):
         with translation.override('en'):
             self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, 29 września')

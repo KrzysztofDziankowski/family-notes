@@ -41,7 +41,7 @@
         {% include "entries/_manage_list.html" with mode=state.list.mode modes=state.list.modes days=state.list.days previous_url=state.list.previous_url next_url=state.list.next_url detail_query=state.list.detail_query %}
     {% endif %}
     {% if state.detail %}
-        {% include "entries/_manage_detail.html" with entry=state.detail.entry list_mode=state.detail.list_mode delete_open=state.detail.delete_open %}
+        {% include "entries/_manage_detail.html" with entry=state.detail.entry list_mode=state.detail.list_mode list_query=state.detail.list_query list_start=state.detail.list_start delete_open=state.detail.delete_open %}
     {% endif %}
     {% if state.form %}
         {% include "entries/_manage_form.html" with form=state.form.form entry=state.form.entry %}

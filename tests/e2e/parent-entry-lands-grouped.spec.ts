@@ -12,10 +12,18 @@ function warsawDateInDays(days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-// The parent calendar's day heading carries the Polish calendar date ("Jutro, 8 października").
-function polishDayAndMonth(isoDate: string): string {
-  return new Intl.DateTimeFormat('pl-PL', { day: 'numeric', month: 'long', timeZone: 'UTC' })
-    .format(new Date(`${isoDate}T00:00:00Z`));
+// The parent calendar's day heading carries the Polish calendar date ("Jutro, 8 października"),
+// plus the year when the day falls in another year than today ("Jutro, 1 stycznia 2027").
+function polishCalendarDate(isoDate: string): string {
+  const sameYear = isoDate.slice(0, 4) === warsawDateInDays(0).slice(0, 4);
+  return new Intl.DateTimeFormat('pl-PL', {
+    day: 'numeric',
+    month: 'long',
+    ...(sameYear ? {} : { year: 'numeric' }),
+    timeZone: 'UTC',
+  })
+    .format(new Date(`${isoDate}T00:00:00Z`))
+    .replace(/ r\.$/, '');
 }
 
 async function deleteEntriesTitled(page: Page, title: string) {
@@ -52,7 +60,7 @@ test.describe('parent-entry-lands-grouped', () => {
 
     // The family calendar shows it in tomorrow's box under "Kasia", and nowhere else.
     await page.goto('/entries/');
-    const tomorrowBox = `Jutro, ${polishDayAndMonth(tomorrow)}`;
+    const tomorrowBox = `Jutro, ${polishCalendarDate(tomorrow)}`;
     await expect(page.getByRole('heading', { level: 2, name: tomorrowBox, exact: true })).toBeVisible();
     const kasiaTomorrow = page.getByRole('list', { name: `${tomorrowBox}, Kasia`, exact: true });
     await expect(kasiaTomorrow.getByRole('link', { name: title, exact: true })).toBeVisible();

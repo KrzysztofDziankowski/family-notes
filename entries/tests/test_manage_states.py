@@ -223,3 +223,16 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         self.assertIn('?view=past&amp;start=2026-09-07">Poprzednie 2 tygodnie</a>', past)
         self.assertNotIn('Następne 2 tygodnie', past)
         self.assertIn('/entries/900002/?view=upcoming&amp;start=2026-10-05"', upcoming)
+
+    @override_settings(DEBUG=True)
+    def test_detail_states_return_to_their_pinned_fortnight(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        self.assertIn(
+            'href="/entries/?view=upcoming&amp;start=2026-10-05">Wróć do listy</a>',
+            state_html(html, 'detail_manual'),
+        )
+        delete_open = state_html(html, 'delete_open')
+        self.assertIn('href="/entries/?view=past&amp;start=2026-09-21">Wróć do listy</a>', delete_open)
+        self.assertIn('<input type="hidden" name="start" value="2026-09-21">', delete_open)

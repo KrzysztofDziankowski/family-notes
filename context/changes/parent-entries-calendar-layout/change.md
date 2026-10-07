@@ -1,7 +1,7 @@
 ---
 change_id: parent-entries-calendar-layout
 title: Calendar-style parent entries list
-status: implementing
+status: impl_reviewed
 created: 2026-10-07
 updated: 2026-10-07
 archived_at: null

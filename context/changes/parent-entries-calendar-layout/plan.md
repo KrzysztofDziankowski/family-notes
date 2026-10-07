@@ -239,8 +239,8 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Manual
 
-- [ ] 1.6 Upcoming initially opens on today and past initially ends on yesterday.
-- [ ] 1.7 Moving between fortnights and returning from an entry detail preserves the expected window.
+- [x] 1.6 Upcoming initially opens on today and past initially ends on yesterday.
+- [x] 1.7 Moving between fortnights and returning from an entry detail preserves the expected window.
 
 ### Phase 2: Calendar Presentation
 
@@ -255,23 +255,23 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Manual
 
-- [ ] 2.7 At 320 CSS px, boxes form one readable column without horizontal scrolling.
-- [ ] 2.8 At a wide viewport, boxes form seven columns and two rows.
-- [ ] 2.9 Empty and populated boxes are visually distinct, readable, and aligned.
-- [ ] 2.10 Focus indicators and keyboard navigation remain visible.
+- [x] 2.7 At 320 CSS px, boxes form one readable column without horizontal scrolling.
+- [x] 2.8 At a wide viewport, boxes form seven columns and two rows.
+- [x] 2.9 Empty and populated boxes are visually distinct, readable, and aligned.
+- [x] 2.10 Focus indicators and keyboard navigation remain visible.
 
 ### Phase 3: Regression and Acceptance Coverage
 
 #### Automated
 
-- [x] 3.1 Focused parent list, state-gallery, and accessibility tests pass.
-- [x] 3.2 Relevant listing, family-isolation, access, and token/style tests pass.
-- [x] 3.3 `uv run python manage.py check` passes.
-- [x] 3.4 `uv run python manage.py makemigrations --check --dry-run` reports no model changes.
-- [x] 3.5 The focused Playwright grouping test passes when the existing E2E environment is available.
+- [x] 3.1 Focused parent list, state-gallery, and accessibility tests pass. — 5d76437
+- [x] 3.2 Relevant listing, family-isolation, access, and token/style tests pass. — 5d76437
+- [x] 3.3 `uv run python manage.py check` passes. — 5d76437
+- [x] 3.4 `uv run python manage.py makemigrations --check --dry-run` reports no model changes. — 5d76437
+- [x] 3.5 The focused Playwright grouping test passes when the existing E2E environment is available. — 5d76437
 
 #### Manual
 
-- [ ] 3.6 A parent can inspect upcoming and historical fortnights without losing entries or crossing list-mode boundaries.
-- [ ] 3.7 An entry created for tomorrow appears once in tomorrow's box under the correct assignee.
-- [ ] 3.8 A fortnight containing no entries still shows all 14 dated boxes.
+- [x] 3.6 A parent can inspect upcoming and historical fortnights without losing entries or crossing list-mode boundaries.
+- [x] 3.7 An entry created for tomorrow appears once in tomorrow's box under the correct assignee.
+- [x] 3.8 A fortnight containing no entries still shows all 14 dated boxes.

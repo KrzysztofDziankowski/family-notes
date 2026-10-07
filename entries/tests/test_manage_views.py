@@ -18,7 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from entries.classification.types import EntryType, SchoolItemKind
-from entries.listing import day_heading, parent_day_heading
+from entries.listing import parent_day_heading
 from entries.models import Entry
 from family_access.models import FamilyMember
 
@@ -365,6 +365,41 @@ class CalendarWindowTests(ManageViewMixin, TestCase):
                 response = self.client.get(INDEX_URL, params)
                 self.assertEqual(self.keys(response)[0], expected.isoformat())
 
+    def test_rows_inside_a_day_run_earliest_first_in_both_modes(self):
+        evening = self.entry('Wieczór', date=self.days(-2), time=datetime.time(18, 0))
+        morning = self.entry('Rano', date=self.days(-2), time=datetime.time(8, 0))
+        untimed = self.entry('Bez godziny', date=self.days(-2))
+
+        past = self.client.get(INDEX_URL, {'view': 'past'})
+
+        self.assertEqual(
+            [pk for pk in self.rendered_rows(past) if pk in {evening.pk, morning.pk, untimed.pk}],
+            [morning.pk, evening.pk, untimed.pk],
+        )
+
+    def test_out_of_range_start_uses_the_mode_default_instead_of_failing(self):
+        cases = (
+            ({'start': '9999-12-31'}, self.today),
+            ({'start': '9999-12-10'}, self.today),
+            ({'view': 'past', 'start': '0001-01-01'}, self.days(-14)),
+        )
+        for params, expected in cases:
+            with self.subTest(params=params):
+                response = self.client.get(INDEX_URL, params)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(self.keys(response)[0], expected.isoformat())
+        entry = self.entry()
+        self.assertContains(
+            self.client.get(detail_url(entry.pk), {'view': 'upcoming', 'start': '9999-12-31'}),
+            f'href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}"',
+        )
+        response = self.client.post(
+            delete_url(entry.pk), {'view': 'past', 'start': '0001-01-01'}
+        )
+        self.assertRedirects(
+            response, f'{INDEX_URL}?view=past&start={self.days(-14).isoformat()}'
+        )
+
     def test_navigation_moves_fourteen_days_and_stops_at_mode_boundary(self):
         upcoming = self.client.get(INDEX_URL)
         self.assertIsNone(upcoming.context['previous_url'])
@@ -474,6 +509,24 @@ class DetailTests(ManageViewMixin, TestCase):
         self.assertContains(
             response,
             f'href="{INDEX_URL}?view=upcoming&amp;start={start.isoformat()}"',
+        )
+
+    def test_detail_without_list_query_returns_to_the_fortnight_holding_the_entry(self):
+        later = self.entry(date=self.days(20))
+        older = self.entry(date=self.days(-20))
+
+        self.assertContains(
+            self.client.get(detail_url(later.pk)),
+            f'href="{INDEX_URL}?view=upcoming&amp;start={self.days(14).isoformat()}"',
+        )
+        self.assertContains(
+            self.client.get(detail_url(older.pk)),
+            f'href="{INDEX_URL}?view=past&amp;start={self.days(-28).isoformat()}"',
+        )
+        # An unknown view falls back to the entry's own list, not to upcoming.
+        self.assertContains(
+            self.client.get(detail_url(older.pk), {'view': 'xyz'}),
+            f'href="{INDEX_URL}?view=past&amp;start={self.days(-28).isoformat()}"',
         )
 
     def test_foreign_and_missing_ids_are_indistinguishable(self):
@@ -1022,7 +1075,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             [self.ewa_later.pk],
         )
         self.assertNotIn(self.days(10).isoformat(), DAY_PATTERN.findall(past))
-        self.assertNotIn(day_heading(self.days(10), self.today), past)
+        self.assertNotIn(parent_day_heading(self.days(10), self.today), past)
 
     def test_past_shows_chronological_days_then_children_parents_family(self):
         html = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
