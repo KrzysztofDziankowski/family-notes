@@ -29,7 +29,7 @@ class Entry(models.Model):
     )
     entry_type = models.CharField('rodzaj', max_length=20, choices=ENTRY_TYPE_CHOICES)
     content = models.TextField('treść')
-    date = models.DateField('data', null=True, blank=True)
+    date = models.DateField('data')
     time = models.TimeField('godzina', null=True, blank=True)
     assigned_member = models.ForeignKey(
         FamilyMember,

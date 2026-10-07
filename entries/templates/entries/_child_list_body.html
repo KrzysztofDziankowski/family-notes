@@ -11,7 +11,7 @@ empty_message.
     <h2 class="fn-day-heading">{{ group.heading }}</h2>
     <ul class="fn-entry-list" data-entry-section="{{ section.key }}">
         {% for entry in group.entries %}
-            {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:child_detail" hide_assignee=True hide_date=True detail_query=detail_query only %}
+            {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:child_detail" hide_assignee=True hide_date=True hide_type=True detail_query=detail_query only %}
         {% endfor %}
     </ul>
     {% endfor %}

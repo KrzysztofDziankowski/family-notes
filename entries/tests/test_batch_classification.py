@@ -162,7 +162,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
         self.assertTrue(batch.is_single)
         self.assertEqual(
             batch.single.result,
-            ClassificationProposal(entry_type=EntryType.NOTE, content=MEETINGS_TEXT),
+            ClassificationProposal(entry_type=EntryType.NOTE, content=MEETINGS_TEXT, date=REFERENCE_DATE),
         )
 
     def test_untyped_or_ungrounded_output_turns_the_whole_batch_into_the_note(self):
@@ -235,7 +235,7 @@ class BatchSemanticsTests(BatchFixtureMixin, TestCase):
 
         self.assertEqual(
             batch.single.result,
-            ClassificationProposal(entry_type=EntryType.NOTE, content=MEETINGS_TEXT),
+            ClassificationProposal(entry_type=EntryType.NOTE, content=MEETINGS_TEXT, date=REFERENCE_DATE),
         )
 
     def test_provider_timeout_gives_an_unavailable_result(self):

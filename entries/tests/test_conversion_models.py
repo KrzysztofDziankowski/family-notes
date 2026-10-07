@@ -5,10 +5,11 @@ notification and the one-to-many, tombstone-preserving output links.
 """
 
 import datetime
+import unittest
 
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase
 from django.utils import timezone
 
 from entries.api_views import content_hash
@@ -24,6 +25,7 @@ from entries.services import delete_family_entry
 from family_access.models import Family
 
 from .test_classification_service import FamilyFixtureMixin
+from .migration_database import migration_database, migrate
 
 CAPTURED_AT = datetime.datetime(2026, 9, 23, 8, 30, tzinfo=datetime.timezone.utc)
 NOW = datetime.datetime(2026, 9, 23, 9, 0, tzinfo=datetime.timezone.utc)
@@ -245,52 +247,31 @@ class ConversionOutputTests(FamilyFixtureMixin, TestCase):
             self.assertNotIn(sensitive, text)
 
 
-class ConversionMigrationTests(TransactionTestCase):
-    """The additive migration keeps stored rows pending with empty metadata."""
-
-    before = [('entries', '0002_inboundnotification')]
-    after = [('entries', '0003_notification_conversion')]
-
-    def tearDown(self):
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        executor.migrate(executor.loader.graph.leaf_nodes())
-        super().tearDown()
+class ConversionMigrationTests(unittest.TestCase):
+    """Additive conversion fields preserve rows in a forward-only database."""
 
     def test_existing_pending_row_survives_with_defaults(self):
-        executor = MigrationExecutor(connection)
-        executor.migrate(self.before)
-        old_apps = executor.loader.project_state(self.before).apps
-        Family = old_apps.get_model('family_access', 'Family')
-        OldNotification = old_apps.get_model('entries', 'InboundNotification')
-        family = Family.objects.create(name='Rodzina Testowa')
-        row = OldNotification.objects.create(
-            family=family,
-            notification_id='anon-1',
-            title='Ocena',
-            message='Nowa ocena: 5, Plastyka, Łucja',
-            captured_at=timezone.now(),
-            captured_date=datetime.date(2026, 9, 23),
-            content_hash='0' * 64,
-            payload={},
-        )
-
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        executor.migrate(self.after)
-        new_apps = executor.loader.project_state(self.after).apps
-        NewNotification = new_apps.get_model('entries', 'InboundNotification')
-        migrated = NewNotification.objects.get(pk=row.pk)
-
-        self.assertEqual(migrated.status, 'pending')
-        self.assertEqual(migrated.attempt_count, 0)
-        self.assertIsNone(migrated.next_attempt_at)
-        self.assertIsNone(migrated.lease_expires_at)
-        self.assertEqual(migrated.last_error_code, '')
-        self.assertIsNone(migrated.raw_pruned_at)
-        self.assertFalse(
-            new_apps.get_model('entries', 'NotificationConversionOutput').objects.exists()
-        )
+        with migration_database() as database:
+            alias = database.alias
+            old_apps = migrate(database, [('entries', '0002_inboundnotification')])
+            Family = old_apps.get_model('family_access', 'Family')
+            OldNotification = old_apps.get_model('entries', 'InboundNotification')
+            family = Family.objects.using(alias).create(name='Rodzina Testowa')
+            row = OldNotification.objects.using(alias).create(
+                family=family, notification_id='anon-1', title='Ocena',
+                message='Nowa ocena: 5, Plastyka', captured_at=timezone.now(),
+                captured_date=datetime.date(2026, 9, 23), content_hash='0' * 64,
+                payload={},
+            )
+            new_apps = migrate(database, [('entries', '0003_notification_conversion')])
+            migrated = new_apps.get_model('entries', 'InboundNotification').objects.using(alias).get(pk=row.pk)
+            self.assertEqual(migrated.status, 'pending')
+            self.assertEqual(migrated.attempt_count, 0)
+            self.assertIsNone(migrated.next_attempt_at)
+            self.assertIsNone(migrated.lease_expires_at)
+            self.assertEqual(migrated.last_error_code, '')
+            self.assertIsNone(migrated.raw_pruned_at)
+            self.assertFalse(new_apps.get_model('entries', 'NotificationConversionOutput').objects.using(alias).exists())
 
 
 class CodeRollbackCompatibilityTests(TestCase):

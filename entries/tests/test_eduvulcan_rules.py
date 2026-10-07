@@ -22,6 +22,7 @@ from entries.eduvulcan.rules import (
     general_note_text,
     propose_entries,
     reference_date_for,
+    writing_date_for,
 )
 from entries.eduvulcan.text import normalize_text, resolve_yearless_date
 from entries.eduvulcan.types import ChildSnapshot, EntryProposal, OutputKind
@@ -186,12 +187,12 @@ class CategoryRuleTests(SimpleTestCase):
 
     def test_child_note_categories(self):
         expected = {
-            'grade': ('Ocena: 4+, Matematyka', None, SchoolItemKind.GRADE, LUCJA),
+            'grade': ('Ocena: 4+, Matematyka', CAPTURED, SchoolItemKind.GRADE, LUCJA),
             'lucky_number': (
-                'Szczęśliwy numerek: 7', datetime.date(2026, 9, 24), SchoolItemKind.LUCKY_NUMBER, BARTOSZ,
+                'Szczęśliwy numerek: 7, w dniu 24 września', datetime.date(2026, 9, 24), SchoolItemKind.LUCKY_NUMBER, BARTOSZ,
             ),
             'late_arrival': (
-                'Spóźnienie na 2. lekcji', datetime.date(2026, 9, 25), SchoolItemKind.LATE_ARRIVAL, LUCJA,
+                'Spóźnienie na 2. lekcji, w dniu 25 września', datetime.date(2026, 9, 25), SchoolItemKind.LATE_ARRIVAL, LUCJA,
             ),
         }
         for key, (content, date, school_item, member) in expected.items():
@@ -213,7 +214,7 @@ class CategoryRuleTests(SimpleTestCase):
         )
 
         self.assertEqual(proposal.entry_type, EntryType.NOTE)
-        self.assertEqual(proposal.content, 'Nieobecność na 3. lekcji')
+        self.assertEqual(proposal.content, 'Nieobecność na 3. lekcji, w dniu 25 września')
         self.assertIsNone(proposal.school_item)
         self.assertEqual(proposal.member, BARTOSZ)
 
@@ -243,7 +244,7 @@ class CategoryRuleTests(SimpleTestCase):
                 self.assertIsNone(proposal.school_item)
                 self.assertIsNone(proposal.member)
 
-    def test_single_timetable_changes_are_dated_child_notes(self):
+    def test_single_timetable_changes_are_dated_child_events(self):
         expected = {
             'substitution': (
                 'Zastępstwo: Język angielski, Zawadzki Olaf (5B)',
@@ -269,7 +270,7 @@ class CategoryRuleTests(SimpleTestCase):
                 proposal = only(propose(key))
 
                 self.assertEqual(proposal.kind, OutputKind.RULE)
-                self.assertEqual(proposal.entry_type, EntryType.NOTE)
+                self.assertEqual(proposal.entry_type, EntryType.CALENDAR_EVENT)
                 self.assertEqual(proposal.content, content)
                 self.assertEqual(proposal.date, date)
                 self.assertEqual(proposal.school_item, school_item)
@@ -293,7 +294,7 @@ class CategoryRuleTests(SimpleTestCase):
 
 
 class MultiChangeTests(SimpleTestCase):
-    def test_each_valid_change_becomes_an_ordered_child_note(self):
+    def test_each_valid_change_becomes_an_ordered_child_event(self):
         proposals = propose('multi_change')
 
         self.assertEqual([p.output_index for p in proposals], [0, 1])
@@ -311,7 +312,7 @@ class MultiChangeTests(SimpleTestCase):
         for proposal in proposals:
             self.assertEqual(proposal.date, datetime.date(2026, 9, 30))
             self.assertEqual(proposal.member, LUCJA)
-            self.assertEqual(proposal.entry_type, EntryType.NOTE)
+            self.assertEqual(proposal.entry_type, EntryType.CALENDAR_EVENT)
 
     def test_malformed_content_becomes_one_trailing_unassigned_note(self):
         message = (
@@ -337,7 +338,7 @@ class MultiChangeTests(SimpleTestCase):
         self.assertEqual(remainder.kind, OutputKind.RULE_REMAINDER)
         self.assertEqual(remainder.entry_type, EntryType.NOTE)
         self.assertIsNone(remainder.member)
-        self.assertIsNone(remainder.date)
+        self.assertEqual(remainder.date, CAPTURED)
         self.assertIsNone(remainder.school_item)
         self.assertEqual(
             remainder.content,
@@ -401,11 +402,11 @@ class NormalizationTests(SimpleTestCase):
             general_note_text(' Nieznana  kategoria ', 'Treść powiadomienia '),
             'Nieznana kategoria: Treść powiadomienia',
         )
-        proposal = general_note_proposal('Nieznana kategoria', 'Treść', output_index=0)
+        proposal = general_note_proposal('Nieznana kategoria', 'Treść', captured_at=CAPTURED, output_index=0)
         self.assertEqual(proposal.kind, OutputKind.GENERAL_NOTE)
         self.assertEqual(proposal.entry_type, EntryType.NOTE)
         self.assertIsNone(proposal.member)
-        self.assertIsNone(proposal.date)
+        self.assertEqual(proposal.date, CAPTURED)
 
 
 class YearInferenceTests(SimpleTestCase):
@@ -511,7 +512,7 @@ class ChildMatchingTests(SimpleTestCase):
         proposal = only(propose('lucky_number', children=()))
 
         self.assertIsNone(proposal.member)
-        self.assertEqual(proposal.content, 'Szczęśliwy numerek: 7 — Bartosz')
+        self.assertEqual(proposal.content, 'Szczęśliwy numerek: 7, w dniu 24 września — Bartosz')
         self.assertEqual(proposal.school_item, SchoolItemKind.LUCKY_NUMBER)
 
 
@@ -534,7 +535,6 @@ class MalformedInputTests(SimpleTestCase):
             'Ocena': 'Nowa ocena: 5',
             'Szczęśliwy numerek': 'Szczęśliwy numer to: 7, Łucja',
             'Frekwencja': 'Spóźnienie na 2. lekcji, Łucja',
-            'Nowa wiadomość': 'Nowa wiadomość od wychowawcy',
         }
         for title, message in cases.items():
             with self.subTest(title=title):
@@ -612,3 +612,39 @@ class ChildSnapshotTests(TestCase):
 
         self.assertIsNone(proposal.member)
         self.assertEqual(proposal.content, 'Ocena: 4+, Matematyka — Łucja')
+
+
+class WritingDateProvenanceTests(SimpleTestCase):
+    def test_recognized_teacher_message_precedes_capture(self):
+        self.assertEqual(
+            writing_date_for('Nowa wiadomość', '21 września od Kowalska Anna: zebranie 2 października', captured_at=CAPTURED),
+            datetime.date(2026, 9, 21),
+        )
+
+    def test_invalid_unrecognized_and_occurrence_dates_use_capture(self):
+        for title, message in (
+            ('Nowa wiadomość', '31 września od Kowalska Anna: zebranie'),
+            ('Ogłoszenie', '21 września od Kowalska Anna: zebranie'),
+            ('Frekwencja', 'Spóźnienie, Łucja, w dniu 21 września'),
+            ('Nowa wiadomość', 'Spotkanie 21 września'),
+        ):
+            with self.subTest(title=title, message=message):
+                self.assertEqual(writing_date_for(title, message, captured_at=CAPTURED), CAPTURED)
+
+    def test_note_rules_keep_occurrence_date_in_text_and_use_capture_date(self):
+        proposal = only(propose(title='Frekwencja', message='Spóźnienie na 2. lekcji, Łucja, w dniu 21 września'))
+        self.assertEqual(proposal.date, CAPTURED)
+        self.assertIn('21 września', proposal.content)
+
+    def test_teacher_messages_with_invalid_or_unrecognized_dates_stay_notes(self):
+        for message in ('31 września od Kowalska Anna: zebranie', 'Nowa wiadomość od wychowawcy'):
+            with self.subTest(message=message):
+                proposal = only(propose(title='Nowa wiadomość', message=message))
+                self.assertEqual(proposal.entry_type, EntryType.NOTE)
+                self.assertEqual(proposal.date, CAPTURED)
+                self.assertIn('wiadomość' if 'wychowawcy' in message else 'zebranie', proposal.content)
+
+    def test_general_fallback_date_is_independent_of_processing_day(self):
+        proposal = general_note_proposal('Nieznana kategoria', 'Spotkanie 21 września', captured_at=CAPTURED)
+        self.assertEqual(proposal.date, CAPTURED)
+        self.assertEqual(proposal.content, 'Nieznana kategoria: Spotkanie 21 września')

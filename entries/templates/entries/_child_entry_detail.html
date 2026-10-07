@@ -9,7 +9,7 @@ back_mode ("upcoming"/"past", already normalized).
         <dd>{{ entry.get_entry_type_display }}</dd>
         <dt>Treść</dt>
         <dd>{{ entry.content|linebreaksbr }}</dd>
-        <dt>Data</dt>
+        <dt>{% include "entries/_entry_date_label.html" with entry=entry only %}</dt>
         <dd>{% if entry.date %}{{ entry.date|date:"l, j E Y"|lower }}{% elif entry.effective_date %}{{ entry.effective_date|date:"l, j E Y"|lower }}{% else %}Bez daty{% endif %}</dd>
         {% if entry.time %}
             <dt>Godzina</dt>

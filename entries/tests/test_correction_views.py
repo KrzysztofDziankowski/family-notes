@@ -119,7 +119,7 @@ class CorrectionFlowTests(CorrectionViewMixin, TestCase):
         )
 
         self.assertEqual(corrected.context['state'], 'proposal')
-        self.assertContains(corrected, 'Zaktualizowano: data.')
+        self.assertContains(corrected, 'Zaktualizowano: data wydarzenia.')
         form = corrected.context['review_form']
         self.assertEqual(form.initial['date'], FRIDAY)
         self.assertEqual(form.initial['content'], CONTENT)
@@ -196,7 +196,7 @@ class CorrectionFlowTests(CorrectionViewMixin, TestCase):
         self.assertEqual(form.initial['entry_type'], EntryType.TODO.value)
         self.assertEqual(form.initial['content'], 'Kupić prezent dla babci')
         self.assertEqual(form.initial['date'], FRIDAY)
-        self.assertContains(response, 'Zaktualizowano: rodzaj, data.')
+        self.assertContains(response, 'Zaktualizowano: rodzaj, termin wykonania.')
 
     def test_correction_leaving_the_date_missing_highlights_it(self):
         response = self.correct(

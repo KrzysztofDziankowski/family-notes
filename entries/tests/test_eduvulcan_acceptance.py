@@ -321,6 +321,7 @@ class UnknownFormatTests(EduVulcanAcceptanceTestCase):
         entry = Entry.objects.get()
         self.assertEqual(entry.entry_type, EntryType.NOTE.value)
         self.assertEqual(entry.content, 'Ogłoszenie: Wycieczka klasowa do muzeum w piątek')
+        self.assertEqual(entry.date, datetime.date(2026, 9, 23))
         self.assertIsNone(entry.assigned_member)
         self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
         self.assertEqual(entry.conversion_output.kind, OutputKind.GENERAL_NOTE.value)
@@ -342,6 +343,7 @@ class UnknownFormatTests(EduVulcanAcceptanceTestCase):
 
         self.assertEqual(result.outputs[0].kind, OutputKind.GENERAL_NOTE.value)
         self.assertIsNone(Entry.objects.get().assigned_member)
+        self.assertEqual(Entry.objects.get().date, datetime.date(2026, 9, 23))
 
 
 class SanitizedFailureTests(EduVulcanAcceptanceTestCase):
@@ -406,6 +408,7 @@ class SanitizedFailureTests(EduVulcanAcceptanceTestCase):
         entry = Entry.objects.get()
         self.assertEqual(entry.conversion_output.kind, OutputKind.GENERAL_NOTE.value)
         self.assertIn(self.SENTINEL, entry.content)
+        self.assertEqual(entry.date, datetime.date(2026, 9, 23))
         output = '\n'.join(logs.output)
         self.assert_sanitized(output)
         self.assertIn(
@@ -453,6 +456,7 @@ class SanitizedFailureTests(EduVulcanAcceptanceTestCase):
         row = InboundNotification.objects.get()
         self.assertEqual((row.status, row.last_error_code), (Status.PROCESSED, 'provider_timeout'))
         self.assertEqual(Entry.objects.get().conversion_output.kind, OutputKind.GENERAL_NOTE.value)
+        self.assertEqual(Entry.objects.get().date, datetime.date(2026, 9, 23))
         self.assert_sanitized('\n'.join(logs.output) + row.last_error_code + row.error)
 
     def test_conversion_health_response_carries_no_notification_data(self):

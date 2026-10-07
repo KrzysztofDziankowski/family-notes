@@ -38,23 +38,23 @@ class EntryModelTests(FamilyFixtureMixin, TestCase):
     def test_calendar_event_requires_date_at_database_level(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
             Entry.objects.create(
+                date=None,
                 family=self.family,
                 entry_type=EntryType.CALENDAR_EVENT.value,
                 content='Wycieczka',
             )
 
-    def test_note_and_todo_without_date_are_accepted(self):
+    def test_note_and_todo_without_date_are_rejected(self):
         for entry_type in (EntryType.NOTE, EntryType.TODO):
             with self.subTest(entry_type=entry_type):
-                entry = Entry.objects.create(
-                    family=self.family,
-                    entry_type=entry_type.value,
-                    content='Kupić zeszyt',
-                )
-                self.assertIsNone(entry.date)
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    Entry.objects.create(
+                        family=self.family, entry_type=entry_type.value, content='Kupić zeszyt',
+                        date=None,
+                    )
 
     def test_eduvulcan_entry_saves_without_key_or_creator(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content='Szczęśliwy numerek 7',
@@ -66,7 +66,7 @@ class EntryModelTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(entry.source, 'eduvulcan')
 
     def test_string_and_repr_never_contain_content(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content=SENTINEL_CONTENT,
@@ -76,7 +76,7 @@ class EntryModelTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn(SENTINEL_CONTENT, repr(entry))
 
     def test_deleting_family_cascades_entries(self):
-        Entry.objects.create(
+        Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content='Notatka',
@@ -88,7 +88,7 @@ class EntryModelTests(FamilyFixtureMixin, TestCase):
         self.assertFalse(Entry.objects.exists())
 
     def test_deleting_assigned_member_or_user_is_restricted(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content='Notatka',
@@ -157,7 +157,7 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
                 'school_item': SchoolItemKind.GRADE.value,
             },
             'substitution': {
-                'entry_type': EntryType.NOTE.value,
+                'entry_type': EntryType.CALENDAR_EVENT.value,
                 'school_item': SchoolItemKind.SUBSTITUTION.value,
             },
             'plain event': {'school_item': ''},
@@ -206,6 +206,13 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
                     self.save(assigned_member=member)
         self.assertFalse(Entry.objects.exists())
 
+    def test_each_type_requires_a_date_even_outside_school(self):
+        for entry_type in EntryType:
+            with self.subTest(entry_type=entry_type):
+                with self.assertRaisesMessage(ValidationError, 'Wpis musi mieć datę.'):
+                    self.save(entry_type=entry_type, school_item='', date=None)
+        self.assertFalse(Entry.objects.exists())
+
     def test_required_fields_are_enforced(self):
         with self.assertRaises(ValidationError):
             self.save(date=None, school_item='')
@@ -245,7 +252,7 @@ class SaveConfirmedEntryTests(FamilyFixtureMixin, TestCase):
 
     def test_key_owned_by_another_family_is_rejected(self):
         key = uuid.uuid4()
-        foreign = Entry.objects.create(
+        foreign = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content='Cudza notatka',
@@ -317,6 +324,7 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
 
     def test_a_rejected_item_rolls_back_the_earlier_ones(self):
         cases = {
+            'missing task deadline': lambda: self.item(entry_type=EntryType.TODO, date=None),
             'foreign key': lambda: self.item(submission_key=self._foreign_key()),
             'foreign member': lambda: self.item(assigned_member=self.other_family_child),
             'school event without subject': lambda: self.item(
@@ -332,7 +340,7 @@ class SaveConfirmedEntriesTests(FamilyFixtureMixin, TestCase):
 
     def _foreign_key(self):
         key = uuid.uuid4()
-        Entry.objects.create(
+        Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family, entry_type=EntryType.NOTE.value, content='x',
             submission_key=key,
         )
@@ -381,13 +389,13 @@ class ManagementFixtureMixin(FamilyFixtureMixin):
         )
         self.eduvulcan = Entry.objects.create(
             family=self.family,
-            entry_type=EntryType.NOTE.value,
+            entry_type=EntryType.CALENDAR_EVENT.value,
             content='Zastępstwo z fizyki',
             date=EVENT_DATE,
             school_item=SchoolItemKind.SUBSTITUTION.value,
             source=Entry.Source.EDUVULCAN,
         )
-        self.foreign = Entry.objects.create(
+        self.foreign = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content=SENTINEL_CONTENT,
@@ -453,7 +461,7 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
         values = {
             'entry_type': EntryType.TODO.value,
             'content': 'Kupić zeszyt w kratkę',
-            'date': None,
+            'date': EVENT_DATE,
             'time': None,
             'assigned_member': self.other_child,
             'school_item': '',
@@ -515,7 +523,7 @@ class CreateFamilyEntryTests(ManagementFixtureMixin, TestCase):
         cases = {
             'blank content': {'content': '   '},
             'too long content': {'content': 'x' * 2001},
-            'undated event': {'entry_type': EntryType.CALENDAR_EVENT.value},
+            'undated event': {'entry_type': EntryType.CALENDAR_EVENT.value, 'date': None},
             'school item type mismatch': {'school_item': SchoolItemKind.TEST.value},
             'school item missing member': {
                 'entry_type': EntryType.CALENDAR_EVENT.value,
@@ -635,7 +643,7 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
         updated = self.update(
             self.eduvulcan,
             entry_type=EntryType.NOTE.value,
-            date=None,
+            date=EVENT_DATE,
             time=None,
             assigned_member=None,
             school_item='',
@@ -643,7 +651,7 @@ class UpdateFamilyEntryTests(ManagementFixtureMixin, TestCase):
 
         updated.refresh_from_db()
         self.assertEqual(updated.school_item, '')
-        self.assertIsNone(updated.date)
+        self.assertEqual(updated.date, EVENT_DATE)
 
     def test_foreign_and_missing_entries_are_not_found_and_unchanged(self):
         before = self.snapshot()
@@ -874,7 +882,7 @@ class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
         return {
             'entry_type': entry_type.value,
             'content': 'Odebrać paczkę z poczty',
-            'date': EVENT_DATE if entry_type == EntryType.CALENDAR_EVENT else None,
+            'date': EVENT_DATE,
             'time': None,
             'assigned_member': member,
             'school_item': '',
@@ -902,7 +910,7 @@ class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
                         self.assertEqual(entry.entry_type, entry_type.value)
 
     def test_update_persists_self_and_other_parent(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content='Stary wpis',
@@ -919,7 +927,7 @@ class TwoParentAssigneeServiceTests(TwoParentFixtureMixin, TestCase):
                     self.assertEqual(entry.assigned_member, member)
 
     def test_foreign_and_inactive_parents_are_rejected_without_writes(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content='Stary wpis',

@@ -9,7 +9,7 @@ Parameters: entry, list_mode, delete_open (optional; renders the disclosure open
         <dd>{{ entry.get_entry_type_display }}</dd>
         <dt>Tytuł</dt>
         <dd class="fn-manage-content">{{ entry.content|linebreaksbr }}</dd>
-        <dt>Data</dt>
+        <dt>{% include "entries/_entry_date_label.html" with entry=entry only %}</dt>
         <dd>{% if entry.date %}{{ entry.date|date:"l, j E Y"|lower }}{% else %}Bez daty{% endif %}</dd>
         <dt>Godzina</dt>
         <dd>{% if entry.time %}{{ entry.time|time:"H:i" }}{% else %}Bez godziny{% endif %}</dd>

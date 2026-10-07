@@ -198,14 +198,14 @@ The owner explicitly authorized migration on 2026-10-06, superseding the earlier
 
 #### Automated
 
-- [ ] 1.1 Classification, correction, service, and EduVulcan tests prove date meanings, source-date precedence, school mappings, and missing-date handling.
-- [ ] 1.2 Batch and conversion tests prove atomicity, replay stability, and full-text dated fallback preservation.
+- [x] 1.1 Classification, correction, service, and EduVulcan tests prove date meanings, source-date precedence, school mappings, and missing-date handling.
+- [x] 1.2 Batch and conversion tests prove atomicity, replay stability, and full-text dated fallback preservation.
 
 ### Phase 2: Forms and Listings
 
 #### Automated
 
-- [ ] 2.1 Form, view, admin, access, and accessibility tests prove required dates and listing-only type hiding.
+- [x] 2.1 Form, view, admin, access, and accessibility tests prove required dates and listing-only type hiding.
 
 #### Manual
 
@@ -215,8 +215,8 @@ The owner explicitly authorized migration on 2026-10-06, superseding the earlier
 
 #### Automated
 
-- [ ] 3.1 Forward migration tests prove Europe/Warsaw backfill, metadata-based type normalization, preservation of unmapped types, and exact preservation of existing dates, unrelated fields, links, and timestamps.
-- [ ] 3.2 Storage tests reject null dates; dated development seeds, ordinary fixtures, isolated historical migration tests, and migration drift checks pass.
+- [x] 3.1 Forward migration tests prove Europe/Warsaw backfill, metadata-based type normalization, preservation of unmapped types, and exact preservation of existing dates, unrelated fields, links, and timestamps.
+- [x] 3.2 Storage tests reject null dates; dated development seeds, ordinary fixtures, isolated historical migration tests, and migration drift checks pass.
 
 #### Manual
 
@@ -226,9 +226,9 @@ The owner explicitly authorized migration on 2026-10-06, superseding the earlier
 
 #### Automated
 
-- [ ] 4.1 Full Django suite passes: `uv run python manage.py test --noinput`.
-- [ ] 4.2 System and migration drift checks pass: `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run`.
-- [ ] 4.3 API and regression tests prove unchanged response shape/type values, non-null dates, authorization, and past/upcoming boundaries.
+- [x] 4.1 Full Django suite passes: `uv run python manage.py test --noinput`.
+- [x] 4.2 System and migration drift checks pass: `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run`.
+- [x] 4.3 API and regression tests prove unchanged response shape/type values, non-null dates, authorization, and past/upcoming boundaries.
 
 #### Manual
 

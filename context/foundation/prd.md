@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 2
 status: draft
 created: 2026-09-20
-updated: 2026-09-27
+updated: 2026-10-06
 context_type: greenfield
 product_type: web-app
 target_scale:
@@ -129,18 +129,22 @@ Children read family information relevant to them but do not create, edit, or de
 
 The application classifies a parent's natural-language text as a todo, calendar event, or note and extracts the affected family member and date.
 
-A homework, class test, test, or quiz entry is a calendar event and requires both an affected family member and a date. A substitution or room-change entry is a note and requires a date. Lucky-number, grade, and late-arrival entries are notes without additional required fields. A calendar entry requires a date, while its time is optional. If a required value is missing, the application asks a follow-up question before presenting the proposal for confirmation.
+A homework, class test, test, or quiz entry is a calendar event and requires both an affected family member and a date. A substitution or room-change entry is a calendar event and requires a date. Lucky-number, grade, and late-arrival entries are notes. Every entry requires a date: notes use their writing date, events their occurrence date, and tasks their due date. Times are optional. Notes default to the local writing date and allow explicit corrections; ordinary edits preserve it. Changing type keeps the selected date for review. If a required value is missing, the application asks a follow-up question before presenting the proposal for confirmation.
 
-If no entry type or relevant detail can be recognized, the text is treated as a general note.
+If no entry type or relevant detail can be recognized, the text is treated as a general note dated by the local writing day.
 
 An EduVulcan notification carries a category title, a short message, a notification id, and a capture time. Known categories are interpreted by fixed school rules; only a notification the rules cannot interpret falls back to classification, and if that also fails it is saved as a general note. The category mapping is:
 
 - "Sprawdzian", "Kartkówka", "Praca klasowa" (test, quiz, class test) and "Zadanie domowe" (homework) → calendar event for the named child on the stated date.
-- "Zmiana planu dla <child>" (substitution, room change, teacher absence) → note for the named child on the stated date; one notification may describe more than one change.
-- "Ocena" (grade), "Szczęśliwy numerek" (lucky number), "Frekwencja" (late arrival) → note for the named child.
-- "Nowa wiadomość" (teacher message) → general family note without an assigned child, dated by the message date.
+- "Zmiana planu dla <child>" (substitution, room change, teacher absence) → calendar event for the named child on the stated date; one notification may describe more than one change.
+- "Ocena" (grade), "Szczęśliwy numerek" (lucky number), "Frekwencja" (late arrival) → note for the named child, dated by capture day; any occurrence/applicability date remains in its text.
+- "Nowa wiadomość" (teacher message) → general family note without an assigned child, dated by a validated source-writing date from the recognized message format, falling back to capture day.
 
 Dates in notifications omit the year; the year is inferred from the capture time. The child is identified by name as it appears in the notification, including Polish diacritics. Automated entries are marked with EduVulcan as their source.
+
+Parent and child listings hide broad type labels; type selection and detail information remain available outside listings. Past tasks leave the upcoming list after their deadlines.
+
+Existing missing dates are backfilled from local creation dates, and historical types follow recognized saved school metadata only. Non-null dates and unrelated values remain unchanged. Every saved date is non-null after migration. The data migration is irreversible and requires writers stopped during backup and migration.
 
 ## Access Control
 

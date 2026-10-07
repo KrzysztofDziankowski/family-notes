@@ -8,7 +8,7 @@ Category mapping (PRD Business Logic):
 
 - "Sprawdzian", "Kartkówka", "Praca klasowa", "Zadanie domowe": a dated
   calendar event for the named child.
-- "Zmiana planu dla <child>": one dated child note per valid change; any
+- "Zmiana planu dla <child>": one dated child event per valid change; any
   unparsed remainder becomes one unassigned family note after them.
 - "Ocena", "Szczęśliwy numerek", "Frekwencja": a child note.
 - "Nowa wiadomość": an unassigned family note dated from the message.
@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime
 import re
+from zoneinfo import ZoneInfo
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from django.utils import timezone
@@ -76,7 +77,7 @@ _CALENDAR_CATEGORIES = {
 }
 
 # change phrase -> (entry label, school item kind, lesson subject required).
-# A teacher absence has no matching school item kind, so it stays a plain note.
+# A teacher absence has no school kind; it is a plain calendar event.
 _CHANGE_KINDS = {
     'zastępstwo': ('Zastępstwo', SchoolItemKind.SUBSTITUTION, True),
     'zmieniono salę': ('Zmiana sali', SchoolItemKind.ROOM_CHANGE, True),
@@ -137,7 +138,7 @@ def reference_date_for(captured_at) -> datetime.date:
     """The local capture day used to infer years; accepts a date or datetime."""
     if isinstance(captured_at, datetime.datetime):
         if timezone.is_aware(captured_at):
-            return timezone.localdate(captured_at)
+            return timezone.localdate(captured_at, timezone=ZoneInfo('Europe/Warsaw'))
         return captured_at.date()
     return captured_at
 
@@ -196,12 +197,13 @@ def _grade(key, message, reference, builder) -> Optional[Proposals]:
     match = _GRADE_MESSAGE.match(message)
     if match is None:
         return None
-    # Grades stay undated; lists place them by their creation day.
+    # A grade is written on the capture day, not an assessment occurrence day.
     builder.add_for_child(
         match.group('child'),
         entry_type=EntryType.NOTE,
         content=f"Ocena: {match.group('grade')}, {match.group('subject')}",
         school_item=SchoolItemKind.GRADE,
+        date=reference,
     )
     return builder.result()
 
@@ -216,8 +218,8 @@ def _lucky_number(key, message, reference, builder) -> Optional[Proposals]:
     builder.add_for_child(
         match.group('child'),
         entry_type=EntryType.NOTE,
-        content=f"Szczęśliwy numerek: {match.group('number')}",
-        date=date,
+        content=f"Szczęśliwy numerek: {match.group('number')}, w dniu {match.group('day')} {match.group('month')}",
+        date=reference,
         school_item=SchoolItemKind.LUCKY_NUMBER,
     )
     return builder.result()
@@ -234,8 +236,8 @@ def _attendance(key, message, reference, builder) -> Optional[Proposals]:
     builder.add_for_child(
         match.group('child'),
         entry_type=EntryType.NOTE,
-        content=event,
-        date=date,
+        content=f"{event}, w dniu {match.group('day')} {match.group('month')}",
+        date=reference,
         school_item=(
             SchoolItemKind.LATE_ARRIVAL if event.casefold().startswith('spóźnienie') else None
         ),
@@ -244,17 +246,19 @@ def _attendance(key, message, reference, builder) -> Optional[Proposals]:
 
 
 def _teacher_message(key, message, reference, builder) -> Optional[Proposals]:
-    match = _TEACHER_MESSAGE.match(message)
+    match = _TEACHER_MESSAGE.fullmatch(message)
     if match is None:
-        return None
-    date = _date_from(match, reference)
-    if date is None:
-        return None
-    builder.add(
-        entry_type=EntryType.NOTE,
-        content=f"Wiadomość od {match.group('sender')}: {match.group('topic')}",
-        date=date,
-    )
+        builder.add(
+            entry_type=EntryType.NOTE,
+            content=f'Nowa wiadomość: {message}',
+            date=reference,
+        )
+    else:
+        builder.add(
+            entry_type=EntryType.NOTE,
+            content=f"Wiadomość od {match.group('sender')}: {match.group('topic')}",
+            date=_date_from(match, reference) or reference,
+        )
     return builder.result()
 
 
@@ -287,7 +291,7 @@ def _timetable(title, child_name, message, reference, builder) -> Optional[Propo
         details = f"{subject}, {match.group('teacher')}" if subject else match.group('teacher')
         builder.add_for_child(
             child_name,
-            entry_type=EntryType.NOTE,
+            entry_type=EntryType.CALENDAR_EVENT,
             content=f'{label}: {details}',
             date=date,
             school_item=school_item,
@@ -299,6 +303,7 @@ def _timetable(title, child_name, message, reference, builder) -> Optional[Propo
             kind=OutputKind.RULE_REMAINDER,
             entry_type=EntryType.NOTE,
             content=f"{title}: {' '.join(unparsed)}",
+            date=reference,
         )
     return builder.result()
 
@@ -319,11 +324,28 @@ def general_note_text(title: str, message: str) -> str:
     return f'{title}: {message}' if title and message else title or message
 
 
-def general_note_proposal(title: str, message: str, *, output_index: int = 0) -> EntryProposal:
+def general_note_proposal(
+    title: str, message: str, *, captured_at, output_index: int = 0
+) -> EntryProposal:
     """The last-resort unassigned family note carrying the notification text."""
     return EntryProposal(
         output_index=output_index,
         kind=OutputKind.GENERAL_NOTE,
         entry_type=EntryType.NOTE,
         content=general_note_text(title, message),
+        date=writing_date_for(title, message, captured_at=captured_at),
     )
+
+
+def writing_date_for(title: str, message: str, *, captured_at) -> datetime.date:
+    """Trust only the recognized teacher-message writing-date format.
+
+    Other school dates are occurrence dates. Neither a provider date nor a
+    processing timestamp may replace the notification's capture day.
+    """
+    reference = reference_date_for(captured_at)
+    if normalize_text(title).casefold() == 'nowa wiadomość':
+        match = _TEACHER_MESSAGE.fullmatch(normalize_text(message))
+        if match is not None:
+            return _date_from(match, reference) or reference
+    return reference

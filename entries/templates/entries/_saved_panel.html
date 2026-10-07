@@ -12,7 +12,7 @@
             <dt>Tytuł</dt>
             <dd>{{ entry.content }}</dd>
             {% if entry.date %}
-                <dt>Data</dt>
+                <dt>{% include "entries/_entry_date_label.html" with entry=entry only %}</dt>
                 <dd>{{ entry.date|date:"l, j E Y"|lower }}</dd>
             {% endif %}
             {% if entry.time %}
