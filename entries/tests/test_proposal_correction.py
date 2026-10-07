@@ -228,6 +228,27 @@ class MergeTests(CorrectionTestMixin, TestCase):
         self.assertEqual(correction.outcome.result.missing_fields, (MissingField.DATE,))
         self.assertEqual(correction.outcome.result.time, datetime.time(8, 0))
 
+    def test_note_date_correction_is_preserved_and_clearing_requires_follow_up(self):
+        current = school_test(entry_type=EntryType.NOTE, school_item=None)
+        for date in (FRIDAY, None):
+            with self.subTest(date=date):
+                backend = RecordingBackend(correction_output({'date'}, date=date))
+                correction = self.correct(backend, current=current)
+                self.assertTrue(correction.applied)
+                self.assertEqual(correction.outcome.result.date, date)
+                if date is None:
+                    self.assertIsInstance(correction.outcome.result, ClassificationFollowUp)
+                    self.assertEqual(correction.outcome.result.missing_fields, (MissingField.DATE,))
+
+    def test_type_change_preserves_the_selected_date(self):
+        current = school_test(school_item=None)
+        for entry_type in (EntryType.NOTE, EntryType.TODO):
+            with self.subTest(entry_type=entry_type):
+                backend = RecordingBackend(correction_output({'entry_type'}, entry_type=entry_type))
+                correction = self.correct(backend, current=current)
+                self.assertTrue(correction.applied)
+                self.assertEqual(correction.outcome.result.date, MONDAY)
+
     def test_relative_shift_result_is_taken_as_returned(self):
         backend = RecordingBackend(
             correction_output({'date', 'time'}, date=MONDAY + datetime.timedelta(days=7), time=None)

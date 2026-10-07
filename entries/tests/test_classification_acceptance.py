@@ -352,7 +352,7 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                     date_source='w poniedziałek',
                     school_item='room_change',
                 ),
-                EntryType.NOTE,
+                EntryType.CALENDAR_EVENT,
                 None,
             ),
             'lucky number': (
@@ -376,7 +376,12 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
                 None,
             ),
             'todo without date': (
-                dict(entry_type='todo', content='Podpisać zgodę na wycieczkę'),
+                dict(
+                    entry_type='todo',
+                    content='Podpisać zgodę na wycieczkę',
+                    date='2026-09-23',
+                    date_source='w poniedziałek',
+                ),
                 EntryType.TODO,
                 None,
             ),
@@ -398,7 +403,11 @@ class EntryCategoryTests(AdapterPathMixin, TestCase):
 
         self.assertEqual(
             outcome.result,
-            ClassificationProposal(entry_type=EntryType.NOTE, content=text.strip()),
+            ClassificationProposal(
+                entry_type=EntryType.NOTE,
+                content=text.strip(),
+                date=PRD_REFERENCE_DATE,
+            ),
         )
         self.assertIsNone(outcome.member)
 
@@ -654,7 +663,7 @@ class TitleKeepsActionOnlyTests(AdapterPathMixin, TestCase):
                 )
                 self.assertEqual(outcome.member, self.kasia)
 
-    def test_ungrounded_date_phrase_stays_in_the_title_and_todo_asks_no_date(self):
+    def test_ungrounded_date_phrase_stays_in_the_title_and_todo_asks_for_date(self):
         cases = (
             # Evidence that is not in the parent's text.
             (self.INSTRUCTION, 'w sobotę'),
@@ -672,7 +681,8 @@ class TitleKeepsActionOnlyTests(AdapterPathMixin, TestCase):
 
                 self.assertEqual(
                     outcome.result,
-                    ClassificationProposal(
+                    ClassificationFollowUp(
+                        missing_fields=(MissingField.DATE,),
                         entry_type=EntryType.TODO,
                         content='Zrobić pranie w piątek',
                         member_name='Kasia',
@@ -696,7 +706,11 @@ class TitleKeepsActionOnlyTests(AdapterPathMixin, TestCase):
 
         self.assertEqual(
             outcome.result,
-            ClassificationProposal(entry_type=EntryType.TODO, content=text),
+            ClassificationFollowUp(
+                missing_fields=(MissingField.DATE,),
+                entry_type=EntryType.TODO,
+                content=text,
+            ),
         )
         self.assertIsNone(outcome.member)
 
@@ -1288,8 +1302,11 @@ class SelfReferenceAcceptanceTests(TwoParentFixtureMixin, AdapterPathMixin, Test
                 self.assertEqual(self.sent_input()['autor_polecenia'], 'Ewa')
                 self.assertEqual(
                     outcome.result,
-                    ClassificationProposal(
-                        entry_type=EntryType.TODO, content='Kupić mleko', member_name='Ewa'
+                    ClassificationFollowUp(
+                        missing_fields=(MissingField.DATE,),
+                        entry_type=EntryType.TODO,
+                        content='Kupić mleko',
+                        member_name='Ewa',
                     ),
                 )
                 self.assertEqual(outcome.member, self.parent)

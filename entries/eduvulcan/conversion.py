@@ -46,11 +46,14 @@ from family_access.models import Family
 from family_notes.log_safety import exception_summary
 
 from ..classification.service import FamilyOutcome, classify_for_family
+from ..classification.types import EntryType
 from ..models import Entry, InboundNotification, NotificationConversionOutput
 from ..services import create_automated_entry, upgrade_automated_exam_entry
 from .children import snapshot_active_children
 from .dedup import Action, Candidate, decide
-from .rules import general_note_proposal, general_note_text, propose_entries, reference_date_for
+from .rules import (
+    general_note_proposal, general_note_text, propose_entries, reference_date_for, writing_date_for,
+)
 from .types import EntryProposal, OutputKind
 
 logger = logging.getLogger(__name__)
@@ -317,8 +320,11 @@ def _convert(claim: Claim, *, backend, now) -> ConversionResult:
             output_index=0,
             kind=OutputKind.CLASSIFICATION,
             entry_type=proposal.entry_type,
-            content=proposal.content,
-            date=proposal.date,
+            content=text if proposal.entry_type == EntryType.NOTE else proposal.content,
+            date=(
+                writing_date_for(row.title, row.message, captured_at=row.captured_at)
+                if proposal.entry_type == EntryType.NOTE else proposal.date
+            ),
             time=proposal.time,
             school_item=proposal.school_item,
             member=classification.member,
@@ -328,7 +334,7 @@ def _convert(claim: Claim, *, backend, now) -> ConversionResult:
         if result is not None:
             return result
 
-    note = general_note_proposal(row.title, row.message)
+    note = general_note_proposal(row.title, row.message, captured_at=row.captured_at)
     result = _try_persist(claim, row, (note,), now=now, error_code=fallback_code)
     if result is not None:
         return result

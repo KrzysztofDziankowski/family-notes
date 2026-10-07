@@ -90,7 +90,7 @@ class StatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
             'Data 01.10.2026 jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
             'Jeśli nie, popraw datę powyżej.',
         )
-        self.assertContains(response, 'Zaktualizowano: data.')
+        self.assertContains(response, 'Zaktualizowano: data wydarzenia.')
         self.assertContains(response, views.CORRECTION_FAILED_NOTICE)
         self.assertContains(response, 'Spotkanie z wychowawczynią')
         self.assertContains(response, 'bla bla</textarea>')

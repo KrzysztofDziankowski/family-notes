@@ -55,8 +55,10 @@ import datetime
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import FrozenSet, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo
 
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
 from family_access.access import is_parent, scope_queryset_to_family
@@ -102,6 +104,15 @@ _MEMBER_FIELDS = frozenset(
 )
 
 
+def _local_reference_date(value):
+    """An aware reference datetime means its Europe/Warsaw calendar day."""
+    if isinstance(value, datetime.datetime):
+        if timezone.is_aware(value):
+            return timezone.localdate(value, timezone=ZoneInfo('Europe/Warsaw'))
+        return value.date()
+    return value
+
+
 @dataclass(frozen=True)
 class ParentClassification:
     """A transient classification result plus its locally resolved member.
@@ -140,8 +151,7 @@ def classify_for_parent(
         )
 
     candidates = _active_family_members(membership)
-    if isinstance(reference_date, datetime.datetime):
-        reference_date = reference_date.date()
+    reference_date = _local_reference_date(reference_date)
     request = BackendRequest(
         submitted_text=submitted_text,
         allowed_member_names=tuple(member.display_name for member in candidates),
@@ -213,8 +223,7 @@ def classify_entries_for_parent(
         return _single(ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG))
 
     candidates = _active_family_members(membership)
-    if isinstance(reference_date, datetime.datetime):
-        reference_date = reference_date.date()
+    reference_date = _local_reference_date(reference_date)
     request = BackendRequest(
         submitted_text=submitted_text,
         allowed_member_names=tuple(member.display_name for member in candidates),
@@ -327,8 +336,7 @@ def correct_proposal_for_parent(
         return _not_applied(CorrectionRejection.TOO_LONG)
 
     candidates = _active_family_members(membership)
-    if isinstance(reference_date, datetime.datetime):
-        reference_date = reference_date.date()
+    reference_date = _local_reference_date(reference_date)
     member_name = _trusted_member_name(current.member_name, current_member, candidates)
     current = replace(current, member_name=member_name)
     request = BackendRequest(
@@ -440,8 +448,7 @@ def classify_follow_up_answer(
         )
 
     candidates = _active_family_members(membership)
-    if isinstance(reference_date, datetime.datetime):
-        reference_date = reference_date.date()
+    reference_date = _local_reference_date(reference_date)
     request = BackendRequest(
         submitted_text=submitted_text,
         allowed_member_names=tuple(member.display_name for member in candidates),
@@ -693,14 +700,13 @@ def classify_for_family(
     """
     if not submitted_text or not submitted_text.strip():
         raise ValueError('submitted_text must not be blank')
-    if isinstance(reference_date, datetime.datetime):
-        reference_date = reference_date.date()
+    reference_date = _local_reference_date(reference_date)
 
     def general_note(outcome=FamilyOutcome.GENERAL_NOTE, reason=None):
         return FamilyClassification(
             outcome=outcome,
             proposal=ClassificationProposal(
-                entry_type=EntryType.NOTE, content=submitted_text.strip()
+                entry_type=EntryType.NOTE, content=submitted_text.strip(), date=reference_date
             ),
             reason=reason,
         )
@@ -732,6 +738,11 @@ def classify_for_family(
     if not isinstance(result, ClassificationProposal):
         # A follow-up cannot be asked of automation: keep the text as a note.
         return general_note()
+
+    if result.entry_type == EntryType.NOTE:
+        # A provider cannot establish imported writing-date provenance. Keep
+        # occurrence dates in the complete text and use the capture reference.
+        result = replace(result, date=reference_date, content=submitted_text.strip())
 
     member = None
     if result.member_name is not None:

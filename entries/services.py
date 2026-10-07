@@ -139,9 +139,11 @@ def _validate_entry_invariants(
         or (not assigned_member.is_active and assigned_member.pk != kept_assignee_id)
     ):
         raise ValidationError('Wybrana osoba nie należy do rodziny.')
-    if entry_type == EntryType.CALENDAR_EVENT and date is None:
-        raise ValidationError('Wydarzenie musi mieć datę.')
-    if school_item is not None and school_item.entry_type == entry_type:
+    if date is None:
+        raise ValidationError('Wpis musi mieć datę.')
+    if school_item is not None and school_item.entry_type != entry_type:
+        raise ValidationError('Element szkolny nie pasuje do rodzaju wpisu.')
+    if school_item is not None:
         if MissingField.DATE in school_item.required_fields and date is None:
             raise ValidationError('Ten wpis szkolny wymaga daty.')
         if MissingField.AFFECTED_MEMBER in school_item.required_fields and assigned_member is None:

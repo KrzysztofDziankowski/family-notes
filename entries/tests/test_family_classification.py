@@ -80,7 +80,9 @@ class FamilyClassificationOutcomeTests(TestCase):
         self.assertIsNone(outcome.member)
         self.assertEqual(
             outcome.proposal,
-            ClassificationProposal(entry_type=EntryType.NOTE, content=NOTIFICATION_TEXT),
+            ClassificationProposal(
+                entry_type=EntryType.NOTE, content=NOTIFICATION_TEXT, date=REFERENCE_DATE
+            ),
         )
 
     def test_valid_classification_resolves_a_snapshot_child(self):
@@ -93,6 +95,13 @@ class FamilyClassificationOutcomeTests(TestCase):
         self.assertEqual(outcome.proposal.entry_type, EntryType.CALENDAR_EVENT)
         self.assertEqual(outcome.proposal.date, EVENT_DATE)
         self.assertEqual(outcome.proposal.content, 'Wycieczka')
+
+    def test_note_ignores_provider_occurrence_date_and_preserves_full_text(self):
+        outcome = classify(RecordingBackend(output(entry_type=EntryType.NOTE)))
+
+        self.assertEqual(outcome.proposal.date, REFERENCE_DATE)
+        self.assertEqual(outcome.proposal.content, NOTIFICATION_TEXT)
+        self.assertEqual(outcome.member, LUCJA)
 
     def test_classification_without_member_stays_unassigned(self):
         outcome = classify(RecordingBackend(output(member_name=None)))

@@ -10,7 +10,7 @@
 #   test_obcy    parent "Obcy"  - Inna rodzina (foreign family)
 #   test_dwie    parent "Ola"   - Rodzina testowa, and child "Ola" - Inna rodzina
 #                (two families: picks one on the chooser, switches in the header)
-# plus sample entries covering upcoming, today, undated, long, past/EduVulcan,
+# plus sample entries covering upcoming, today, long, past/EduVulcan,
 # sibling, family-wide and foreign-family cases. Safe to re-run: it resets these
 # users' passwords and recreates entries of the two test families only.
 import datetime
@@ -63,6 +63,7 @@ def entry(content, assignee, fam=family, **fields):
         content=content,
         assigned_member=assignee,
         entry_type=fields.pop('entry_type', 'todo'),
+        date=fields.pop('date', today),
         created_by=fields.pop('created_by', parent),
         **fields,
     )

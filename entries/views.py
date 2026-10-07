@@ -797,7 +797,7 @@ def states(request):
         {
             'name': 'corrected',
             'label': 'Propozycja po poprawce',
-            'notice': CORRECTION_APPLIED_NOTICE.format(fields='data'),
+            'notice': CORRECTION_APPLIED_NOTICE.format(fields='data wydarzenia'),
             'review_form': corrected_form,
         },
         {
@@ -1090,6 +1090,7 @@ def _synthetic_entry(offset, **fields):
     values = dict(
         pk=STATES_ENTRY_PK + offset,
         entry_type=EntryType.TODO.value,
+        date=STATES_DATE,
         source=Entry.Source.MANUAL,
         created_at=created_at,
         updated_at=created_at + datetime.timedelta(days=1, minutes=5),
@@ -1148,7 +1149,8 @@ def _manage_state_sections(membership):
         ),
         member='Tymek',
     )
-    undated = _synthetic_entry(4, content='Oddać książkę do biblioteki')
+    library_task = _synthetic_entry(4, content='Oddać książkę do biblioteki',
+                                    date=STATES_DATE + datetime.timedelta(days=3))
     parent_note = _synthetic_entry(
         7,
         entry_type=EntryType.NOTE.value,
@@ -1182,7 +1184,7 @@ def _manage_state_sections(membership):
         member='Tymek',
     )
 
-    create_form = EntryCreateForm(membership)
+    create_form = EntryCreateForm(membership, today=STATES_DATE)
     _use_synthetic_members(create_form)
 
     invalid_form = EntryCreateForm(
@@ -1211,8 +1213,7 @@ def _manage_state_sections(membership):
             'list': _synthetic_list(
                 UPCOMING,
                 [
-                    (SECTION_DATED, [test_entry, parent_note, family_meeting, trip]),
-                    (SECTION_UNDATED, [long_note, undated]),
+                    (SECTION_DATED, [test_entry, parent_note, family_meeting, long_note, trip, library_task]),
                 ],
             ),
         },
@@ -1315,6 +1316,7 @@ def child_detail(request, pk):
 def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school_item='',
                         school_subject='', source=Entry.Source.MANUAL, effective_date=None):
     """Unsaved fictional entry for the child gallery; never written."""
+    date = date or STATES_DATE
     entry = Entry(
         pk=pk,
         entry_type=entry_type.value,
@@ -1351,7 +1353,7 @@ def child_states(request):
     todo = _child_states_entry(
         9003, 'Przynieść strój na WF', EntryType.TODO, date=STATES_DATE + day,
     )
-    undated = _child_states_entry(
+    long_note = _child_states_entry(
         9004,
         'Wycieczka do muzeum: zabrać drugie śniadanie, picie, legitymację, wygodne buty, '
         'kurtkę przeciwdeszczową i pieniądze na bilety oraz pamiątki. Zbiórka przy bramie '
@@ -1375,7 +1377,7 @@ def child_states(request):
         date=STATES_DATE + 21 * day, time=datetime.time(17, 30),
     )
     homework = _child_states_entry(
-        9009, 'Zadanie domowe z angielskiego', EntryType.TODO, date=STATES_DATE - day,
+        9009, 'Zadanie domowe z angielskiego', EntryType.CALENDAR_EVENT, date=STATES_DATE - day,
     )
     start = _child_states_entry(
         9010, 'Rozpoczęcie roku szkolnego', EntryType.CALENDAR_EVENT,
@@ -1387,8 +1389,7 @@ def child_states(request):
 
     sections = [
         list_state('upcoming', 'Nadchodzące', UPCOMING, [
-            EntrySection(SECTION_DATED, [test, grade, todo, reading, meeting]),
-            EntrySection(SECTION_UNDATED, [undated]),
+            EntrySection(SECTION_DATED, [test, grade, long_note, todo, reading, meeting]),
         ]),
         list_state('past', 'Minione', PAST, [
             EntrySection(SECTION_PAST, [homework, quiz, returned, start]),
@@ -1399,7 +1400,7 @@ def child_states(request):
         ]),
         list_state('past_empty', 'Brak minionych', PAST, [EntrySection(SECTION_PAST, [])]),
         {'name': 'detail_manual', 'label': 'Szczegóły wpisu ręcznego',
-         'entry': undated, 'back_mode': UPCOMING},
+         'entry': long_note, 'back_mode': UPCOMING},
         {'name': 'detail_eduvulcan', 'label': 'Szczegóły wpisu z EduVulcan',
          'entry': quiz, 'back_mode': PAST},
         {'name': 'error_forbidden', 'label': 'Błąd: brak dostępu',

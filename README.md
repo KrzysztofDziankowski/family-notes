@@ -118,7 +118,7 @@ It creates these users, all with the password `test-haslo-123`:
 | `test_tymek` | child (Tymek), sibling | Rodzina testowa |
 | `test_obcy` | parent (Obcy) | Inna rodzina |
 
-It also adds sample entries: upcoming, today, undated, long text, past
+It also adds sample entries: upcoming, today, dated notes/tasks, long text, past
 EduVulcan, a sibling's entry, a family-wide entry, and one entry in the other
 family. At the end it prints the IDs of the sibling, family-wide and
 other-family entries, which the access checks use. Re-running it resets the
@@ -210,16 +210,14 @@ of pasting the secret into a command:
 read -rs FAMILY_NOTES_TOKEN && export FAMILY_NOTES_TOKEN
 ```
 
-Fetch the first page of all entries (dated and undated):
+Fetch the first page of all entries:
 
 ```bash
 curl -sS -H "Authorization: Bearer $FAMILY_NOTES_TOKEN" \
   "http://localhost:20121/api/automation/entries/"
 ```
 
-Fetch the entries from today to four weeks ahead (both bounds inclusive). With
-a date bound, entries without a date are left out unless you add
-`include_undated=true`:
+Fetch the entries from today to four weeks ahead (both bounds inclusive). Date bounds remain inclusive. `include_undated` remains accepted for API compatibility; after the mandatory-date migration, every entry is dated, so the parameter cannot add undated results:
 
 ```bash
 curl -sS -H "Authorization: Bearer $FAMILY_NOTES_TOKEN" \
@@ -240,7 +238,7 @@ Query parameters (all optional; unknown parameters are ignored):
 | `include_undated` | `true` or `false`, case-insensitive | `true` without date bounds, `false` with at least one bound |
 
 Either bound may be given alone. Without bounds, `include_undated=false`
-returns only dated entries. If a parameter is repeated, the last value is
+returns the same dated entries as `true` after the mandatory-date migration. If a parameter is repeated, the last value is
 used.
 
 Results are ordered by `created_at`, then `id`, both ascending. A `200`
@@ -268,7 +266,7 @@ response looks like this (fictional data):
       "id": 42,
       "entry_type": "todo",
       "content": "Kupić blok techniczny",
-      "date": null,
+      "date": "2026-10-03",
       "time": null,
       "assigned_member": null,
       "school_item": null,
@@ -284,7 +282,7 @@ response looks like this (fictional data):
   `eduvulcan`.
 - `date` is `YYYY-MM-DD`, `time` is `HH:MM:SS`, and `created_at` /
   `updated_at` are ISO 8601 timestamps with a UTC offset.
-- A missing date, time, assigned member, or school item is `null`.
+- Every entry has a non-null date. A missing time, assigned member, or school item is `null`.
   `assigned_member` contains only `display_name`.
 
 `count` is the number of all entries matching the filters, before `limit` and
@@ -314,6 +312,30 @@ Errors:
   no longer an active parent of an active family. Revocation takes effect on
   the next request.
 - `405` for any method other than `GET`.
+
+### Entry dates and types
+
+Entries retain three stored types: `note`, `calendar_event`, and `todo`. Every
+entry requires a date. For notes it is the writing date (defaults to the local
+writing day and can be corrected); for events it is the occurrence date; for
+tasks it is the due date. Missing event/task dates trigger follow-up before
+confirmation. Changing type keeps the selected date for the parent to review.
+Parent and child lists hide type badges; review, editing, and detail retain types.
+Past tasks move out of the upcoming view after their deadline.
+
+School events include homework, tests/quizzes/class tests, substitutions, room
+changes, and teacher absence. Grades, lucky numbers, late arrival, teacher
+messages, and final fallbacks are notes. Imported note dates use a validated
+writing date from a recognized teacher-message format, otherwise the local
+capture day. Source occurrence dates remain in note text. Processing delays and
+provider-produced dates cannot redefine imported note-writing dates.
+
+The date migration fills only missing dates from `created_at` in Europe/Warsaw
+and aligns historical types using recognized saved school-kind metadata. It
+preserves existing non-null dates and all unrelated data; blank/unknown school
+metadata leaves the old type unchanged. Old undated tasks receive creation days
+as fallback deadlines. The data migration is irreversible. See the runbook's
+mandatory-date release prerequisites before deployment.
 
 ### Convert notifications locally
 

@@ -300,6 +300,16 @@ class AuthorizationMatrixTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(backend.requests[0].reference_date, REFERENCE_DATE)
         self.assertIs(type(backend.requests[0].reference_date), datetime.date)
 
+    def test_aware_reference_uses_warsaw_writing_day(self):
+        backend = RecordingBackend(BackendOutput(entry_type=EntryType.NOTE, content='Notatka', grounded=True))
+        outcome = classify_for_parent(
+            self.parent, 'Notatka',
+            reference_date=datetime.datetime(2026, 9, 30, 23, 30, tzinfo=datetime.timezone.utc),
+            backend=backend,
+        )
+        self.assertEqual(outcome.result.date, datetime.date(2026, 10, 1))
+        self.assertEqual(backend.requests[0].reference_date, datetime.date(2026, 10, 1))
+
     def _deactivate_parent(self):
         self.parent.is_active = False
         self.parent.save(update_fields=('is_active',))
@@ -555,7 +565,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)
         self.assertIsNone(outcome.member)
 
-    def test_ambiguous_todo_asks_only_which_member(self):
+    def test_ambiguous_undated_todo_asks_member_and_deadline(self):
         self.add_hanna()
         self.add_anna()
         backend = RecordingBackend(
@@ -571,7 +581,7 @@ class ShortNameMentionTests(FamilyFixtureMixin, TestCase):
         outcome = self.classify(self.parent, backend)
 
         self.assertIsInstance(outcome.result, ClassificationFollowUp)
-        self.assertEqual(outcome.result.missing_fields, (MissingField.AMBIGUOUS_MEMBER,))
+        self.assertEqual(outcome.result.missing_fields, (MissingField.AMBIGUOUS_MEMBER, MissingField.DATE))
         self.assertIsNone(outcome.member)
 
     def test_inactive_namesake_does_not_make_a_short_name_ambiguous(self):

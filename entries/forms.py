@@ -4,6 +4,7 @@ import uuid
 from django import forms
 from django.forms.utils import ErrorDict
 from django.db.models import Q
+from django.utils import timezone
 
 from family_access.access import scope_queryset_to_family
 from family_access.models import FamilyMember
@@ -33,6 +34,12 @@ MISSING_FIELD_HINTS = {
     MissingField.AMBIGUOUS_MEMBER: ('assigned_member', 'Wybierz osobę.'),
     MissingField.SCHOOL_SUBJECT: ('school_subject', 'Podaj przedmiot.'),
 }
+DATE_LABELS = {
+    EntryType.NOTE.value: 'Data zapisania',
+    EntryType.CALENDAR_EVENT.value: 'Data wydarzenia',
+    EntryType.TODO.value: 'Termin wykonania',
+}
+
 PAST_DATE_WARNING = (
     'Data {date} jest w przeszłości. Jeśli jest poprawna, zapisz wpis. '
     'Jeśli nie, popraw datę powyżej.'
@@ -120,8 +127,9 @@ class EntryFieldsForm(forms.Form):
         widget=forms.Textarea(attrs={'rows': 2}),
     )
     date = forms.DateField(
-        label='Data',
-        required=False,
+        label='Data zapisania',
+        required=True,
+        error_messages={'required': 'Podaj datę.'},
         widget=forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
     )
     time = forms.TimeField(
@@ -147,8 +155,16 @@ class EntryFieldsForm(forms.Form):
         strip=True,
     )
 
-    def __init__(self, membership, *args, **kwargs):
+    def __init__(self, membership, *args, today=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.initial.get('entry_type'):
+            self.initial['entry_type'] = EntryType.NOTE.value
+        selected_type = self['entry_type'].value() or EntryType.NOTE.value
+        self.fields['date'].label = DATE_LABELS.get(selected_type, 'Data zapisania')
+        self.fields['entry_type'].widget.attrs['data-entry-date-type'] = ''
+        self.fields['date'].widget.attrs['data-entry-date'] = ''
+        if not self.is_bound and selected_type == EntryType.NOTE.value and 'date' not in self.initial:
+            self.initial['date'] = today or timezone.localdate()
         self.fields['assigned_member'].queryset = scope_queryset_to_family(
             FamilyMember.objects.filter(is_active=True), membership
         ).order_by('pk')
@@ -175,10 +191,10 @@ class EntryFieldsForm(forms.Form):
         return True
 
     def _require_schedule_fields(self, cleaned, entry_type, school_item):
-        """Enforce the calendar date and the school item's required fields."""
+        """Enforce a saving date and the school item's required fields."""
         date = cleaned.get('date')
-        if entry_type == EntryType.CALENDAR_EVENT.value and date is None and 'date' not in self.errors:
-            self.add_error('date', 'Wydarzenie musi mieć datę.')
+        if date is None and 'date' not in self.errors:
+            self.add_error('date', 'Podaj datę.')
         if school_item is not None:
             required = school_item.required_fields
             if MissingField.DATE in required and date is None and 'date' not in self.errors:
@@ -246,7 +262,7 @@ class EntryReviewForm(EntryFieldsForm):
     refuse_pending_correction = True
 
     def __init__(self, membership, *args, missing=None, today=None, **kwargs):
-        super().__init__(membership, *args, **kwargs)
+        super().__init__(membership, *args, today=today, **kwargs)
         # Stable markup for Enter-to-„Popraw” (S-05): the box names its button.
         self.fields['correction'].widget.attrs['data-enter-submitter'] = self.correct_submit_id
         self.missing = dict(missing or {})
@@ -302,6 +318,10 @@ class ProposalCorrectionForm(EntryReviewForm):
     correction = _correction_field(required=True)
 
     refuse_pending_correction = False
+
+    def __init__(self, membership, *args, **kwargs):
+        super().__init__(membership, *args, **kwargs)
+        self.fields['date'].required = False
 
     def _require_schedule_fields(self, cleaned, entry_type, school_item):
         return None
@@ -788,8 +808,7 @@ def _draft_from_cleaned(cleaned):
     school_subject = cleaned['school_subject'] or None
 
     required = set(school_item.required_fields) if school_item else set()
-    if entry_type == EntryType.CALENDAR_EVENT:
-        required.add(MissingField.DATE)
+    required.add(MissingField.DATE)
     allowed = set()
     if MissingField.DATE in required and date is None:
         allowed.add(MissingField.DATE)
@@ -800,7 +819,10 @@ def _draft_from_cleaned(cleaned):
     if MissingField.SCHOOL_SUBJECT in required and school_subject is None:
         allowed.add(MissingField.SCHOOL_SUBJECT)
     posted = {MissingField(value) for value in cleaned['missing']}
-    missing = tuple(field for field in MissingField if field in posted & allowed)
+    missing = tuple(
+        field for field in MissingField
+        if field in posted & allowed or (field == MissingField.DATE and field in allowed)
+    )
 
     draft = ClassificationFollowUp(
         missing_fields=missing,
@@ -835,7 +857,7 @@ def skip_review_form(membership, draft, member, *, today=None):
         initial={
             'entry_type': EntryType.NOTE.value,
             'content': draft.content,
-            'date': draft.date,
+            'date': draft.date or today or timezone.localdate(),
             'time': draft.time,
             'assigned_member': member.pk if member else None,
             'school_item': '',

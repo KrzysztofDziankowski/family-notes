@@ -53,9 +53,9 @@ class SchoolItemKind(str, Enum):
     QUIZ = ('quiz', 'kartkówka', EntryType.CALENDAR_EVENT, _SCHOOL_EVENT)
     LUCKY_NUMBER = ('lucky_number', 'szczęśliwy numerek', EntryType.NOTE, ())
     GRADE = ('grade', 'ocena', EntryType.NOTE, ())
-    SUBSTITUTION = ('substitution', 'zastępstwo', EntryType.NOTE, _DATE)
+    SUBSTITUTION = ('substitution', 'zastępstwo', EntryType.CALENDAR_EVENT, _DATE)
     LATE_ARRIVAL = ('late_arrival', 'spóźnienie', EntryType.NOTE, ())
-    ROOM_CHANGE = ('room_change', 'zmiana sali', EntryType.NOTE, _DATE)
+    ROOM_CHANGE = ('room_change', 'zmiana sali', EntryType.CALENDAR_EVENT, _DATE)
 
     def __new__(
         cls,

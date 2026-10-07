@@ -280,7 +280,7 @@ class BatchRejectionTests(BatchViewMixin, TestCase):
 
         response = self.client.post(BATCH_URL, data)
 
-        self.assert_rerendered(response, 'Wydarzenie musi mieć datę.')
+        self.assert_rerendered(response, 'Podaj datę.')
         form = response.context['batch_form']
         self.assertEqual(form.forms[1].fields['date'].widget.attrs['aria-invalid'], 'true')
         # The parent's keys are kept for the retry.
@@ -290,7 +290,7 @@ class BatchRejectionTests(BatchViewMixin, TestCase):
 
     def test_service_rejection_of_the_second_proposal_rolls_back_the_first(self):
         foreign_key = uuid.uuid4()
-        Entry.objects.create(
+        Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content='SENTINEL-OBCY-WPIS',
@@ -371,10 +371,10 @@ class BatchAccessTests(BatchViewMixin, TestCase):
         self.assertFalse(Entry.objects.filter(family=self.other_family).exists())
 
     def test_saved_panel_ignores_foreign_and_invalid_ids(self):
-        foreign = Entry.objects.create(
+        foreign = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family, entry_type=EntryType.NOTE.value, content='SENTINEL-OBCY-WPIS'
         )
-        ours = Entry.objects.create(
+        ours = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family, entry_type=EntryType.NOTE.value, content='Nasz wpis'
         )
         too_many = ','.join([str(ours.pk)] * (MAX_PROPOSALS_PER_INSTRUCTION + 1))
@@ -394,7 +394,7 @@ class BatchAccessTests(BatchViewMixin, TestCase):
 class BatchPrivacyTests(BatchViewMixin, TestCase):
     def test_posted_text_never_reaches_logs(self):
         foreign_key = uuid.uuid4()
-        Entry.objects.create(
+        Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family, entry_type=EntryType.NOTE.value, content='x',
             submission_key=foreign_key,
         )
@@ -526,7 +526,7 @@ class BatchCorrectionTests(BatchCorrectionMixin, TestCase):
         self.assertEqual(form.forms[0]['date'].value(), THURSDAY)
         self.assertEqual(form.forms[2].errors, {})
         self.assertEqual(form.forms[2]['date'].value(), 'nie-data')
-        self.assertContains(response, 'Wpis 1: zaktualizowano: data.')
+        self.assertContains(response, 'Wpis 1: zaktualizowano: data wydarzenia.')
 
     def test_after_a_correction_saving_saves_the_corrected_values(self):
         data = self.three_meetings()

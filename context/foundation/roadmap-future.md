@@ -58,7 +58,7 @@ Confirmed delivery order (owner asked the agent to determine it, 2026-10-04): th
 | 12 | S-14 | family-membership-management | Authorized family manager can manage family members in the application. | S-17 (soft — reuse audit helper) | PK-16 | planning |
 | 13 | S-15 | family-role-management | Authorized family manager can manage roles in the application. | S-14 | PK-16 | planning |
 | 14 | S-16 | multiple-family-use | Authorized member can use the application across multiple families. | S-14, S-15 | PK-16 | planning |
-| 15 | S-21 | entry-date-semantics | Entries require meaningful dates; family listings hide type labels. | S-01, S-03, S-04, S-20 | Owner decision 2026-10-06 | planning |
+| 15 | S-21 | entry-date-semantics | Entries require meaningful dates; family listings hide type labels. | S-01, S-03, S-04, S-20 | Owner decision 2026-10-06 | in-progress |
 
 ## Baseline
 
@@ -285,7 +285,7 @@ No new foundations are proposed. Existing application layers are available; each
   - Resolved 2026-10-06: keep note/event/task; no generic type. Dates are mandatory; backfill nulls from Europe/Warsaw created_at and enforce non-null storage. Preserve existing non-null dates; normalize historical types only from recognized saved school-kind metadata. Notes use writing dates; imported notes prefer source-writing dates then capture dates; events use occurrence dates and tasks deadlines. Type controls outside listings remain available.
 - **Risk:** Date defaults must not invent an event schedule or task deadline. Retain school requirements and existing read/API compatibility while preserving existing non-null dates and unmapped types during backfill.
 - **Plan:** `context/changes/entry-date-semantics/plan.md`
-- **Status:** planning
+- **Status:** in-progress
 
 ## Backlog Handoff
 

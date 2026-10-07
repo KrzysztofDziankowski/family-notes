@@ -74,6 +74,7 @@ class ManageViewMixin(FamilyFixtureMixin):
     def entry(self, content='Wpis', family=None, **fields):
         values = dict(
             family=family or self.family,
+            date=self.days(10),
             entry_type=EntryType.TODO.value,
             content=content,
             created_by=self.parent,
@@ -153,9 +154,9 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         self.today_early = e('Dziś rano', date=self.today, time=datetime.time(7, 30))
         self.tomorrow = e('Jutro', date=self.days(1), time=datetime.time(8, 0))
         self.next_week = e('Za tydzień', date=self.days(7))
-        self.undated_old = e('Bez daty starszy')
-        self.undated_new = e('Bez daty nowszy')
-        Entry.objects.filter(pk=self.undated_old.pk).update(
+        self.later_old = e('Późniejszy starszy')
+        self.later_new = e('Późniejszy nowszy')
+        Entry.objects.filter(pk=self.later_old.pk).update(
             updated_at=timezone.now() - datetime.timedelta(days=2)
         )
         self.yesterday_untimed = e('Wczoraj bez godziny', date=self.days(-1))
@@ -169,7 +170,7 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         )
         self.foreign = e(FOREIGN_SENTINEL, family=self.other_family, date=self.today)
 
-    def test_upcoming_is_default_with_dated_then_undated_in_exact_order(self):
+    def test_upcoming_orders_all_dated_entries_in_exact_order(self):
         response = self.client.get(INDEX_URL)
 
         self.assertEqual(
@@ -180,13 +181,13 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
                 self.today_untimed.pk,
                 self.tomorrow.pk,
                 self.next_week.pk,
-                self.undated_new.pk,
-                self.undated_old.pk,
+                self.later_old.pk,
+                self.later_new.pk,
             ],
         )
         self.assertEqual(
             DAY_PATTERN.findall(response.content.decode()),
-            [self.today.isoformat(), self.days(1).isoformat(), self.days(7).isoformat(), 'undated'],
+            [self.today.isoformat(), self.days(1).isoformat(), self.days(7).isoformat(), self.days(10).isoformat()],
         )
         self.assertContains(response, 'aria-current="page">Nadchodzące<')
 
@@ -240,8 +241,8 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         self.assertIn(f'data-entry-row="{self.tomorrow.pk}"', row)
         self.assertIn('<span>08:00</span>', row)
         self.assertNotIn('<span>Michał</span>', row)
-        undated = day_html(html, 'undated')
-        self.assertEqual(DAY_HEADING_PATTERN.findall(undated), ['Bez daty'])
+        later = day_html(html, self.days(10).isoformat())
+        self.assertEqual(DAY_HEADING_PATTERN.findall(later), [day_heading(self.days(10), self.today)])
         self.assertNotIn('Bez daty</span>', html)
 
 
@@ -324,13 +325,13 @@ class DetailTests(ManageViewMixin, TestCase):
 
     def test_detail_links_back_to_the_list_the_entry_belongs_to(self):
         past_entry = self.entry(date=self.days(-3))
-        undated = self.entry()
+        later = self.entry()
 
         self.assertContains(
             self.client.get(detail_url(past_entry.pk)), f'href="{INDEX_URL}?view=past"'
         )
         self.assertContains(
-            self.client.get(detail_url(undated.pk)), f'href="{INDEX_URL}?view=upcoming"'
+            self.client.get(detail_url(later.pk)), f'href="{INDEX_URL}?view=upcoming"'
         )
 
     def test_foreign_and_missing_ids_are_indistinguishable(self):
@@ -561,7 +562,7 @@ class EditTests(ManageViewMixin, TestCase):
             self.form_data(
                 entry_type=EntryType.TODO.value,
                 content='Oddać dwie książki',
-                date='',
+                date=self.days(10).isoformat(),
                 time='',
                 assigned_member=str(self.inactive_child.pk),
             ),
@@ -732,7 +733,7 @@ class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase)
                     CREATE_URL,
                     self.form_data(
                         entry_type=EntryType.NOTE.value,
-                        date='',
+                        date=self.days(10).isoformat(),
                         time='',
                         assigned_member=str(member.pk),
                         submission_key=str(uuid.uuid4()),
@@ -746,7 +747,7 @@ class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase)
                     edit_url(entry.pk),
                     self.form_data(
                         entry_type=EntryType.NOTE.value,
-                        date='',
+                        date=self.days(10).isoformat(),
                         time='',
                         assigned_member=str(other.pk),
                     ),
@@ -774,15 +775,15 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         # Created out of group order: the order comes from roles and member pks.
         self.family_today = e('Rodzina dziś', date=self.today)
         self.pawel_tomorrow = e('Paweł jutro', date=self.days(1), assigned_member=self.second_parent)
-        self.ewa_undated = e('Ewa bez daty', assigned_member=self.parent)
+        self.ewa_later = e('Ewa później', assigned_member=self.parent)
         self.ania_tomorrow = e('Ania jutro', date=self.days(1), assigned_member=self.other_child)
         self.michal_next_week = e('Michał za tydzień', date=self.days(7), assigned_member=self.child)
         self.michal_today = e(
             'Michał dziś', date=self.today, time=datetime.time(8), assigned_member=self.child
         )
-        self.michal_undated = e('Michał bez daty', assigned_member=self.child)
+        self.michal_later = e('Michał później', assigned_member=self.child)
         self.zosia_today = e('Zosia dziś', date=self.today, assigned_member=self.inactive_child)
-        self.family_undated = e('Rodzina bez daty')
+        self.family_later = e('Rodzina później')
         self.michal_yesterday = e('Michał wczoraj', date=self.days(-1), assigned_member=self.child)
         self.michal_last_week = e('Michał tydzień temu', date=self.days(-7), assigned_member=self.child)
         self.jolanta_yesterday = e(
@@ -808,11 +809,11 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
 
         self.assertEqual(
             DAY_PATTERN.findall(html),
-            [self.today.isoformat(), self.days(1).isoformat(), self.days(7).isoformat(), 'undated'],
+            [self.today.isoformat(), self.days(1).isoformat(), self.days(7).isoformat(), self.days(10).isoformat()],
         )
         self.assertEqual(
             DAY_HEADING_PATTERN.findall(html),
-            ['Dziś', 'Jutro', day_heading(self.days(7), self.today), 'Bez daty'],
+            ['Dziś', 'Jutro', day_heading(self.days(7), self.today), day_heading(self.days(10), self.today)],
         )
         self.assertEqual(
             self.day_groups(html),
@@ -820,7 +821,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
                 self.today.isoformat(): [self.key(self.child), self.key(self.inactive_child), 'family'],
                 self.days(1).isoformat(): [self.key(self.other_child), self.key(self.second_parent)],
                 self.days(7).isoformat(): [self.key(self.child)],
-                'undated': [self.key(self.child), self.key(self.parent), 'family'],
+                self.days(10).isoformat(): [self.key(self.child), self.key(self.parent), 'family'],
             },
         )
         today = day_html(html, self.today.isoformat())
@@ -828,7 +829,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             GROUP_HEADING_PATTERN.findall(today), ['Michał', 'Zosia (nieaktywne konto)', 'Cała rodzina']
         )
         self.assertEqual(
-            GROUP_HEADING_PATTERN.findall(day_html(html, 'undated')), ['Michał', 'Ewa', 'Cała rodzina']
+            GROUP_HEADING_PATTERN.findall(day_html(html, self.days(10).isoformat())), ['Michał', 'Ewa', 'Cała rodzina']
         )
 
     def test_same_day_entries_share_one_day_heading_in_child_parent_family_order(self):
@@ -859,22 +860,22 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             [self.family_today.pk],
         )
         self.assertEqual(
-            [int(pk) for pk in ROW_PATTERN.findall(group_html(day_html(html, 'undated'), 'family'))],
-            [self.family_undated.pk],
+            [int(pk) for pk in ROW_PATTERN.findall(group_html(day_html(html, self.days(10).isoformat()), 'family'))],
+            [self.family_later.pk],
         )
 
-    def test_undated_group_is_last_in_upcoming_and_absent_from_past(self):
+    def test_later_day_is_last_in_upcoming_and_absent_from_past(self):
         upcoming = self.client.get(INDEX_URL).content.decode()
         past = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
 
-        self.assertEqual(DAY_PATTERN.findall(upcoming)[-1], 'undated')
-        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming)[-1], 'Bez daty')
+        self.assertEqual(DAY_PATTERN.findall(upcoming)[-1], self.days(10).isoformat())
+        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming)[-1], day_heading(self.days(10), self.today))
         self.assertEqual(
-            [int(pk) for pk in ROW_PATTERN.findall(group_html(day_html(upcoming, 'undated'), self.key(self.parent)))],
-            [self.ewa_undated.pk],
+            [int(pk) for pk in ROW_PATTERN.findall(group_html(day_html(upcoming, self.days(10).isoformat()), self.key(self.parent)))],
+            [self.ewa_later.pk],
         )
-        self.assertNotIn('undated', DAY_PATTERN.findall(past))
-        self.assertNotIn('Bez daty', past)
+        self.assertNotIn(self.days(10).isoformat(), DAY_PATTERN.findall(past))
+        self.assertNotIn(day_heading(self.days(10), self.today), past)
 
     def test_past_shows_newest_day_first_then_children_parents_family(self):
         html = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
@@ -930,9 +931,9 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
     def test_each_own_family_entry_renders_exactly_once(self):
         expected = {
             'upcoming': {
-                self.family_today, self.pawel_tomorrow, self.ewa_undated, self.ania_tomorrow,
-                self.michal_next_week, self.michal_today, self.michal_undated,
-                self.zosia_today, self.family_undated,
+                self.family_today, self.pawel_tomorrow, self.ewa_later, self.ania_tomorrow,
+                self.michal_next_week, self.michal_today, self.michal_later,
+                self.zosia_today, self.family_later,
             },
             'past': {
                 self.michal_yesterday, self.michal_last_week, self.jolanta_yesterday,
@@ -951,11 +952,11 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
 
     def test_reassigned_entry_moves_to_the_new_group(self):
         self.client.post(
-            edit_url(self.family_undated.pk),
+            edit_url(self.family_later.pk),
             self.form_data(
                 entry_type=EntryType.TODO.value,
-                content='Rodzina bez daty',
-                date='',
+                content='Rodzina później',
+                date=self.days(10).isoformat(),
                 time='',
                 assigned_member=str(self.other_child.pk),
             ),
@@ -963,12 +964,12 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
 
         html = self.client.get(INDEX_URL).content.decode()
 
-        undated = day_html(html, 'undated')
+        later = day_html(html, self.days(10).isoformat())
         self.assertIn(
-            f'data-entry-row="{self.family_undated.pk}"',
-            group_html(undated, self.key(self.other_child)),
+            f'data-entry-row="{self.family_later.pk}"',
+            group_html(later, self.key(self.other_child)),
         )
-        self.assertNotIn('family', GROUP_PATTERN.findall(undated))
+        self.assertNotIn('family', GROUP_PATTERN.findall(later))
 
     def test_grouping_adds_no_queries_per_row(self):
         with self.assertNumQueries(self._index_queries()):

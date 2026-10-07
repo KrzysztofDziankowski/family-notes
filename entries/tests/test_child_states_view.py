@@ -1,3 +1,4 @@
+import datetime
 """S-03 child-view kitchen sink: DEBUG gating, access and synthetic-only rendering."""
 
 import re
@@ -24,7 +25,7 @@ STATE_NAMES = (
 )
 # STATES_DATE is Monday 2026-10-05; each list covers every day-heading kind.
 EXPECTED_DAY_HEADINGS = {
-    'upcoming': ['Dziś', 'Jutro', 'Czwartek', 'Poniedziałek, 26 października', 'Bez daty'],
+    'upcoming': ['Dziś', 'Jutro', 'Czwartek', 'Poniedziałek, 26 października'],
     'past': ['Wczoraj', 'Piątek', 'Środa', 'Sobota, 5 września'],
 }
 
@@ -72,7 +73,7 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
 
     @override_settings(DEBUG=True)
     def test_every_state_renders_from_synthetic_data_only(self):
-        Entry.objects.create(
+        Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type='note',
             content='SENTINEL-REAL-ROW',
@@ -91,7 +92,7 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
                 self.assertContains(response, 'data-empty-state="past"')
                 self.assertContains(response, 'Nie masz żadnych nadchodzących wpisów.')
                 self.assertContains(response, 'Nie masz żadnych minionych wpisów.')
-                self.assertContains(response, 'Bez daty')
+                self.assertNotContains(response, 'Bez daty')
                 self.assertContains(response, 'EduVulcan')
                 self.assertContains(response, 'Ręcznie')
                 self.assertContains(response, 'kartkówka')

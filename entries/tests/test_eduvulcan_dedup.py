@@ -6,6 +6,7 @@ database is needed. Every child name here is invented.
 """
 
 import datetime
+from dataclasses import replace
 from types import SimpleNamespace
 
 from django.test import SimpleTestCase
@@ -212,11 +213,12 @@ class ExactDuplicateTests(SimpleTestCase):
         self.assertEqual(decision.action, Action.CREATE)
 
     def test_undated_candidate_without_source_day_is_not_matched(self):
-        existing = stored(self.grade())
+        # Rules always date entries now; an undated proposal is matched only
+        # through its source capture day, which this candidate lacks.
+        grade = replace(self.grade(), date=None)
+        existing = stored(grade)
 
-        self.assertEqual(
-            decide(self.grade(), CAPTURED, [candidate(existing, None)]).action, Action.CREATE
-        )
+        self.assertEqual(decide(grade, CAPTURED, [candidate(existing, None)]).action, Action.CREATE)
 
     def test_timetable_change_resend_is_a_duplicate(self):
         message = 'Zastępstwo w dniu 24 września na lekcji Matematyka, Nowak Anna'
@@ -237,8 +239,9 @@ class ExactDuplicateTests(SimpleTestCase):
         self.assertEqual(
             decide(remainder, CAPTURED, [candidate(existing, CAPTURED)]).action, Action.DUPLICATE
         )
+        next_day = propose('Zmiana planu dla Zuzanna', f'Uwaga: {message}', captured=NEXT_DAY)[-1]
         self.assertEqual(
-            decide(remainder, NEXT_DAY, [candidate(existing, CAPTURED)]).action, Action.CREATE
+            decide(next_day, NEXT_DAY, [candidate(existing, CAPTURED)]).action, Action.CREATE
         )
 
     def test_differing_field_is_not_a_duplicate(self):
@@ -249,7 +252,7 @@ class ExactDuplicateTests(SimpleTestCase):
             {'school_item': ''},
             {'entry_type': EntryType.TODO.value},
             {'content': 'Ocena: 4, Biologia'},
-            {'date': CAPTURED},
+            {'date': NEXT_DAY},
         ):
             with self.subTest(**overrides):
                 existing = stored(grade, **overrides)
@@ -284,7 +287,9 @@ class ExactDuplicateTests(SimpleTestCase):
             school_item=test.school_item,
             member=test.member,
         )
-        note = general_note_proposal('Sprawdzian', '7 października, Biologia, Zuzanna')
+        note = general_note_proposal(
+            'Sprawdzian', '7 października, Biologia, Zuzanna', captured_at=CAPTURED
+        )
         for proposal in (classified, note):
             with self.subTest(kind=proposal.kind):
                 self.assertEqual(

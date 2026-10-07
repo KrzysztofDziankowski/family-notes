@@ -93,7 +93,7 @@ def validate_output(
     kind = output.school_item
     entry_type = kind.entry_type if kind is not None else output.entry_type
     required = set(kind.required_fields) if kind is not None else set()
-    if entry_type == EntryType.CALENDAR_EVENT:
+    if entry_type in (EntryType.CALENDAR_EVENT, EntryType.TODO):
         required.add(MissingField.DATE)
     if MissingField.DATE in required and output.date is None:
         missing.append(MissingField.DATE)
@@ -109,10 +109,22 @@ def validate_output(
     ):
         missing.append(MissingField.SCHOOL_SUBJECT)
 
+    date = output.date
+    if (
+        entry_type == EntryType.NOTE
+        and request.current_proposal is None
+        and request.follow_up_answer is None
+    ):
+        # Initial notes are written now; occurrence dates are not writing dates.
+        date = request.reference_date
+
+    if entry_type == EntryType.NOTE and date is None:
+        missing.append(MissingField.DATE)
+
     values = dict(
         entry_type=entry_type,
         content=content,
-        date=output.date,
+        date=date,
         time=output.time,
         school_item=output.school_item,
         member_name=member_name,
@@ -139,4 +151,6 @@ def _general_note(request: BackendRequest) -> ClassificationResult:
     content = request.submitted_text.strip()
     if not content:
         raise ClassificationValidationError(UnavailableReason.EMPTY_CONTENT)
-    return ClassificationProposal(entry_type=EntryType.NOTE, content=content)
+    return ClassificationProposal(
+        entry_type=EntryType.NOTE, content=content, date=request.reference_date
+    )

@@ -1,3 +1,4 @@
+import datetime
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -5,6 +6,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
+from django.utils import timezone
 
 from entries.eduvulcan.children import snapshot_active_children
 from entries.forms import EntryCreateForm
@@ -338,6 +340,7 @@ class DeactivationRegressionTests(MembershipFixtureMixin, TestCase):
         super().setUp()
         self.client.force_login(self.parent.user)
         self.entry = Entry.objects.create(
+            date=timezone.localdate() + datetime.timedelta(days=1),
             family=self.family,
             entry_type='todo',
             content='Oddać książkę',
