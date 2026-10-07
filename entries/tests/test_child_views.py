@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from entries.classification.types import EntryType, SchoolItemKind
+from entries.listing import parent_day_heading
 from entries.models import Entry
 from entries.services import save_confirmed_entry
 
@@ -248,20 +249,37 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(response, '<span>09:00</span>', html=True)
         self.assertNotContains(response, 'Bez daty')
 
-    def test_parent_list_uses_the_same_day_headings(self):
+    def test_parent_list_uses_full_calendar_day_headings(self):
         # Owner request 2026-10-05 (S-08): the parent list groups by day like
-        # the child view, so its rows also show only the time. Only this
-        # class's fixed-date rows stay, so the headings are deterministic.
+        # the child view, so its rows also show only the time. Since
+        # parent-entries-calendar-layout the parent shows a 14-day calendar
+        # whose headings carry the calendar date; the child keeps short ones.
         Entry.objects.exclude(assigned_member=self.child).delete()
         self.client.force_login(self.parent.user)
+        day = datetime.timedelta(days=1)
 
         response = self.client.get(PARENT_LIST_URL)
         past = self.client.get(PARENT_LIST_URL, {'view': 'past'})
 
-        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Poniedziałek, 5 października'])
-        self.assertEqual(self.headings(past), ['Wczoraj', 'Piątek, 18 września'])
+        self.assertEqual(
+            self.headings(response),
+            [parent_day_heading(FIXED_TODAY + n * day, FIXED_TODAY) for n in range(14)],
+        )
+        self.assertEqual(
+            self.headings(past),
+            [parent_day_heading(FIXED_TODAY + n * day, FIXED_TODAY) for n in range(-14, 0)],
+        )
+        self.assertEqual(self.headings(response)[:2], ['Dziś, 28 września', 'Jutro, 29 września'])
+        self.assertEqual(self.headings(past)[-1], 'Wczoraj, 27 września')
+        body = response.content.decode()
+        order = [
+            body.index(marker)
+            for marker in ('>Dziś, 28 września<', 'SENTINEL-TODAY',
+                           '>Jutro, 29 września<', 'SENTINEL-TOMORROW',
+                           '>Poniedziałek, 5 października<', 'SENTINEL-LATER')
+        ]
+        self.assertEqual(order, sorted(order))
         self.assertContains(response, '<span>08:15</span>', html=True)
-        self.assertNotContains(response, 'września')
 
 
 class ChildDetailTests(ChildViewFixtureMixin, TestCase):

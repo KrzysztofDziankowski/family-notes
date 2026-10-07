@@ -231,11 +231,11 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Automated
 
-- [ ] 1.1 Parent view tests prove both default 14-day ranges and exact inclusive boundaries.
-- [ ] 1.2 Tests cover valid, malformed, and out-of-mode `start` values.
-- [ ] 1.3 Tests prove navigation shifts by 14 days and cannot cross today's mode boundary.
-- [ ] 1.4 Tests prove family isolation and existing role/access behavior remain unchanged.
-- [ ] 1.5 Tests prove detail and back links preserve `view` and `start`.
+- [x] 1.1 Parent view tests prove both default 14-day ranges and exact inclusive boundaries.
+- [x] 1.2 Tests cover valid, malformed, and out-of-mode `start` values.
+- [x] 1.3 Tests prove navigation shifts by 14 days and cannot cross today's mode boundary.
+- [x] 1.4 Tests prove family isolation and existing role/access behavior remain unchanged.
+- [x] 1.5 Tests prove detail and back links preserve `view` and `start`.
 
 #### Manual
 

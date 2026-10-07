@@ -280,12 +280,16 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
         self.entry('Kupić blok')
         self.entry('Zapłacić za obiady', days=-3, assigned_member=self.parent)
         self.entry('Oddać bilety', days=-3)
-        # S-08: h1 page title, h2 per day, h3 per assignee within the day.
-        expected_headings = {
-            'upcoming': ['h1', 'h2', 'h3', 'h3', 'h3', 'h2', 'h3'],
-            'past': ['h1', 'h2', 'h3', 'h3'],
+        # S-08: h1 page title, h2 per calendar day (all 14, empty ones too),
+        # h3 per assignee within the day.
+        assignee_groups = {
+            'upcoming': (range(14), {2: 3, 10: 1}),
+            'past': (range(-14, 0), {-3: 2}),
         }
-        for view, headings in expected_headings.items():
+        for view, (offsets, groups) in assignee_groups.items():
+            headings = ['h1']
+            for offset in offsets:
+                headings += ['h2'] + ['h3'] * groups.get(offset, 0)
             with self.subTest(view=view):
                 response = self.client.get(reverse('entries:index'), {'view': view})
                 assert_accessible(self, response)

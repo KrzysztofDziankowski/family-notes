@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import ValidationError
+from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -70,6 +71,7 @@ from .listing import (
     EntrySection,
     group_by_day,
     normalize_list_mode,
+    parent_day_heading,
     partition_entries,
     split_by_assignee,
     with_effective_date,
@@ -890,13 +892,61 @@ EMPTY_LIST_MESSAGES = {
     UPCOMING: 'Nie ma nadchodzących wpisów.',
     PAST: 'Nie ma minionych wpisów.',
 }
+CALENDAR_WINDOW_DAYS = 14
 ENTRY_CREATED_MESSAGE = 'Dodano wpis.'
 ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
 ENTRY_DELETED_MESSAGE = 'Usunięto wpis.'
 
 
-def _index_url(mode):
-    return f"{reverse('entries:index')}?view={normalize_list_mode(mode)}"
+def _index_url(mode, start=None):
+    query = f'view={normalize_list_mode(mode)}'
+    if start:
+        query += f'&start={start.isoformat()}'
+    return f"{reverse('entries:index')}?{query}"
+
+
+def _default_window_start(mode, today):
+    if mode == PAST:
+        return today - datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
+    return today
+
+
+def _calendar_window(mode, value, today):
+    """Return a valid inclusive parent-calendar window for ``mode``."""
+    default_start = _default_window_start(mode, today)
+    try:
+        start = datetime.date.fromisoformat(value) if value else default_start
+    except (TypeError, ValueError):
+        start = default_start
+    if value and start.isoformat() != value:
+        start = default_start
+    end = start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
+    if (mode == UPCOMING and start < today) or (mode == PAST and end >= today):
+        start = default_start
+        end = start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
+    return start, end
+
+
+def _calendar_query(mode, start):
+    return f'view={mode}&start={start.isoformat()}'
+
+
+def _calendar_navigation(mode, start, today):
+    step = datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
+    previous_start = start - step
+    next_start = start + step
+    return {
+        'previous_url': (
+            _index_url(mode, previous_start)
+            if mode == PAST or previous_start >= today
+            else None
+        ),
+        'next_url': (
+            _index_url(mode, next_start)
+            if mode == UPCOMING or next_start + step - datetime.timedelta(days=1) < today
+            else None
+        ),
+    }
 
 
 def _list_mode_for(entry, today):
@@ -924,26 +974,19 @@ def _assignee_heading(member):
     return member.display_name
 
 
-def _index_days(sections, today):
-    """Day groups over the partitioned ``sections`` (each evaluated once), as in
-    the child list; inside a day, assignee sub-groups in S-08 order. The undated
-    upcoming section becomes one final "Bez daty" day."""
+def _index_days(entries, start, today):
+    """Build all fourteen chronological parent days, including empty dates."""
+    rows_by_date = {}
+    for entry in entries:
+        rows_by_date.setdefault(entry.effective_date, []).append(entry)
     days = []
-    for section in sections:
-        entries = list(section.entries)
-        if not entries:
-            continue
-        if section.key == SECTION_UNDATED:
-            day_rows = [(UNDATED_DAY_KEY, UNDATED_DAY_HEADING, entries)]
-        else:
-            day_rows = [
-                (rows[0].effective_date.isoformat(), heading, rows)
-                for heading, rows in group_by_day(entries, today)
-            ]
-        days.extend(
+    for offset in range(CALENDAR_WINDOW_DAYS):
+        day = start + datetime.timedelta(days=offset)
+        rows = rows_by_date.get(day, [])
+        days.append(
             {
-                'key': key,
-                'heading': heading,
+                'key': day.isoformat(),
+                'heading': parent_day_heading(day, today),
                 'groups': [
                     {
                         'key': group.key,
@@ -953,24 +996,35 @@ def _index_days(sections, today):
                     for group in split_by_assignee(rows)
                 ],
             }
-            for key, heading, rows in day_rows
         )
     return days
 
 
-def _index_context(mode, sections, today):
-    days = _index_days(sections, today)
+def _index_context(mode, entries, today, start=None):
+    start = start or _default_window_start(mode, today)
+    days = _index_days(entries, start, today)
+    detail_query = _calendar_query(mode, start)
     return {
         'mode': mode,
         'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
         'days': days,
-        'is_empty': not days,
+        'is_empty': not any(day['groups'] for day in days),
         'empty_message': EMPTY_LIST_MESSAGES[mode],
+        'start': start,
+        'detail_query': detail_query,
+        **_calendar_navigation(mode, start, today),
     }
 
 
-def _detail_context(entry, list_mode, delete_open=False):
-    return {'entry': entry, 'list_mode': list_mode, 'delete_open': delete_open}
+def _detail_context(entry, list_mode, list_start=None, delete_open=False):
+    list_start = list_start or _default_window_start(list_mode, timezone.localdate())
+    return {
+        'entry': entry,
+        'list_mode': list_mode,
+        'list_start': list_start,
+        'list_query': _calendar_query(list_mode, list_start),
+        'delete_open': delete_open,
+    }
 
 
 def _form_context(form, *, entry=None):
@@ -984,16 +1038,31 @@ def index(request):
     mode = normalize_list_mode(request.GET.get('view', ''))
     membership = _require_parent(request)
     today = timezone.localdate()
-    sections = partition_entries(parent_family_entries(membership), mode, today)
-    return render(request, 'entries/manage_index.html', _index_context(mode, sections, today))
+    start, end = _calendar_window(mode, request.GET.get('start'), today)
+    rows = with_effective_date(parent_family_entries(membership)).exclude(
+        school_item=SchoolItemKind.LUCKY_NUMBER.value
+    ).filter(effective_date__range=(start, end)).select_related('assigned_member')
+    if mode == PAST:
+        rows = rows.order_by('effective_date', F('time').desc(nulls_last=True), '-pk')
+    else:
+        rows = rows.order_by('effective_date', F('time').asc(nulls_last=True), 'pk')
+    return render(request, 'entries/manage_index.html', _index_context(mode, list(rows), today, start))
 
 
 @require_http_methods(['GET'])
 @login_required
 def detail(request, pk):
     entry = _managed_entry_or_404(_require_parent(request), pk)
-    list_mode = _list_mode_for(entry, timezone.localdate())
-    return render(request, 'entries/manage_detail.html', _detail_context(entry, list_mode))
+    today = timezone.localdate()
+    entry_mode = _list_mode_for(entry, today)
+    requested_mode = request.GET.get('view')
+    list_mode = normalize_list_mode(requested_mode) if requested_mode else entry_mode
+    list_start, _ = _calendar_window(list_mode, request.GET.get('start'), today)
+    return render(
+        request,
+        'entries/manage_detail.html',
+        _detail_context(entry, list_mode, list_start),
+    )
 
 
 @sensitive_post_parameters('content')
@@ -1077,7 +1146,9 @@ def delete(request, pk):
     except Entry.DoesNotExist:
         raise Http404 from None
     messages.success(request, ENTRY_DELETED_MESSAGE)
-    return redirect(_index_url(request.POST.get('view', '')))
+    mode = normalize_list_mode(request.POST.get('view', ''))
+    start, _ = _calendar_window(mode, request.POST.get('start'), timezone.localdate())
+    return redirect(_index_url(mode, start))
 
 
 # Fictional management kitchen-sink data (DEBUG gallery): unsaved rows only.
@@ -1113,9 +1184,10 @@ def _states_member(display_name):
 
 
 def _synthetic_list(mode, sections):
+    entries = [entry for _key, rows in sections for entry in rows]
     return _index_context(
         mode,
-        [EntrySection(key, entries) for key, entries in sections],
+        entries,
         STATES_DATE,
     )
 
