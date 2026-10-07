@@ -193,11 +193,11 @@ Migration only alters choices and a check constraint; existing rows keep valid k
 
 #### Automated
 
-- [ ] 1.1 Matching unit tests pass: `uv run python manage.py test entries.tests.test_eduvulcan_dedup`
-- [ ] 1.2 Unit tests cover: both user examples in both arrival orders, equal-rank re-send, homework not merged with exams, unassigned exam merge with child suffix, grade duplicate same capture day vs different day, timetable change duplicate, manual entry ignored, different subject/date/child not matched
-- [ ] 1.3 Upgrade service tests pass (rejects manual entries and non-exam kinds): `uv run python manage.py test entries.tests.test_entry_service`
-- [ ] 1.4 Migration check is clean: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 1.5 Django checks pass: `uv run python manage.py check`
+- [x] 1.1 Matching unit tests pass: `uv run python manage.py test entries.tests.test_eduvulcan_dedup`
+- [x] 1.2 Unit tests cover: both user examples in both arrival orders, equal-rank re-send, homework not merged with exams, unassigned exam merge with child suffix, grade duplicate same capture day vs different day, timetable change duplicate, manual entry ignored, different subject/date/child not matched
+- [x] 1.3 Upgrade service tests pass (rejects manual entries and non-exam kinds): `uv run python manage.py test entries.tests.test_entry_service`
+- [x] 1.4 Migration check is clean: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.5 Django checks pass: `uv run python manage.py check`
 
 ### Phase 2: Conversion Integration
 
