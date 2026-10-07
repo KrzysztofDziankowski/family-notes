@@ -134,7 +134,7 @@ class ValidationTests(SimpleTestCase):
         self.assertIsNone(result.time)
         self.assertIsNone(result.member_name)
 
-    def test_todo_without_date_is_complete(self):
+    def test_todo_without_date_needs_follow_up(self):
         result = validate_output(
             make_request(),
             make_output(
@@ -146,7 +146,8 @@ class ValidationTests(SimpleTestCase):
             require_school_subject=True,
         )
 
-        self.assertIsInstance(result, ClassificationProposal)
+        self.assertIsInstance(result, ClassificationFollowUp)
+        self.assertEqual(result.missing_fields, (MissingField.DATE,))
         self.assertEqual(result.entry_type, EntryType.TODO)
 
     def test_unrecognized_content_falls_back_to_general_note(self):
@@ -160,7 +161,7 @@ class ValidationTests(SimpleTestCase):
         self.assertIsInstance(result, ClassificationProposal)
         self.assertEqual(result.entry_type, EntryType.NOTE)
         self.assertEqual(result.content, 'Pamiętać o kwiatach')
-        self.assertIsNone(result.date)
+        self.assertEqual(result.date, REFERENCE_DATE)
         self.assertIsNone(result.member_name)
 
     def test_calendar_event_without_date_needs_follow_up(self):
@@ -213,9 +214,9 @@ class ValidationTests(SimpleTestCase):
             SchoolItemKind.QUIZ: ('kartkówka', EntryType.CALENDAR_EVENT, school_event),
             SchoolItemKind.LUCKY_NUMBER: ('szczęśliwy numerek', EntryType.NOTE, ()),
             SchoolItemKind.GRADE: ('ocena', EntryType.NOTE, ()),
-            SchoolItemKind.SUBSTITUTION: ('zastępstwo', EntryType.NOTE, date_only),
+            SchoolItemKind.SUBSTITUTION: ('zastępstwo', EntryType.CALENDAR_EVENT, date_only),
             SchoolItemKind.LATE_ARRIVAL: ('spóźnienie', EntryType.NOTE, ()),
-            SchoolItemKind.ROOM_CHANGE: ('zmiana sali', EntryType.NOTE, date_only),
+            SchoolItemKind.ROOM_CHANGE: ('zmiana sali', EntryType.CALENDAR_EVENT, date_only),
         }
 
         self.assertEqual(set(SchoolItemKind), set(expected))
@@ -243,7 +244,7 @@ class ValidationTests(SimpleTestCase):
         self.assertEqual(MissingField.SCHOOL_SUBJECT.value, 'school_subject')
 
     def test_event_kinds_require_date_and_member_as_calendar_events(self):
-        event_kinds = [k for k in SchoolItemKind if k.entry_type == EntryType.CALENDAR_EVENT]
+        event_kinds = [k for k in SchoolItemKind if MissingField.AFFECTED_MEMBER in k.required_fields]
         for kind in event_kinds:
             with self.subTest(kind=kind.value):
                 result = validate_output(
@@ -286,7 +287,7 @@ class ValidationTests(SimpleTestCase):
                 self.assertEqual(result.entry_type, EntryType.NOTE)
                 self.assertEqual(result.school_item, kind)
 
-    def test_dated_note_kinds_require_only_a_date(self):
+    def test_timetable_event_kinds_require_only_a_date(self):
         for kind in (SchoolItemKind.SUBSTITUTION, SchoolItemKind.ROOM_CHANGE):
             with self.subTest(kind=kind.value, date=None):
                 result = validate_output(
@@ -296,7 +297,7 @@ class ValidationTests(SimpleTestCase):
                 )
 
                 self.assertIsInstance(result, ClassificationFollowUp)
-                self.assertEqual(result.entry_type, EntryType.NOTE)
+                self.assertEqual(result.entry_type, EntryType.CALENDAR_EVENT)
                 self.assertEqual(result.missing_fields, (MissingField.DATE,))
 
             with self.subTest(kind=kind.value, date=MONDAY):
@@ -307,7 +308,7 @@ class ValidationTests(SimpleTestCase):
                 )
 
                 self.assertIsInstance(result, ClassificationProposal)
-                self.assertEqual(result.entry_type, EntryType.NOTE)
+                self.assertEqual(result.entry_type, EntryType.CALENDAR_EVENT)
                 self.assertEqual(result.date, MONDAY)
 
     def test_unknown_member_is_rejected(self):
@@ -485,7 +486,7 @@ class SchoolSubjectValidationTests(SimpleTestCase):
                 entry_type=EntryType.NOTE, school_item=SchoolItemKind.SUBSTITUTION
             ),
             'plain event': make_output(school_item=None),
-            'todo': make_output(entry_type=EntryType.TODO, school_item=None, date=None),
+            'todo': make_output(entry_type=EntryType.TODO, school_item=None),
         }
         for name, output in cases.items():
             with self.subTest(name):
@@ -665,3 +666,22 @@ class SensitiveRepresentationTests(SimpleTestCase):
             with self.subTest(result_type=result_type.__name__):
                 names = {f.name for f in fields(result_type)}
                 self.assertFalse(names & {'raw', 'payload', 'response', 'raw_response'})
+
+
+class DateMeaningTests(SimpleTestCase):
+    def test_new_note_uses_writing_day_instead_of_provider_occurrence_day(self):
+        result = validate_output(make_request(), make_output(entry_type=EntryType.NOTE, school_item=None), require_school_subject=True)
+        self.assertEqual(result.date, REFERENCE_DATE)
+
+    def test_type_specific_follow_up_questions(self):
+        from entries.classification.follow_up import follow_up_question
+
+        expected = {
+            EntryType.CALENDAR_EVENT: 'Kiedy odbędzie się „Spotkanie”?',
+            EntryType.TODO: 'Na kiedy trzeba wykonać „Spotkanie”?',
+            EntryType.NOTE: 'Kiedy zapisano „Spotkanie”?',
+        }
+        for entry_type, question in expected.items():
+            with self.subTest(entry_type=entry_type):
+                draft = ClassificationFollowUp(missing_fields=(MissingField.DATE,), entry_type=entry_type, content='Spotkanie')
+                self.assertEqual(follow_up_question(draft), question)

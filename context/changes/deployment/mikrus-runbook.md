@@ -1127,6 +1127,36 @@ again. An application rollback disables the worker first; pending rows and
 conversion outputs stay valid for a forward fix, and migrations are never
 reversed automatically.
 
+## Mandatory-date release prerequisites
+
+The `entry-date-semantics` release backfills missing entry dates from
+`created_at` in Europe/Warsaw, normalizes historical entry types only from saved
+school-kind metadata, and makes entry dates non-null. Existing non-null dates,
+timestamps, relationships, and notification output links are preserved. Original
+null dates and previous mapped types are not reconstructable by reversing code.
+
+Do not deploy this schema through the current protocol-1 `activate` action: it
+migrates before restarting Gunicorn and permits old web/conversion workers to
+write during the backfill. Production release remains blocked until the
+maintenance deployment work in `testing-production-security-schema-safety`,
+phase 4, is installed and verified. Required order: validate candidate → stop all
+web and conversion writers and confirm inactivity → backup → migrations →
+activate date-aware code → start → readiness checks. No installation or production
+acceptance is claimed by the local implementation.
+
+Before rollout, review synthetic migration evidence for null-date backfill,
+metadata type mappings, preserved existing dates/relationships, and non-null
+rejection. After rollout, use synthetic notes/events/tasks to check date labels,
+missing-schedule follow-up, parent/child list badges, token response dates, and
+conversion fallback dates. Use the existing privacy-safe classification smoke
+and sentinel log inspection; record outcomes without family content or secrets.
+
+A pre-date-semantics application release may still write null dates and is not a
+safe code-only rollback target. On migration/startup failure keep writers stopped
+and preserve the candidate and backup evidence for an explicit forward fix. Never
+automatically restart old code, reverse migrations, or restore a database.
+Database restoration requires a separate operator-approved incident procedure.
+
 ## 11. Roll Back the Application
 
 As `deploy`, list releases and identify the previous known-good directory:

@@ -65,7 +65,7 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
             family=self.family,
             entry_type=(entry_type or EntryType.NOTE).value,
             content=content,
-            date=date,
+            date=date or TODAY,
             time=time,
             school_item=school_item,
         )
@@ -84,15 +84,15 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
             for section in partition_entries(Entry.objects.all(), mode, today)
         }
 
-    def test_boundaries_between_upcoming_undated_and_past(self):
+    def test_boundaries_between_dated_upcoming_and_past(self):
         self._entry('yesterday', date=YESTERDAY)
         self._entry('today', date=TODAY)
         self._entry('tomorrow', date=TOMORROW)
-        self._entry('undated')
+        self._entry('previously-undated', date=TODAY)
 
         self.assertEqual(
             self._sections(UPCOMING),
-            {SECTION_DATED: ['today', 'tomorrow'], SECTION_UNDATED: ['undated']},
+            {SECTION_DATED: ['today', 'previously-undated', 'tomorrow'], SECTION_UNDATED: []},
         )
         self.assertEqual(self._sections(PAST), {SECTION_PAST: ['yesterday']})
 
@@ -132,21 +132,13 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
             ],
         )
 
-    def test_undated_orders_by_updated_at_desc_then_pk_desc(self):
-        older = self._entry('older')
-        newer = self._entry('newer')
-        tie_a = self._entry('tie-a')
-        tie_b = self._entry('tie-b')
-        base = datetime.datetime(2026, 9, 20, 12, 0, tzinfo=datetime.timezone.utc)
-        self._set_timestamps(older, updated_at=base)
-        self._set_timestamps(newer, updated_at=base + datetime.timedelta(hours=2))
-        self._set_timestamps(tie_a, updated_at=base + datetime.timedelta(hours=1))
-        self._set_timestamps(tie_b, updated_at=base + datetime.timedelta(hours=1))
+    def test_dated_entries_keep_date_and_pk_order_after_content_edits(self):
+        first = self._entry('first', date=TODAY)
+        second = self._entry('second', date=TODAY)
+        self._set_timestamps(first, updated_at=timezone.now() + datetime.timedelta(hours=1))
 
-        self.assertEqual(
-            self._sections(UPCOMING)[SECTION_UNDATED],
-            ['newer', 'tie-b', 'tie-a', 'older'],
-        )
+        self.assertEqual(self._sections(UPCOMING)[SECTION_DATED], ['first', 'second'])
+        self.assertEqual(self._sections(UPCOMING)[SECTION_UNDATED], [])
 
     def test_past_orders_by_date_desc_then_time_desc_missing_last_then_pk_desc(self):
         earlier_day = YESTERDAY - datetime.timedelta(days=1)
@@ -156,7 +148,7 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
         self._entry('yesterday-no-time-b', date=YESTERDAY)
         self._entry('yesterday-17-a', date=YESTERDAY, time=datetime.time(17, 0))
         self._entry('yesterday-17-b', date=YESTERDAY, time=datetime.time(17, 0))
-        self._entry('undated')
+        self._entry('previously-undated', date=TODAY)
 
         self.assertEqual(
             self._sections(PAST)[SECTION_PAST],
@@ -183,10 +175,10 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(upcoming, {SECTION_DATED: ['plain'], SECTION_UNDATED: []})
         self.assertEqual(past, {SECTION_PAST: []})
 
-    def test_undated_grade_uses_local_creation_day(self):
+    def test_grade_uses_its_stored_writing_day(self):
         grade = SchoolItemKind.GRADE.value
         today_grade = self._entry('grade-today', school_item=grade)
-        yesterday_grade = self._entry('grade-yesterday', school_item=grade)
+        yesterday_grade = self._entry('grade-yesterday', date=YESTERDAY, school_item=grade)
         self._set_timestamps(
             today_grade, created_at=datetime.datetime(2026, 9, 28, 10, 0, tzinfo=WARSAW)
         )
@@ -206,10 +198,10 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(upcoming[SECTION_DATED], ['today-09', 'grade-today', 'tomorrow'])
         self.assertEqual(upcoming[SECTION_UNDATED], [])
         self.assertEqual(past[SECTION_PAST], ['yesterday-12', 'grade-yesterday', 'two-days-ago'])
-        self.assertIsNone(Entry.objects.get(pk=today_grade.pk).date)
-        self.assertIsNone(Entry.objects.get(pk=yesterday_grade.pk).date)
+        self.assertEqual(Entry.objects.get(pk=today_grade.pk).date, TODAY)
+        self.assertEqual(Entry.objects.get(pk=yesterday_grade.pk).date, YESTERDAY)
 
-    def test_grade_effective_date_follows_local_midnight_not_utc(self):
+    def test_grade_stored_date_is_not_overwritten_by_creation_timestamp(self):
         grade = self._entry('grade-after-midnight', school_item=SchoolItemKind.GRADE.value)
         # 22:30 UTC on the 27th is 00:30 on the 28th in Europe/Warsaw.
         self._set_timestamps(
@@ -220,13 +212,14 @@ class PartitionTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(self._sections(UPCOMING)[SECTION_DATED], ['grade-after-midnight'])
         self.assertEqual(self._sections(PAST)[SECTION_PAST], [])
 
-    def test_undated_non_grade_note_never_gets_an_effective_date(self):
+    def test_dated_non_grade_note_keeps_writing_date_on_read(self):
         note = self._entry('undated-note', school_item=SchoolItemKind.LATE_ARRIVAL.value)
         self._set_timestamps(
             note, created_at=datetime.datetime(2026, 9, 1, 10, 0, tzinfo=WARSAW)
         )
 
-        self.assertEqual(self._sections(UPCOMING)[SECTION_UNDATED], ['undated-note'])
+        self.assertEqual(self._sections(UPCOMING)[SECTION_DATED], ['undated-note'])
+        self.assertEqual(Entry.objects.get(pk=note.pk).date, TODAY)
         self.assertEqual(self._sections(PAST)[SECTION_PAST], [])
 
     def test_helper_does_not_widen_the_callers_scope(self):
@@ -282,7 +275,7 @@ class GroupByDayTests(FamilyFixtureMixin, TestCase):
     _entry = PartitionTests._entry
     _set_timestamps = PartitionTests._set_timestamps
 
-    def test_keeps_input_order_and_groups_undated_grade_by_effective_date(self):
+    def test_keeps_input_order_and_groups_grade_by_writing_date(self):
         grade = self._entry('grade-today', school_item=SchoolItemKind.GRADE.value)
         self._set_timestamps(
             grade, created_at=datetime.datetime(2026, 9, 28, 10, 0, tzinfo=WARSAW)
@@ -324,7 +317,7 @@ class SplitByAssigneeTests(TwoParentFixtureMixin, TestCase):
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content=content,
-            date=date,
+            date=date or TODAY,
             time=time,
             assigned_member=member,
         )
@@ -381,7 +374,7 @@ class SplitByAssigneeTests(TwoParentFixtureMixin, TestCase):
         self._entry('michal', self.child)
         self._entry('family')
 
-        groups = split_by_assignee(self._rows(UPCOMING, section=1))
+        groups = split_by_assignee(self._rows(UPCOMING))
 
         self.assertEqual([group.member for group in groups], [self.child, None])
 
@@ -391,7 +384,7 @@ class SplitByAssigneeTests(TwoParentFixtureMixin, TestCase):
         self._entry('jolanta', self.inactive_parent)
         self._entry('michal', self.child)
 
-        groups = split_by_assignee(self._rows(UPCOMING, section=1))
+        groups = split_by_assignee(self._rows(UPCOMING))
 
         self.assertEqual(
             [group.key for group in groups],
@@ -445,6 +438,7 @@ class SplitByAssigneeTests(TwoParentFixtureMixin, TestCase):
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content='theirs',
+            date=TODAY,
             assigned_member=self.other_family_child,
         )
         rows = list(Entry.objects.select_related('assigned_member'))

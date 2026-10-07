@@ -1,3 +1,4 @@
+import datetime
 """Access matrix for every parent management path (S-02 phase 3).
 
 Every read and mutation obeys the family-access hard rule: only an active parent
@@ -10,6 +11,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from entries.classification.types import EntryType
 from entries.models import Entry
@@ -22,13 +24,13 @@ FOREIGN_SENTINEL = 'SENTINEL-OBCY-WPIS-91fa'
 class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
     def setUp(self):
         super().setUp()
-        self.own = Entry.objects.create(
+        self.own = Entry.objects.create(date=timezone.localdate(),
             family=self.family,
             entry_type=EntryType.TODO.value,
             content='Własny wpis',
             created_by=self.parent,
         )
-        self.foreign = Entry.objects.create(
+        self.foreign = Entry.objects.create(date=timezone.localdate(),
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content=FOREIGN_SENTINEL,
@@ -42,7 +44,7 @@ class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
         return {
             'entry_type': EntryType.NOTE.value,
             'content': 'Zmieniona treść',
-            'date': '',
+            'date': timezone.localdate().isoformat(),
             'time': '',
             'assigned_member': '',
             'school_item': '',
@@ -225,7 +227,7 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
         self.assertFalse(Entry.objects.exists())
 
     def test_eduvulcan_entry_correction_preserves_source_then_deletes(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=timezone.localdate(),
             family=self.family,
             entry_type=EntryType.NOTE.value,
             content='Informacja ze szkoły',
@@ -256,7 +258,7 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
         self.assertFalse(Entry.objects.exists())
 
     def test_capture_saved_entry_appears_in_shared_index_and_detail(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=timezone.localdate(),
             family=self.family,
             entry_type=EntryType.TODO.value,
             content='Wpis z rozpoznawania',

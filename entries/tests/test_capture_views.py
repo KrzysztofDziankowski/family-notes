@@ -308,7 +308,7 @@ class CorrectionAndValidationTests(CaptureViewMixin, TestCase):
     def test_calendar_event_without_date_is_an_error(self):
         response = self.client.post(CONFIRM_URL, self.confirm_data(date='', school_item=''))
 
-        self.assertContains(response, 'Wydarzenie musi mieć datę.')
+        self.assertContains(response, 'Podaj datę.')
         self.assertContains(response, 'aria-invalid="true"')
         self.assertFalse(Entry.objects.exists())
 
@@ -521,7 +521,7 @@ class IdempotencyAndSavedPanelTests(CaptureViewMixin, TestCase):
 
     def test_key_owned_by_another_family_rerenders_with_new_key(self):
         key = uuid.uuid4()
-        Entry.objects.create(
+        Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content='SENTINEL-OBCY-WPIS',
@@ -539,7 +539,7 @@ class IdempotencyAndSavedPanelTests(CaptureViewMixin, TestCase):
         self.assertEqual(Entry.objects.count(), 1)
 
     def test_saved_panel_for_other_family_entry_leaks_nothing(self):
-        foreign = Entry.objects.create(
+        foreign = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family,
             entry_type=EntryType.NOTE.value,
             content='SENTINEL-OBCY-WPIS',
@@ -710,7 +710,7 @@ class ProgressIndicatorCaptureTests(CaptureViewMixin, TestCase):
         self.assertContains(response, f'<script src="{ENTER_SCRIPT_URL}" defer></script>', html=True)
 
     def test_saved_panel_has_no_progress_partial_of_its_own(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.TODO.value,
             content='Kupić zeszyt',
@@ -726,7 +726,7 @@ class ProgressIndicatorCaptureTests(CaptureViewMixin, TestCase):
         self.assertEqual(self.only_progress_form(response)['attrs']['action'], CAPTURE_URL)
 
     def test_structured_create_and_edit_forms_have_no_progress_partial(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.TODO.value,
             content='Kupić zeszyt',

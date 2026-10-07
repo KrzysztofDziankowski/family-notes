@@ -390,7 +390,8 @@ class ClassificationFallbackTests(ConversionTestCase):
         self.assertEqual((result.outcome, result.attempt), (ConversionOutcome.PROCESSED, 1))
         entry = Entry.objects.get()
         self.assertEqual(entry.assigned_member, self.child)
-        self.assertEqual(entry.content, 'Wycieczka klasowa')
+        self.assertEqual(entry.content, f'{UNKNOWN_TITLE}: {UNKNOWN_MESSAGE}')
+        self.assertEqual(entry.date, conversion.reference_date_for(self.row.captured_at))
         self.assertEqual(entry.source, Entry.Source.EDUVULCAN)
         self.assertEqual(entry.conversion_output.kind, OutputKind.CLASSIFICATION.value)
 

@@ -1,3 +1,4 @@
+import datetime
 """S-16: several families per person, the chooser, the header switcher and the stale-tab guard."""
 
 import re
@@ -8,6 +9,7 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve, reverse
+from django.utils import timezone
 
 from entries import urls as entries_urls
 from entries.classification.types import EntryType
@@ -50,10 +52,12 @@ class MultiFamilyFixtureMixin:
         self.child_a = self.member('kasia', self.family_a, FamilyMember.Role.CHILD, 'Kasia')
         self.child_b = self.member('tymek', self.family_b, FamilyMember.Role.CHILD, 'Tymek')
         self.entry_a = Entry.objects.create(
+            date=timezone.localdate() + datetime.timedelta(days=1),
             family=self.family_a, entry_type=EntryType.TODO.value, content='Wpis A',
             assigned_member=self.child_a, created_by=self.parent_a,
         )
         self.entry_b = Entry.objects.create(
+            date=timezone.localdate() + datetime.timedelta(days=1),
             family=self.family_b, entry_type=EntryType.TODO.value, content='Wpis B',
             assigned_member=self.child_b, created_by=self.parent_b,
         )
@@ -267,6 +271,7 @@ class StaleTabGuardTests(MultiFamilyFixtureMixin, TestCase):
             FORM_FIELD: str(self.family_a.pk),
             'entry_type': EntryType.NOTE.value,
             'content': 'Nowy wpis',
+            'date': '2026-10-06',
             'submission_key': '6b0f7c2e-79a4-4d55-a1b2-1f0d1f2f3a4b',
         })
 
@@ -280,6 +285,7 @@ class StaleTabGuardTests(MultiFamilyFixtureMixin, TestCase):
             FORM_FIELD: str(self.family_b.pk),
             'entry_type': EntryType.NOTE.value,
             'content': 'Nowy wpis',
+            'date': '2026-10-06',
             'submission_key': '6b0f7c2e-79a4-4d55-a1b2-1f0d1f2f3a4b',
         })
 

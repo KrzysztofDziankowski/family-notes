@@ -128,6 +128,7 @@ class EntriesApiDataMixin(AutomationFixtureMixin):
 
     def entry(self, content, day=None, *, family=None, **values):
         values.setdefault('entry_type', EntryType.NOTE.value)
+        day = day or datetime.date(2026, 10, 6)
         return Entry.objects.create(
             family=family or self.family, content=content, date=day, **values
         )
@@ -144,7 +145,7 @@ class AutomationFamilyEntriesFilterTests(EntriesApiDataMixin, TestCase):
         self.middle = self.entry('middle', datetime.date(2026, 9, 15))
         self.last_day = self.entry('last-day', datetime.date(2026, 9, 30))
         self.after = self.entry('after', datetime.date(2026, 10, 1))
-        self.undated = self.entry('undated')
+        self.outside_range = self.entry('outside-range')
         self.entry(FOREIGN_SENTINEL, datetime.date(2026, 9, 15), family=self.other_family)
         self.entry(FOREIGN_SENTINEL, family=self.other_family)
 
@@ -154,18 +155,18 @@ class AutomationFamilyEntriesFilterTests(EntriesApiDataMixin, TestCase):
     def assertNoForeignEntries(self, contents):
         self.assertNotIn(FOREIGN_SENTINEL, contents)
 
-    def test_no_bounds_returns_dated_and_undated_family_entries(self):
+    def test_no_bounds_returns_all_dated_family_entries(self):
         contents = self.read()
 
         self.assertEqual(
-            contents, ['before', 'first-day', 'middle', 'last-day', 'after', 'undated']
+            contents, ['before', 'first-day', 'middle', 'last-day', 'after', 'outside-range']
         )
         self.assertNoForeignEntries(contents)
 
     def test_explicit_false_without_bounds_returns_only_dated_entries(self):
         contents = self.read(include_undated=False)
 
-        self.assertEqual(contents, ['before', 'first-day', 'middle', 'last-day', 'after'])
+        self.assertEqual(contents, ['before', 'first-day', 'middle', 'last-day', 'after', 'outside-range'])
 
     def test_both_bounds_are_inclusive(self):
         contents = self.read(
@@ -180,27 +181,27 @@ class AutomationFamilyEntriesFilterTests(EntriesApiDataMixin, TestCase):
     def test_date_from_alone_is_inclusive_lower_bound(self):
         contents = self.read(date_from=datetime.date(2026, 9, 30), include_undated=False)
 
-        self.assertEqual(contents, ['last-day', 'after'])
+        self.assertEqual(contents, ['last-day', 'after', 'outside-range'])
 
     def test_date_to_alone_is_inclusive_upper_bound(self):
         contents = self.read(date_to=datetime.date(2026, 9, 1), include_undated=False)
 
         self.assertEqual(contents, ['before', 'first-day'])
 
-    def test_range_with_undated_adds_undated_entries(self):
+    def test_include_undated_cannot_bypass_date_range(self):
         contents = self.read(
             date_from=datetime.date(2026, 9, 15),
             date_to=datetime.date(2026, 9, 15),
             include_undated=True,
         )
 
-        self.assertEqual(contents, ['middle', 'undated'])
+        self.assertEqual(contents, ['middle'])
         self.assertNoForeignEntries(contents)
 
-    def test_single_bound_with_undated_adds_undated_entries(self):
+    def test_include_undated_cannot_bypass_single_bound(self):
         contents = self.read(date_to=datetime.date(2026, 8, 31), include_undated=True)
 
-        self.assertEqual(contents, ['before', 'undated'])
+        self.assertEqual(contents, ['before'])
 
     def test_parsed_defaults_drive_the_same_filter(self):
         parsed = parse_entries_query(query(date_from='2026-09-01', date_to='2026-09-30'))
@@ -264,7 +265,7 @@ class SerializeEntryTests(EntriesApiDataMixin, TestCase):
 
         data = serialize_entry(entry)
 
-        self.assertIsNone(data['date'])
+        self.assertEqual(data['date'], '2026-10-06')
         self.assertIsNone(data['time'])
         self.assertIsNone(data['assigned_member'])
         self.assertEqual(entry.school_item, '')
@@ -392,7 +393,7 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
             school_item=SchoolItemKind.TEST.value,
             source=Entry.Source.EDUVULCAN,
         )
-        self.todo = self.entry('Kupić zeszyt', entry_type=EntryType.TODO.value)
+        self.todo = self.entry('Kupić zeszyt', datetime.date(2026, 9, 28), entry_type=EntryType.TODO.value)
         self.note = self.entry('Notatka rodzica', datetime.date(2026, 10, 5))
         self.foreign_dated = self.entry(
             FOREIGN_SENTINEL, datetime.date(2026, 9, 28), family=self.other_family
@@ -436,7 +437,7 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
             self.assertEqual(set(record), EXPECTED_FIELDS)
         self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
 
-    def test_records_carry_all_types_sources_and_undated_entries(self):
+    def test_records_carry_all_types_sources_and_non_null_dates(self):
         records = {record['id']: record for record in self.get().json()['results']}
 
         self.assertEqual(
@@ -461,7 +462,8 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
             },
         )
         undated = records[self.todo.pk]
-        self.assertIsNone(undated['date'])
+        self.assertEqual(undated['date'], '2026-09-28')
+        self.assertTrue(all(record['date'] is not None for record in records.values()))
         self.assertIsNone(undated['time'])
         self.assertIsNone(undated['assigned_member'])
         self.assertIsNone(undated['school_item'])
@@ -490,16 +492,16 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
         self.assertEqual(response.json()['count'], 3)
         self.assertNotIn(FOREIGN_SENTINEL, response.content.decode())
 
-    def test_date_range_excludes_undated_by_default(self):
+    def test_date_range_includes_each_dated_entry_in_bounds(self):
         response = self.get(date_from='2026-09-01', date_to='2026-09-30')
 
-        self.assertEqual(response.json()['count'], 1)
-        self.assertEqual(self.ids(response), [self.dated.pk])
+        self.assertEqual(response.json()['count'], 2)
+        self.assertEqual(self.ids(response), [self.dated.pk, self.todo.pk])
 
     def test_explicit_false_without_bounds_returns_dated_only(self):
         response = self.get(include_undated='FALSE')
 
-        self.assertEqual(self.ids(response), [self.dated.pk, self.note.pk])
+        self.assertEqual(self.ids(response), [self.dated.pk, self.todo.pk, self.note.pk])
 
     def test_pagination_counts_before_paging(self):
         response = self.get(limit='1', offset='1')
@@ -699,10 +701,10 @@ class MultiFamilyTokenTests(TestCase):
             user=self.user, family=self.family_b, role=FamilyMember.Role.PARENT, display_name='Ewa',
         )
         self.entry_a = Entry.objects.create(
-            family=self.family_a, entry_type=EntryType.TODO.value, content='Wpis A',
+            family=self.family_a, entry_type=EntryType.TODO.value, content='Wpis A', date=datetime.date(2026, 10, 6),
         )
         self.entry_b = Entry.objects.create(
-            family=self.family_b, entry_type=EntryType.TODO.value, content=FOREIGN_SENTINEL,
+            family=self.family_b, entry_type=EntryType.TODO.value, content=FOREIGN_SENTINEL, date=datetime.date(2026, 10, 6),
         )
         _, self.secret_a = AutomationToken.issue(self.parent_a, 'Telefon A')
         _, self.secret_b = AutomationToken.issue(self.parent_b, 'Telefon B')

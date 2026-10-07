@@ -258,17 +258,32 @@ class QuestionFlowTests(FollowUpViewMixin, TestCase):
         self.assertEqual(response.context['review_form'].initial['date'], NEXT_FRIDAY)
 
     def test_tampered_missing_values_are_dropped(self):
-        # A todo has no required fields, so a posted "date" is not missing.
+        # A forged date hint is removed when the task already has its due date.
         _, data = self.ask()
         calls = len(self.backend.requests)
 
         response = self.answer(
-            data, answer='jutro', entry_type=EntryType.TODO.value, school_item=''
+            data, answer='jutro', entry_type=EntryType.TODO.value, school_item='', date=NEXT_FRIDAY.isoformat()
         )
 
         self.assertEqual(len(self.backend.requests), calls)
         self.assertEqual(response.context['state'], 'proposal')
         self.assertEqual(response.context['review_form'].initial['entry_type'], 'todo')
+
+
+    def test_forged_missing_fields_cannot_hide_a_missing_task_deadline(self):
+        _, data = self.ask()
+        calls = len(self.backend.requests)
+        response = self.answer(
+            data, output(date=NEXT_FRIDAY), answer='w piątek',
+            entry_type=EntryType.TODO.value, school_item='', missing=['school_subject'],
+        )
+        self.assertEqual(len(self.backend.requests), calls + 1)
+        self.assertEqual(response.context['state'], 'proposal')
+        form = response.context['review_form']
+        self.assertEqual(form.initial['entry_type'], EntryType.TODO.value)
+        self.assertEqual(form.initial['date'], NEXT_FRIDAY)
+        self.assertFalse(Entry.objects.exists())
 
 
 class ShortNameAnswerFlowTests(FollowUpViewMixin, TestCase):

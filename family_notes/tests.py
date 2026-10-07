@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -149,6 +150,7 @@ class ErrorPageTests(FamilyFixtureMixin, TestCase):
 
     def test_foreign_and_missing_entries_get_identical_polish_404(self):
         foreign = Entry.objects.create(
+            date=datetime.date(2026, 10, 6),
             family=self.other_family,
             entry_type='note',
             content='SENTINEL-FOREIGN',

@@ -147,7 +147,7 @@ class CaptureFlowAuditTests(CaptureAuditMixin, TestCase):
         self.assert_state(response, 'invalid')
 
     def test_saved(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.TODO.value,
             content='Oddać zgodę',
@@ -245,7 +245,7 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
         self.today = timezone.localdate()
 
     def entry(self, content, days=None, **fields):
-        date = None if days is None else self.today + datetime.timedelta(days=days)
+        date = self.today + datetime.timedelta(days=10 if days is None else days)
         return Entry.objects.create(
             family=self.family,
             entry_type=EntryType.TODO.value,
@@ -341,7 +341,7 @@ class ChildAuditTests(FamilyFixtureMixin, TestCase):
                 family=self.family,
                 entry_type=EntryType.TODO.value,
                 content=content,
-                date=None if days is None else self.today + datetime.timedelta(days=days),
+                date=self.today + datetime.timedelta(days=10 if days is None else days),
                 assigned_member=self.child,
                 created_by=self.parent,
             )

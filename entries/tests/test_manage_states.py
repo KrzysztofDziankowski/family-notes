@@ -57,9 +57,9 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         expectations = {
-            'list_upcoming': ['data-day-group="2026-10-05"', 'data-day-group="undated"',
+            'list_upcoming': ['data-day-group="2026-10-05"', 'data-day-group="2026-10-08"',
                               'aria-current="page">Nadchodzące<',
-                              '<h2 class="fn-day-heading">Bez daty</h2>'],
+                              '<h2 class="fn-day-heading">Czwartek</h2>'],
             'list_past': ['data-day-group="2026-09-21"', 'aria-current="page">Minione<'],
             'list_empty': ['Nie ma nadchodzących wpisów.'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
@@ -155,22 +155,22 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         upcoming = state_html(html, 'list_upcoming')
-        self.assertEqual(DAY_PATTERN.findall(upcoming), ['2026-10-05', '2026-10-07', 'undated'])
-        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming), ['Dziś', 'Środa', 'Bez daty'])
+        self.assertEqual(DAY_PATTERN.findall(upcoming), ['2026-10-05', '2026-10-07', '2026-10-08'])
+        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming), ['Dziś', 'Środa', 'Czwartek'])
         self.assertEqual(
             GROUP_PATTERN.findall(upcoming),
-            ['member-900101', 'member-900103', 'family', 'member-900102', 'member-900102', 'family'],
+            ['member-900101', 'member-900102', 'member-900103', 'family', 'member-900102', 'family'],
         )
         self.assertEqual(
             HEADING_PATTERN.findall(upcoming),
-            ['Kasia', 'Marta', 'Cała rodzina', 'Tymek', 'Tymek', 'Cała rodzina'],
+            ['Kasia', 'Tymek', 'Marta', 'Cała rodzina', 'Tymek', 'Cała rodzina'],
         )
         for text, day, heading in (
             ('Sprawdzian z historii o średniowieczu', 'Dziś', 'Kasia'),
             ('Odebrać paczkę z paczkomatu', 'Dziś', 'Marta'),
             ('Zebranie z wychowawczynią', 'Dziś', 'Cała rodzina'),
             ('Wycieczka klasowa do muzeum techniki', 'Środa', 'Tymek'),
-            ('Oddać książkę do biblioteki', 'Bez daty', 'Cała rodzina'),
+            ('Oddać książkę do biblioteki', 'Czwartek', 'Cała rodzina'),
         ):
             with self.subTest(text=text):
                 self.assertIn(

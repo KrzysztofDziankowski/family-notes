@@ -1,6 +1,7 @@
 """``child_entries``: the child-scoped read boundary and its access matrix."""
 
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 from django.test import TestCase
 
 from entries.classification.types import EntryType
@@ -21,6 +22,7 @@ class ChildEntriesTests(FamilyFixtureMixin, TestCase):
 
     def _entry(self, content, family, assigned_member):
         return Entry.objects.create(
+            date=timezone.localdate(),
             family=family,
             entry_type=EntryType.NOTE.value,
             content=content,
@@ -65,11 +67,13 @@ class TwoParentChildEntriesTests(TwoParentFixtureMixin, TestCase):
 
     def test_parent_assigned_entries_are_never_returned_to_a_child(self):
         own = Entry.objects.create(
+            date=timezone.localdate(),
             family=self.family, entry_type=EntryType.NOTE.value, content='own',
             assigned_member=self.child,
         )
         for parent in (self.parent, self.second_parent):
             Entry.objects.create(
+            date=timezone.localdate(),
                 family=self.family, entry_type=EntryType.NOTE.value,
                 content=f'for {parent.display_name}', assigned_member=parent,
             )

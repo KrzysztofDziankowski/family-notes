@@ -39,7 +39,7 @@ class ChildViewFixtureMixin(FamilyFixtureMixin):
             time=datetime.time(8, 0),
             school_item=SchoolItemKind.TEST.value,
         )
-        self.own_undated = self._entry('SENTINEL-OWN-UNDATED', self.child)
+        self.own_later = self._entry('SENTINEL-OWN-LATER', self.child)
         self.own_past = self._entry(
             'SENTINEL-OWN-PAST',
             self.child,
@@ -62,6 +62,7 @@ class ChildViewFixtureMixin(FamilyFixtureMixin):
         self.excluded = (self.unassigned, self.sibling, self.foreign)
 
     def _entry(self, content, member, family=None, entry_type=EntryType.NOTE, **fields):
+        fields.setdefault('date', self.today + datetime.timedelta(days=10))
         return Entry.objects.create(
             family=family or self.family,
             entry_type=entry_type.value,
@@ -103,7 +104,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         )
         self.assertEqual([href for href, marker in links if marker], [current])
 
-    def test_default_list_shows_upcoming_then_undated(self):
+    def test_default_list_shows_upcoming_in_date_order(self):
         response = self.client.get(LIST_URL)
 
         self.assertEqual(response.status_code, 200)
@@ -111,7 +112,7 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(response, '<h1>Moje wpisy</h1>', html=True)
         body = response.content.decode()
         self.assertLess(
-            body.index('SENTINEL-OWN-UPCOMING'), body.index('SENTINEL-OWN-UNDATED')
+            body.index('SENTINEL-OWN-UPCOMING'), body.index('SENTINEL-OWN-LATER')
         )
         self.assertNotContains(response, 'SENTINEL-OWN-PAST')
         self.assertContains(response, f'href="{detail_url(self.own_upcoming.pk)}"')
@@ -121,13 +122,15 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertReadOnly(response)
         # The child's own list hides the redundant assignee.
         self.assertNotContains(response, 'Michał</span>')
+        self.assertNotContains(response, 'fn-entry-type')
 
     def test_past_mode_lists_past_entries_with_mode_in_links(self):
         response = self.client.get(LIST_URL, {'view': 'past'})
 
         self.assertContains(response, 'SENTINEL-OWN-PAST')
+        self.assertNotContains(response, 'fn-entry-type')
         self.assertNotContains(response, 'SENTINEL-OWN-UPCOMING')
-        self.assertNotContains(response, 'SENTINEL-OWN-UNDATED')
+        self.assertNotContains(response, 'SENTINEL-OWN-LATER')
         self.assertContains(response, f'href="{detail_url(self.own_past.pk)}?view=past"')
         self.assertRegex(
             response.content.decode(), r'href="/entries/mine/\?view=past"\s+aria-current="page"'
@@ -198,7 +201,7 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         self.tomorrow_untimed = self._entry(
             'SENTINEL-TOMORROW', self.child, date=FIXED_TODAY + day
         )
-        self.undated = self._entry('SENTINEL-UNDATED', self.child)
+        self.later = self._entry('SENTINEL-LATER', self.child, date=FIXED_TODAY + 7 * day)
         self.yesterday = self._entry(
             'SENTINEL-YESTERDAY', self.child, date=FIXED_TODAY - day, time=datetime.time(9, 0)
         )
@@ -212,21 +215,21 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
     def headings(self, response):
         return HEADING_PATTERN.findall(response.content.decode())
 
-    def test_upcoming_groups_days_under_relative_headings_then_undated(self):
+    def test_upcoming_groups_all_dates_under_relative_headings(self):
         self.client.force_login(self.child.user)
 
         response = self.client.get(LIST_URL)
 
-        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Bez daty'])
+        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Poniedziałek, 5 października'])
         body = response.content.decode()
         order = [
             body.index(marker)
             for marker in ('>Dziś<', 'SENTINEL-TODAY', '>Jutro<', 'SENTINEL-TOMORROW',
-                           '>Bez daty<', 'SENTINEL-UNDATED')
+                           '>Poniedziałek, 5 października<', 'SENTINEL-LATER')
         ]
         self.assertEqual(order, sorted(order))
         self.assertEqual(
-            re.findall(r'data-entry-section="(\w+)"', body), ['dated', 'dated', 'undated']
+            re.findall(r'data-entry-section="(\w+)"', body), ['dated', 'dated', 'dated']
         )
         # Rows under a day heading show only the time, never the date.
         self.assertContains(response, '<span>08:15</span>', html=True)
@@ -255,7 +258,7 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         response = self.client.get(PARENT_LIST_URL)
         past = self.client.get(PARENT_LIST_URL, {'view': 'past'})
 
-        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Bez daty'])
+        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Poniedziałek, 5 października'])
         self.assertEqual(self.headings(past), ['Wczoraj', 'Piątek, 18 września'])
         self.assertContains(response, '<span>08:15</span>', html=True)
         self.assertNotContains(response, 'września')
@@ -319,10 +322,11 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(response, f'href="{LIST_URL}" data-back-link')
         self.assertNotContains(response, '<script>x')
 
-    def test_undated_entry_shows_no_date(self):
-        response = self.client.get(detail_url(self.own_undated.pk))
+    def test_note_shows_writing_date_without_time(self):
+        response = self.client.get(detail_url(self.own_later.pk))
 
-        self.assertContains(response, 'Bez daty')
+        self.assertNotContains(response, 'Bez daty')
+        self.assertContains(response, 'Data')
         self.assertNotContains(response, 'Godzina')
 
     def test_excluded_and_missing_ids_return_identical_404(self):

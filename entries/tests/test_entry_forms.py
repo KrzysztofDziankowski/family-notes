@@ -74,7 +74,7 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
         form = self.bound(date='', school_item='')
 
         self.assertFalse(form.is_valid())
-        self.assertEqual(form.errors['date'], ['Wydarzenie musi mieć datę.'])
+        self.assertEqual(form.errors['date'], ['Podaj datę.'])
 
     def test_school_item_requires_member_while_type_matches(self):
         form = self.bound(assigned_member='')
@@ -94,7 +94,7 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
         form = self.bound(
             entry_type=EntryType.NOTE.value,
             assigned_member='',
-            date='',
+            date=MONDAY.isoformat(),
             school_item='',
             school_subject='',
         )
@@ -258,7 +258,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
         expected = {
             'entry_type': 'Rodzaj',
             'content': 'Tytuł',
-            'date': 'Data',
+            'date': 'Data zapisania',
             'time': 'Godzina',
             'assigned_member': 'Dla kogo',
             'school_subject': 'Przedmiot',
@@ -322,7 +322,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
                 self.assertIn('assigned_member', form.errors)
 
     def test_edit_keeps_current_inactive_assignee_selectable(self):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family,
             entry_type=EntryType.TODO.value,
             content='Oddać książkę',
@@ -336,7 +336,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
 
         bound = EntryEditForm(
             self.parent,
-            self.data(entry_type=EntryType.TODO.value, school_item='', date='', time='',
+            self.data(entry_type=EntryType.TODO.value, school_item='', date=MONDAY.isoformat(), time='',
                       assigned_member=str(self.inactive_child.pk)),
             entry=entry,
         )
@@ -357,7 +357,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
     def test_calendar_event_requires_date(self):
         for form in self.each_form(date='', school_item=''):
             self.assertFalse(form.is_valid())
-            self.assertEqual(form.errors['date'], ['Wydarzenie musi mieć datę.'])
+            self.assertEqual(form.errors['date'], ['Podaj datę.'])
 
     def test_school_item_requires_its_date_and_member(self):
         for form in self.each_form(assigned_member=''):
@@ -373,12 +373,12 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
             self.assertFalse(form.is_valid())
             self.assertEqual(form.errors['date'], ['Podaj datę.'])
 
-    def test_undated_note_without_school_item_is_valid(self):
+    def test_undated_note_without_school_item_is_rejected(self):
         for form in self.each_form(
             entry_type=EntryType.NOTE.value, date='', time='', assigned_member='', school_item=''
         ):
-            self.assertTrue(form.is_valid(), form.errors)
-            self.assertIsNone(form.cleaned_data['assigned_member'])
+            self.assertFalse(form.is_valid())
+            self.assertEqual(form.errors['date'], ['Podaj datę.'])
 
     def test_unknown_choices_are_rejected_in_polish(self):
         for form in self.each_form(entry_type='meeting', school_item='exam'):
@@ -551,7 +551,7 @@ class TwoParentAssigneeFormTests(TwoParentFixtureMixin, TestCase):
         values = {
             'entry_type': EntryType.NOTE.value,
             'content': 'Odebrać paczkę z poczty',
-            'date': '',
+            'date': MONDAY.isoformat(),
             'time': '',
             'assigned_member': str(member.pk) if member is not None else '',
             'school_item': '',
@@ -562,7 +562,7 @@ class TwoParentAssigneeFormTests(TwoParentFixtureMixin, TestCase):
         return values
 
     def forms_for(self, member, **overrides):
-        entry = Entry.objects.create(
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.family, entry_type=EntryType.NOTE.value, content='Stary wpis'
         )
         yield EntryReviewForm(self.parent, self.data(member, **overrides))
@@ -643,7 +643,7 @@ class DescribeFieldsTests(FamilyFixtureMixin, TestCase):
         return render_to_string('entries/_field.html', {'field': form[name], 'hint': hint})
 
     def test_hint_only(self):
-        form = EntryReviewForm(self.parent, missing={'date': 'Podaj datę.'})
+        form = EntryReviewForm(self.parent, initial={'entry_type': 'calendar_event'}, missing={'date': 'Podaj datę.'})
 
         html = self.render_field(form, 'date', hint='Podaj datę.')
 
@@ -667,7 +667,7 @@ class DescribeFieldsTests(FamilyFixtureMixin, TestCase):
         html = self.render_field(form, 'date', hint='Podaj datę.')
 
         self.assertIn('Podaj datę.', html)
-        self.assertIn('Wydarzenie musi mieć datę.', html)
+        self.assertIn('Podaj datę.', html)
         assert_described_by(self, html, 'id_date', ['id_date-hint', 'id_date_error'])
 
     def test_two_errors_render_one_error_container(self):
@@ -689,7 +689,7 @@ class DescribeFieldsTests(FamilyFixtureMixin, TestCase):
         self.assertIn('aria-describedby="id_date-human"', str(form['date']))
 
     def test_no_description_without_hint_error_or_date(self):
-        form = EntryReviewForm(self.parent)
+        form = EntryReviewForm(self.parent, initial={'entry_type': EntryType.CALENDAR_EVENT.value})
 
         describe_fields(form)
 
@@ -705,3 +705,57 @@ class DescribeFieldsTests(FamilyFixtureMixin, TestCase):
         invalid.is_valid()
         describe_fields(invalid)
         self.assertIn('aria-describedby="id_text_error id_text-enter-hint"', str(invalid['text']))
+
+
+class EntryDateMeaningTests(FamilyFixtureMixin, TestCase):
+    def test_notes_default_to_reference_writing_date(self):
+        form = EntryCreateForm(self.parent, today=MONDAY)
+        self.assertEqual(form['date'].value(), MONDAY)
+        self.assertEqual(form['entry_type'].value(), EntryType.NOTE.value)
+        self.assertEqual(form['date'].label, 'Data zapisania')
+
+    def test_all_types_require_a_date_and_explain_its_meaning(self):
+        labels = {'note': 'Data zapisania', 'calendar_event': 'Data wydarzenia',
+                  'todo': 'Termin wykonania'}
+        for entry_type, label in labels.items():
+            with self.subTest(entry_type=entry_type):
+                data = {'entry_type': entry_type, 'content': 'Wpis', 'date': '',
+                        'submission_key': str(uuid.uuid4())}
+                form = EntryCreateForm(self.parent, data)
+                self.assertFalse(form.is_valid())
+                self.assertEqual(form['date'].label, label)
+                self.assertEqual(form.errors['date'], ['Podaj datę.'])
+                correction = ProposalCorrectionForm(self.parent, {**data, 'correction': 'jutro'})
+                self.assertTrue(correction.is_valid(), correction.errors)
+
+    def test_explicitly_cleared_draft_date_is_never_replaced_by_default(self):
+        for form_class in (EntryReviewForm, ProposalCorrectionForm):
+            with self.subTest(form=form_class.__name__):
+                form = form_class(self.parent, initial={'entry_type': 'note', 'date': None}, today=MONDAY)
+                self.assertIsNone(form['date'].value())
+
+    def test_edit_preserves_writing_date_and_type_changes_keep_selected_date(self):
+        entry = Entry.objects.create(family=self.family, entry_type='note', content='Notatka', date=MONDAY)
+        form = EntryEditForm(self.parent, entry=entry)
+        self.assertEqual(form['date'].value(), MONDAY)
+        changed = EntryEditForm(self.parent, {'entry_type': 'todo', 'content': 'Zadanie',
+                                             'date': MONDAY.isoformat()}, entry=entry)
+        self.assertTrue(changed.is_valid(), changed.errors)
+        self.assertEqual(changed.cleaned_data['date'], MONDAY)
+        self.assertEqual(changed['date'].label, 'Termin wykonania')
+
+
+class EntryAdminDateTests(TestCase):
+    def test_admin_requires_dates_and_defaults_new_note_to_writing_date(self):
+        from unittest.mock import patch
+        from entries.admin import EntryAdminForm
+        with patch('entries.admin.timezone.localdate', return_value=MONDAY):
+            form = EntryAdminForm()
+        self.assertTrue(form.fields['date'].required)
+        self.assertEqual(form['date'].value(), MONDAY)
+        self.assertEqual(form.fields['date'].label, 'Writing date')
+        self.assertEqual(form['entry_type'].value(), 'note')
+        bound = EntryAdminForm(data={'entry_type': 'todo', 'content': 'Task', 'date': ''})
+        self.assertFalse(bound.is_valid())
+        self.assertIn('date', bound.errors)
+        self.assertEqual(bound.fields['date'].label, 'Due date')

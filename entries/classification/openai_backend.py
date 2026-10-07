@@ -253,6 +253,9 @@ def _school_item_guide() -> str:
 # multi-entry capture) reuse this constant unchanged; ``INSTRUCTIONS`` already
 # ends with it, so prompts built from ``INSTRUCTIONS`` must not append it again.
 DATE_RULES = (
+    'Znaczenie date: dla note jest to data zapisania notatki, dla calendar_event '
+    'data wydarzenia, a dla todo termin wykonania. Dla note nie zamieniaj daty '
+    'opisywanego wydarzenia na datę zapisania; zachowaj ją w treści. '
     'Zasady dat: liczysz je w strefie czasowej Europe/Warsaw, a tydzień zaczyna '
     'się w poniedziałek. Sam dzień tygodnia (np. „w piątek”) oznacza jego '
     'najbliższe wystąpienie po dacie odniesienia: jeśli data odniesienia wypada '
@@ -270,7 +273,8 @@ _TITLE_RULE = (
     'polecenia „kasia zrobić pranie w piątek” content to „Zrobić pranie”, data '
     'to najbliższy piątek, a osoba to Kasia. Inne osoby i szczegóły zostaw '
     '(np. „Kupić prezent dla babci”); przedmiot szkolny także zostaje w treści '
-    '(np. „Kartkówka z matematyki”). '
+    '(np. „Kartkówka z matematyki”). Dla note zachowaj w treści daty zdarzeń, '
+    'ponieważ data notatki oznacza dzień jej zapisania. '
 )
 
 # Self-reference rule (S-07): ``autor_polecenia`` is sent only for the
@@ -641,10 +645,14 @@ def _translate_entry(parsed: StructuredClassification, request: BackendRequest) 
     Raises ``TypeError``/``ValueError`` for values outside the domain.
     """
     date_accepted = parsed.date is not None and _date_is_grounded(parsed.date_source, request)
+    kind = SchoolItemKind(parsed.school_item) if parsed.school_item else None
+    entry_type = kind.entry_type if kind else parsed.entry_type
     content = strip_extracted_phrases(
         parsed.content,
         assignee_refs=_assignee_refs(parsed, request),
-        date_phrase=parsed.date_source if date_accepted else None,
+        date_phrase=(
+            parsed.date_source if date_accepted and entry_type != EntryType.NOTE else None
+        ),
         self_reference=_is_self_assigned(parsed, request),
     )
     return _backend_output(parsed, content=content, date_accepted=date_accepted)

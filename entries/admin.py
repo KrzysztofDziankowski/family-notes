@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django import forms
+from django.utils import timezone
 
 from .eduvulcan.conversion import requeue_failed_notifications
 from .models import Entry, InboundNotification, NotificationConversionOutput
@@ -6,8 +8,33 @@ from .models import Entry, InboundNotification, NotificationConversionOutput
 RAW_DATA_PRUNED = 'Raw data pruned'
 
 
+class EntryAdminForm(forms.ModelForm):
+    class Meta:
+        model = Entry
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['date'].required = True
+        if not self.is_bound and not self.instance.pk and not self.initial.get('entry_type'):
+            self.initial['entry_type'] = 'note'
+        selected_type = self['entry_type'].value() or 'note'
+        if not self.is_bound and not self.instance.pk and selected_type == 'note' and not self.initial.get('date'):
+            self.initial['date'] = timezone.localdate()
+        labels = {'note': 'Writing date', 'calendar_event': 'Event date', 'todo': 'Due date'}
+        self.fields['date'].label = labels.get(selected_type, 'Date')
+        type_attrs = self.fields['entry_type'].widget.attrs
+        type_attrs['data-entry-date-type'] = ''
+        for entry_type, label in labels.items():
+            type_attrs[f'data-entry-date-label-{entry_type.replace("_", "-")}'] = label
+
+
 @admin.register(Entry)
 class EntryAdmin(admin.ModelAdmin):
+    form = EntryAdminForm
+
+    class Media:
+        js = ('js/entry-date-labels.js',)
     list_display = (
         '__str__',
         'entry_type',

@@ -9,6 +9,7 @@ import uuid
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from django.test import TestCase
 from django.urls import reverse
 
@@ -70,6 +71,7 @@ class MixedRoleFixtureMixin:
 
     def entry(self, family, content, assignee, creator):
         return Entry.objects.create(
+            date=timezone.localdate(),
             family=family, entry_type=EntryType.TODO.value, content=content,
             assigned_member=assignee, created_by=creator,
         )
@@ -154,7 +156,7 @@ class ParentContextEntriesTests(MixedRoleFixtureMixin, TestCase):
 
         response = self.post(reverse('entries:create'), {
             'entry_type': EntryType.NOTE.value,
-            'content': 'Nowa notatka',
+            'content': 'Nowa notatka', 'date': timezone.localdate().isoformat(),
             'assigned_member': self.kuba_b.pk,
             'submission_key': str(uuid.uuid4()),
         })
@@ -180,7 +182,7 @@ class ParentContextEntriesTests(MixedRoleFixtureMixin, TestCase):
 
         response = self.post(reverse('entries:confirm'), {
             'entry_type': EntryType.TODO.value,
-            'content': 'Kupić zeszyt',
+            'content': 'Kupić zeszyt', 'date': timezone.localdate().isoformat(),
             'assigned_member': self.kuba_b.pk,
             'submission_key': str(uuid.uuid4()),
         })

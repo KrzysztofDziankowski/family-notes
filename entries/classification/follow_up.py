@@ -7,7 +7,7 @@ draft's own title is quoted.
 
 from __future__ import annotations
 
-from .types import ClassificationFollowUp, MissingField
+from .types import ClassificationFollowUp, EntryType, MissingField
 
 # Each missing field maps to (opening with the subject, continuation without
 # it). The continuation is used when several fields join into one question.
@@ -33,16 +33,25 @@ def follow_up_question(draft: ClassificationFollowUp) -> str:
     missing = set(draft.missing_fields)
     if MissingField.AMBIGUOUS_MEMBER in missing:
         missing.discard(MissingField.AFFECTED_MEMBER)
-    ordered = [field for field in _PHRASES if field in missing]
+    phrases = dict(_PHRASES)
+    if draft.entry_type == EntryType.TODO:
+        phrases[MissingField.DATE] = (
+            'Na kiedy trzeba wykonać {subject}', 'na kiedy trzeba wykonać'
+        )
+    elif draft.entry_type == EntryType.NOTE:
+        phrases[MissingField.DATE] = (
+            'Kiedy zapisano {subject}', 'kiedy zapisano'
+        )
+    ordered = [field for field in phrases if field in missing]
     if not ordered:
         raise ValueError('draft has no missing fields')
 
     content = (draft.content or '').strip()
     subject = f'„{content}”' if content else _FALLBACK_SUBJECT
     first, *rest = ordered
-    opening = _PHRASES[first][0]
-    if not content and first is MissingField.DATE:
+    opening = phrases[first][0]
+    if not content and first is MissingField.DATE and draft.entry_type == EntryType.CALENDAR_EVENT:
         opening = _FALLBACK_DATE_OPENING
     parts = [opening.format(subject=subject)]
-    parts.extend(_PHRASES[field][1] for field in rest)
+    parts.extend(phrases[field][1] for field in rest)
     return ' i '.join(parts) + '?'

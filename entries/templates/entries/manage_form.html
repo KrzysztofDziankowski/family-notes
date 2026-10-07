@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{% if form.errors %}Błąd: {% endif %}{% if entry %}Edytuj wpis{% else %}Nowy wpis{% endif %}{% endblock %}
 
@@ -8,4 +9,8 @@
     <p class="fn-muted">Wolisz opisać wpis własnymi słowami? <a href="{% url 'entries:capture' %}">Dodaj wpis z tekstu</a>.</p>
 {% endif %}
 {% include "entries/_manage_form.html" %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'js/entry-date-labels.js' %}" defer></script>
 {% endblock %}
