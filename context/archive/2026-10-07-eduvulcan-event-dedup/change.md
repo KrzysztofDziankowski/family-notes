@@ -1,10 +1,10 @@
 ---
 change_id: eduvulcan-event-dedup
 title: Reject duplicate and merge similar EduVulcan events on automation intake
-status: implemented
+status: archived
 created: 2026-10-07
 updated: 2026-10-07
-archived_at: null
+archived_at: 2026-10-07T18:32:05Z
 ---
 
 ## Notes
