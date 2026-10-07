@@ -46,7 +46,7 @@ def healthz(request):
 
 # Mirror --fn-color-accent and --fn-color-bg in css/tokens.css (a test keeps
 # them in sync); the manifest carries the colours because templates may not.
-PWA_THEME_COLOR = '#2f6f5e'
+PWA_THEME_COLOR = '#005ec3'
 PWA_BACKGROUND_COLOR = '#f7f8fa'
 PWA_CACHE_PREFIX = 'familynotes-'
 # Shell assets the service worker may cache; never family data or pages.
