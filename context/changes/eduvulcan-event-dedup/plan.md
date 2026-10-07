@@ -210,6 +210,6 @@ Migration only alters choices and a check constraint; existing rows keep valid k
 
 #### Manual
 
-- [ ] 2.5 Locally (one Gunicorn worker), POST "Kartkówka" then "Sprawdzian" for the same child/subject/date to `/api/automation/notifications/`; parent list shows a single "Sprawdzian: …" entry
-- [ ] 2.6 Repeat with "Praca klasowa" then "Kartkówka"; only "Praca klasowa: …" remains
-- [ ] 2.7 Admin shows `merged`/`duplicate` conversion outputs with empty entry for the skipped notifications
+- [x] 2.5 Locally (one Gunicorn worker), POST "Kartkówka" then "Sprawdzian" for the same child/subject/date to `/api/automation/notifications/`; parent list shows a single "Sprawdzian: …" entry
+- [x] 2.6 Repeat with "Praca klasowa" then "Kartkówka"; only "Praca klasowa: …" remains
+- [x] 2.7 Admin shows `merged`/`duplicate` conversion outputs with empty entry for the skipped notifications
