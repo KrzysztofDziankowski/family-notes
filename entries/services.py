@@ -1,5 +1,7 @@
 """Write paths for family entries: parent-confirmed and automated EduVulcan."""
 
+import unicodedata
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
@@ -13,7 +15,7 @@ from family_access.access import (
 from family_access.models import FamilyMember
 
 from .classification.service import MAX_PROPOSALS_PER_INSTRUCTION, MAX_SUBMITTED_TEXT_LENGTH
-from .classification.types import EntryType, MissingField, SchoolItemKind
+from .classification.types import EXAM_KINDS, EXAM_RANKS, EntryType, MissingField, SchoolItemKind
 from .models import SCHOOL_SUBJECT_MAX_LENGTH, Entry
 
 SCHOOL_EVENT_KINDS = frozenset(
@@ -424,3 +426,58 @@ def create_automated_entry(
         created_by=None,
         submission_key=None,
     )
+
+
+@sensitive_variables('text')
+def _exam_kind_of(text):
+    """The exam kind named by a ``"<Label>: ..."`` content prefix, or ``None``."""
+    folded = ' '.join(unicodedata.normalize('NFC', text or '').split()).casefold()
+    for kind in EXAM_RANKS:
+        if folded.startswith(f'{kind.label}: '):
+            return kind
+    return None
+
+
+@sensitive_variables('content')
+def upgrade_automated_exam_entry(entry, *, content, school_item):
+    """Upgrade an EduVulcan exam entry in place to a higher-ranked exam.
+
+    The second automated write path, used only when conversion merges exam
+    notifications. The entry must be an EduVulcan calendar event whose content
+    starts with an exam label (and whose kind, if any, matches it); the new
+    content must start with a higher-ranked exam label. ``school_item`` must be
+    that label's kind or ``None`` (an unassigned exam carries no kind). Only
+    ``content``, ``school_item`` and ``updated_at`` are saved; any violation
+    raises ``ValidationError`` before a write. Callers own the surrounding
+    transaction.
+    """
+    if entry.source != Entry.Source.EDUVULCAN:
+        raise ValidationError('Można zmienić tylko wpis z EduVulcan.')
+    school_item = SchoolItemKind(school_item) if school_item else None
+    if school_item is not None and school_item not in EXAM_KINDS:
+        raise ValidationError('Element szkolny musi być kartkówką, sprawdzianem lub pracą klasową.')
+    if not content or not content.strip():
+        raise ValidationError('Treść wpisu jest wymagana.')
+    current_kind = _exam_kind_of(entry.content)
+    if (
+        EntryType(entry.entry_type) != EntryType.CALENDAR_EVENT
+        or current_kind is None
+        or (entry.school_item and entry.school_item != current_kind.value)
+    ):
+        raise ValidationError('Można zmienić tylko kartkówkę, sprawdzian lub pracę klasową.')
+    new_kind = _exam_kind_of(content)
+    if new_kind is None or EXAM_RANKS[new_kind] <= EXAM_RANKS[current_kind]:
+        raise ValidationError('Nowy rodzaj sprawdzianu musi być ważniejszy od obecnego.')
+    if school_item is not None and school_item != new_kind:
+        raise ValidationError('Element szkolny nie pasuje do treści wpisu.')
+    if school_item is not None and school_item.entry_type != EntryType(entry.entry_type):
+        raise ValidationError('Element szkolny nie pasuje do rodzaju wpisu.')
+    _validate_entry_invariants(
+        entry.family_id, EntryType(entry.entry_type), entry.date, entry.assigned_member,
+        school_item, kept_assignee_id=entry.assigned_member_id,
+        school_subject=entry.school_subject, require_subject=False,
+    )
+    entry.content = content
+    entry.school_item = school_item.value if school_item else ''
+    entry.save(update_fields=('content', 'school_item', 'updated_at'))
+    return entry

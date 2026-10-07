@@ -11,7 +11,11 @@ point and the next sweep recovers:
 3. ``process_claim`` derives ordered proposals (fixed rules, then
    family-scoped classification, then a general note) and saves every entry,
    its output link, and ``status=processed`` in one transaction, but only
-   while the claim still owns an unexpired lease.
+   while the claim still owns an unexpired lease. Fixed-rule proposals are
+   first matched against live EduVulcan entries of the family under a family
+   row lock: a re-sent event is recorded as a ``duplicate`` output and a
+   lower- or equal-ranked exam as ``merged`` (a higher-ranked one upgrades
+   the existing entry), both without an entry.
 4. Temporary provider unavailability and transient database contention are
    retried after a delay until ``max_attempts``; exhausted provider failures
    save a general note, exhausted or permanent infrastructure failures mark
@@ -35,16 +39,18 @@ from typing import Iterable, List, Optional, Sequence, Tuple
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, OperationalError, transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
+from family_access.models import Family
 from family_notes.log_safety import exception_summary
 
 from ..classification.service import FamilyOutcome, classify_for_family
 from ..classification.types import EntryType
-from ..models import InboundNotification, NotificationConversionOutput
-from ..services import create_automated_entry
+from ..models import Entry, InboundNotification, NotificationConversionOutput
+from ..services import create_automated_entry, upgrade_automated_exam_entry
 from .children import snapshot_active_children
+from .dedup import Action, Candidate, decide
 from .rules import (
     general_note_proposal, general_note_text, propose_entries, reference_date_for, writing_date_for,
 )
@@ -362,6 +368,75 @@ def _try_persist(claim, row, proposals, *, now, error_code=''):
         return None
 
 
+_DEDUPLICATED_KINDS = frozenset({OutputKind.RULE, OutputKind.RULE_REMAINDER})
+
+
+def _candidates(row: InboundNotification, proposal: EntryProposal) -> List[Candidate]:
+    """Live EduVulcan entries of the family that ``proposal`` may match.
+
+    Same assignee and date; an undated proposal looks only at undated entries
+    whose source notification was captured on this notification's day. The
+    entry rows are locked, so a concurrent parent edit or delete either waits
+    or is already applied (a deleted entry is simply not a candidate) before an
+    upgrade is computed from them.
+    """
+    entries = Entry.objects.filter(
+        family_id=row.family_id,
+        source=Entry.Source.EDUVULCAN,
+        assigned_member_id=proposal.assigned_member_id,
+    )
+    if proposal.date is not None:
+        entries = entries.filter(date=proposal.date)
+    else:
+        entries = entries.filter(
+            date__isnull=True,
+            conversion_output__notification__captured_date=row.captured_date,
+        )
+    entries = (
+        entries.annotate(source_captured_date=F('conversion_output__notification__captured_date'))
+        .select_for_update(of=('self',))
+        .order_by('pk')
+    )
+    return [Candidate(entry, entry.source_captured_date) for entry in entries]
+
+
+def _create_entry(row: InboundNotification, proposal: EntryProposal):
+    return create_automated_entry(
+        row.family,
+        entry_type=proposal.entry_type,
+        content=proposal.content,
+        date=proposal.date,
+        time=proposal.time,
+        assigned_member_id=proposal.assigned_member_id,
+        school_item=proposal.school_item,
+        school_subject=proposal.school_subject,
+    )
+
+
+def _apply(row: InboundNotification, proposal: EntryProposal):
+    """Save one new proposal; return its output ``(kind, entry or None)``."""
+    if proposal.kind not in _DEDUPLICATED_KINDS:
+        return proposal.kind, _create_entry(row, proposal)
+    decision = decide(proposal, row.captured_date, _candidates(row, proposal))
+    if decision.action == Action.CREATE:
+        return proposal.kind, _create_entry(row, proposal)
+    if decision.action == Action.DUPLICATE:
+        return OutputKind.DUPLICATE, None
+    if decision.action == Action.UPGRADE:
+        try:
+            upgrade_automated_exam_entry(
+                decision.entry, content=decision.content, school_item=decision.school_item
+            )
+        except ValidationError as exc:
+            # Still merged: the existing entry keeps its label. Falling through
+            # to classification would create a second entry for this event.
+            logger.warning(
+                'EduVulcan conversion upgrade rejected: notification=%s entry=%s error=%s',
+                row.pk, decision.entry.pk, exception_summary(exc),
+            )
+    return OutputKind.MERGED, None
+
+
 def _persist(
     claim: Claim,
     row: InboundNotification,
@@ -375,6 +450,12 @@ def _persist(
     Output indexes that already exist are kept unchanged, including
     tombstones whose entry a parent deleted, so a retry never duplicates or
     recreates an output.
+
+    The family row is locked (``FOR NO KEY UPDATE``, so intake and manual
+    entry inserts are not blocked) before rule proposals are matched, so
+    concurrent conversions of one family's burst serialize. Earlier
+    proposals of this notification are visible to later ones, so duplicates
+    inside one notification collapse too.
     """
     with transaction.atomic():
         if not list(_owned(claim, now).select_for_update().values_list('pk', flat=True)):
@@ -384,23 +465,23 @@ def _persist(
                 'output_index', flat=True
             )
         )
-        for proposal in sorted(proposals, key=lambda item: item.output_index):
-            if proposal.output_index in existing:
-                continue
-            entry = create_automated_entry(
-                row.family,
-                entry_type=proposal.entry_type,
-                content=proposal.content,
-                date=proposal.date,
-                time=proposal.time,
-                assigned_member_id=proposal.assigned_member_id,
-                school_item=proposal.school_item,
-                school_subject=proposal.school_subject,
+        pending = [
+            proposal
+            for proposal in sorted(proposals, key=lambda item: item.output_index)
+            if proposal.output_index not in existing
+        ]
+        if any(proposal.kind in _DEDUPLICATED_KINDS for proposal in pending):
+            list(
+                Family.objects.select_for_update(no_key=True)
+                .filter(pk=row.family_id)
+                .values_list('pk', flat=True)
             )
+        for proposal in pending:
+            kind, entry = _apply(row, proposal)
             NotificationConversionOutput.objects.create(
                 notification_id=row.pk,
                 output_index=proposal.output_index,
-                kind=proposal.kind.value,
+                kind=kind.value,
                 entry=entry,
             )
         updates = dict(
@@ -419,8 +500,11 @@ def _persist(
             )
         )
     logger.info(
-        'EduVulcan conversion processed: notification=%s attempt=%s outputs=%s',
+        'EduVulcan conversion processed: notification=%s attempt=%s outputs=%s '
+        'duplicates=%s merged=%s',
         claim.notification_id, claim.attempt, len(outputs),
+        sum(output.kind == OutputKind.DUPLICATE.value for output in outputs),
+        sum(output.kind == OutputKind.MERGED.value for output in outputs),
     )
     return ConversionResult(
         claim.notification_id,

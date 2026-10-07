@@ -197,8 +197,11 @@ class NotificationConversionOutput(models.Model):
     """Provenance of one entry generated from a notification.
 
     ``output_index`` is stable within a notification, so a retry recognises
-    completed outputs. Deleting the entry nulls ``entry`` but keeps this
-    non-sensitive tombstone, so a retry never recreates a deleted entry.
+    completed outputs. A NULL ``entry`` is either a tombstone or a skipped
+    output: deleting the entry nulls ``entry`` but keeps this non-sensitive
+    tombstone, so a retry never recreates a deleted entry; a ``duplicate`` or
+    ``merged`` output never owned an entry because its event already existed
+    as a live EduVulcan entry (a ``merged`` one may have upgraded that entry).
     Admin-only metadata, so labels are English.
     """
 

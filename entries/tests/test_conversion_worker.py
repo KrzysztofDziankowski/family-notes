@@ -46,6 +46,7 @@ from .test_notification_intake import sample_payload
 Status = InboundNotification.Status
 TEST_TITLE = 'Sprawdzian'
 TEST_MESSAGE = '2 października, Biologia (biologia), Michał'
+OTHER_SUBJECT_MESSAGE = '2 października, Chemia (chemia), Michał'
 GUNICORN_CONF = Path(settings.BASE_DIR) / 'gunicorn.conf.py'
 
 
@@ -86,10 +87,10 @@ class WorkerTestCase(FamilyFixtureMixin, TestCase):
         self.clock = FakeClock()
         self.worker = ConversionWorker(backend=NoProviderBackend(), monotonic=self.clock)
 
-    def notification(self, index=1, **overrides):
+    def notification(self, index=1, message=TEST_MESSAGE, **overrides):
         overrides.setdefault('content_hash', f'{index:064d}')
         return make_notification(
-            self.family, index, title=TEST_TITLE, message=TEST_MESSAGE, **overrides
+            self.family, index, title=TEST_TITLE, message=message, **overrides
         )
 
     def status(self, row):
@@ -99,7 +100,11 @@ class WorkerTestCase(FamilyFixtureMixin, TestCase):
 
 class StartupAndPeriodicSweepTests(WorkerTestCase):
     def test_first_iteration_is_the_startup_sweep(self):
-        rows = [self.notification(index) for index in (1, 2)]
+        # Distinct events (different subjects), so deduplication keeps both.
+        rows = [
+            self.notification(1),
+            self.notification(2, message=OTHER_SUBJECT_MESSAGE),
+        ]
 
         with mock.patch.object(
             conversion, 'prune_raw_notifications', wraps=conversion.prune_raw_notifications
