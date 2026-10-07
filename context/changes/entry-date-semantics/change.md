@@ -1,9 +1,9 @@
 ---
 change_id: entry-date-semantics
 title: Require meaningful dates and hide types in entry lists
-status: implementing
+status: impl_reviewed
 created: 2026-10-06
-updated: 2026-10-06
+updated: 2026-10-07
 archived_at: null
 ---
 
