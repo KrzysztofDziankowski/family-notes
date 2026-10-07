@@ -945,6 +945,59 @@ class UpgradeAutomatedExamEntryTests(FamilyFixtureMixin, TestCase):
         with self.assertRaisesMessage(ValidationError, 'Treść wpisu jest wymagana.'):
             upgrade_automated_exam_entry(self.entry, content='  ', school_item=SchoolItemKind.TEST)
 
+    def test_rejects_entries_that_are_not_exams_without_write(self):
+        note = create_automated_entry(
+            self.family,
+            entry_type=EntryType.NOTE.value,
+            content='Kartkówka: Biologia',
+            assigned_member_id=self.child.pk,
+        )
+        homework = create_automated_entry(
+            self.family,
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Zadanie domowe: Biologia',
+            date=EVENT_DATE,
+            assigned_member_id=self.child.pk,
+            school_item=SchoolItemKind.HOMEWORK.value,
+        )
+        relabelled = create_automated_entry(
+            self.family,
+            entry_type=EntryType.CALENDAR_EVENT.value,
+            content='Kartkówka: Biologia',
+            date=EVENT_DATE,
+            assigned_member_id=self.child.pk,
+            school_item=SchoolItemKind.HOMEWORK.value,
+        )
+        for entry in (note, homework, relabelled):
+            with self.subTest(content=entry.content, school_item=entry.school_item):
+                before = self.snapshot(entry)
+                with self.assertRaisesMessage(
+                    ValidationError, 'Można zmienić tylko kartkówkę, sprawdzian lub pracę klasową.'
+                ):
+                    upgrade_automated_exam_entry(
+                        entry, content='Sprawdzian: Biologia', school_item=None
+                    )
+                self.assertEqual(self.snapshot(entry), before)
+
+    def test_rejects_a_new_label_that_is_not_higher_without_write(self):
+        before = self.snapshot(self.entry)
+        for content in ('Kartkówka: Biologia', 'Zadanie domowe: Biologia', 'Biologia'):
+            with self.subTest(content=content):
+                with self.assertRaisesMessage(
+                    ValidationError, 'Nowy rodzaj sprawdzianu musi być ważniejszy od obecnego.'
+                ):
+                    upgrade_automated_exam_entry(self.entry, content=content, school_item=None)
+                self.assertEqual(self.snapshot(self.entry), before)
+
+    def test_rejects_a_kind_that_does_not_match_the_new_label_without_write(self):
+        before = self.snapshot(self.entry)
+
+        with self.assertRaisesMessage(ValidationError, 'Element szkolny nie pasuje do treści wpisu.'):
+            upgrade_automated_exam_entry(
+                self.entry, content='Sprawdzian: Biologia', school_item=SchoolItemKind.CLASS_TEST
+            )
+        self.assertEqual(self.snapshot(self.entry), before)
+
     def test_keeps_a_deactivated_assignee(self):
         self.child.is_active = False
         self.child.save(update_fields=['is_active'])

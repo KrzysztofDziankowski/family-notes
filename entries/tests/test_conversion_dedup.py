@@ -7,7 +7,9 @@ family row lock across processes.
 """
 
 import datetime
+from unittest import mock
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from entries.classification.types import EntryType, SchoolItemKind
@@ -98,6 +100,23 @@ class ExamMergeTests(ConversionDedupTestCase):
         self.assertEqual(entry.content, 'Praca klasowa: Biologia')
         self.assertEqual(entry.school_item, SchoolItemKind.CLASS_TEST.value)
         self.assertEqual(self.output_kinds(quiz), [(OutputKind.MERGED.value, None)])
+
+    def test_a_rejected_upgrade_is_still_merged_without_a_second_entry(self):
+        quiz = self.receive('Kartkówka')
+        self.convert(quiz)
+        test = self.receive('Sprawdzian', captured_at=CAPTURED_AT + datetime.timedelta(seconds=9))
+
+        with mock.patch(
+            'entries.eduvulcan.conversion.upgrade_automated_exam_entry',
+            side_effect=ValidationError('odrzucone'),
+        ), self.assertLogs('entries.eduvulcan.conversion', 'WARNING') as logs:
+            self.convert(test)
+
+        entry = self.eduvulcan_entries().get()
+        self.assertEqual(entry.content, 'Kartkówka: Biologia')
+        self.assertEqual(self.output_kinds(test), [(OutputKind.MERGED.value, None)])
+        self.assertIn(f'upgrade rejected: notification={test.pk} entry={entry.pk}', logs.output[0])
+        self.assertNotIn('Biologia', ''.join(logs.output))
 
     def test_retrying_a_merged_notification_creates_nothing_new(self):
         self.convert(self.receive('Sprawdzian'))

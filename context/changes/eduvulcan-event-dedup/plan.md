@@ -203,10 +203,10 @@ Migration only alters choices and a check constraint; existing rows keep valid k
 
 #### Automated
 
-- [x] 2.1 Conversion dedup tests pass: `uv run python manage.py test entries.tests.test_conversion_dedup`
-- [x] 2.2 Tests cover: Kartkówka→Sprawdzian leaves one entry "Sprawdzian: Biologia" with `school_item=test`; Praca klasowa→Kartkówka leaves "Praca klasowa: Biologia"; exact re-send on a later day with a new notification id yields one entry and a `duplicate` output; retry of a merged notification creates nothing new; parent-deleted entry is recreated by a re-send; manual entry with identical text is untouched and does not block creation; another family's identical entry does not block creation
-- [x] 2.3 Full EduVulcan suites stay green: `uv run python manage.py test entries`
-- [x] 2.4 Migration check and Django checks pass: `uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check`
+- [x] 2.1 Conversion dedup tests pass: `uv run python manage.py test entries.tests.test_conversion_dedup` — dd8cd3f
+- [x] 2.2 Tests cover: Kartkówka→Sprawdzian leaves one entry "Sprawdzian: Biologia" with `school_item=test`; Praca klasowa→Kartkówka leaves "Praca klasowa: Biologia"; exact re-send on a later day with a new notification id yields one entry and a `duplicate` output; retry of a merged notification creates nothing new; parent-deleted entry is recreated by a re-send; manual entry with identical text is untouched and does not block creation; another family's identical entry does not block creation — dd8cd3f
+- [x] 2.3 Full EduVulcan suites stay green: `uv run python manage.py test entries` — dd8cd3f
+- [x] 2.4 Migration check and Django checks pass: `uv run python manage.py makemigrations --check --dry-run && uv run python manage.py check` — dd8cd3f
 
 #### Manual
 

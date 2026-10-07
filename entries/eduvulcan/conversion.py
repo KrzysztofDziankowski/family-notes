@@ -369,7 +369,10 @@ def _candidates(row: InboundNotification, proposal: EntryProposal) -> List[Candi
     """Live EduVulcan entries of the family that ``proposal`` may match.
 
     Same assignee and date; an undated proposal looks only at undated entries
-    whose source notification was captured on this notification's day.
+    whose source notification was captured on this notification's day. The
+    entry rows are locked, so a concurrent parent edit or delete either waits
+    or is already applied (a deleted entry is simply not a candidate) before an
+    upgrade is computed from them.
     """
     entries = Entry.objects.filter(
         family_id=row.family_id,
@@ -383,9 +386,11 @@ def _candidates(row: InboundNotification, proposal: EntryProposal) -> List[Candi
             date__isnull=True,
             conversion_output__notification__captured_date=row.captured_date,
         )
-    entries = entries.annotate(
-        source_captured_date=F('conversion_output__notification__captured_date')
-    ).order_by('pk')
+    entries = (
+        entries.annotate(source_captured_date=F('conversion_output__notification__captured_date'))
+        .select_for_update(of=('self',))
+        .order_by('pk')
+    )
     return [Candidate(entry, entry.source_captured_date) for entry in entries]
 
 
@@ -412,9 +417,17 @@ def _apply(row: InboundNotification, proposal: EntryProposal):
     if decision.action == Action.DUPLICATE:
         return OutputKind.DUPLICATE, None
     if decision.action == Action.UPGRADE:
-        upgrade_automated_exam_entry(
-            decision.entry, content=decision.content, school_item=decision.school_item
-        )
+        try:
+            upgrade_automated_exam_entry(
+                decision.entry, content=decision.content, school_item=decision.school_item
+            )
+        except ValidationError as exc:
+            # Still merged: the existing entry keeps its label. Falling through
+            # to classification would create a second entry for this event.
+            logger.warning(
+                'EduVulcan conversion upgrade rejected: notification=%s entry=%s error=%s',
+                row.pk, decision.entry.pk, exception_summary(exc),
+            )
     return OutputKind.MERGED, None
 
 

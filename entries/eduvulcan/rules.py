@@ -68,7 +68,7 @@ _CHANGE = re.compile(
     re.IGNORECASE,
 )
 
-_CALENDAR_CATEGORIES = {
+CALENDAR_CATEGORIES = {
     'sprawdzian': ('Sprawdzian', SchoolItemKind.TEST),
     'kartkówka': ('Kartkówka', SchoolItemKind.QUIZ),
     'praca klasowa': ('Praca klasowa', SchoolItemKind.CLASS_TEST),
@@ -172,7 +172,7 @@ def _date_from(match: re.Match, reference: datetime.date) -> Optional[datetime.d
 
 
 def _calendar(key, message, reference, builder) -> Optional[Proposals]:
-    label, school_item = _CALENDAR_CATEGORIES[key]
+    label, school_item = CALENDAR_CATEGORIES[key]
     match = _CALENDAR_MESSAGE.match(message)
     if match is None:
         return None
@@ -304,7 +304,7 @@ def _timetable(title, child_name, message, reference, builder) -> Optional[Propo
 
 
 _HANDLERS: Dict[str, Callable[..., Optional[Proposals]]] = {
-    **{key: _calendar for key in _CALENDAR_CATEGORIES},
+    **{key: _calendar for key in CALENDAR_CATEGORIES},
     'ocena': _grade,
     'szczęśliwy numerek': _lucky_number,
     'frekwencja': _attendance,

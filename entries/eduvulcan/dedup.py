@@ -26,23 +26,15 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, NamedTuple, Optional
 
-from ..classification.types import EntryType, SchoolItemKind
+from ..classification.types import EXAM_RANKS, EntryType, SchoolItemKind
 from ..models import Entry
-from .rules import _CALENDAR_CATEGORIES
+from .rules import CALENDAR_CATEGORIES
 from .text import normalize_text
 from .types import EntryProposal, OutputKind
 
-# Exam kinds by rank; a higher rank replaces a lower one for the same lesson.
-EXAM_RANKS = {
-    SchoolItemKind.QUIZ: 1,
-    SchoolItemKind.TEST: 2,
-    SchoolItemKind.CLASS_TEST: 3,
-}
-EXAM_KINDS = frozenset(EXAM_RANKS)
-
 # Entry label (as the rules write it) -> exam kind.
 _EXAM_LABELS = {
-    label: kind for label, kind in _CALENDAR_CATEGORIES.values() if kind in EXAM_RANKS
+    label: kind for label, kind in CALENDAR_CATEGORIES.values() if kind in EXAM_RANKS
 }
 
 _DEDUPLICATED_KINDS = frozenset({OutputKind.RULE, OutputKind.RULE_REMAINDER})

@@ -72,6 +72,15 @@ class SchoolItemKind(str, Enum):
         return member
 
 
+# Exam kinds by rank; a higher rank replaces a lower one for the same lesson.
+EXAM_RANKS = {
+    SchoolItemKind.QUIZ: 1,
+    SchoolItemKind.TEST: 2,
+    SchoolItemKind.CLASS_TEST: 3,
+}
+EXAM_KINDS = frozenset(EXAM_RANKS)
+
+
 class UnavailableReason(str, Enum):
     """Safe outcome categories; never carry provider or family content."""
 
