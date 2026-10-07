@@ -22,6 +22,7 @@ from entries.listing import (
     group_by_day,
     normalize_list_mode,
     partition_entries,
+    parent_day_heading,
     split_by_assignee,
 )
 from entries.models import Entry
@@ -269,6 +270,36 @@ class DayHeadingTests(TestCase):
         with translation.override('en'):
             self.assertEqual(self._heading(2), 'Środa')
             self.assertEqual(self._heading(7), 'Poniedziałek, 5 października')
+
+
+class ParentDayHeadingTests(TestCase):
+    def test_relative_days_include_the_calendar_date(self):
+        self.assertEqual(parent_day_heading(TODAY, TODAY), 'Dziś, 28 września')
+        self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, 29 września')
+        self.assertEqual(parent_day_heading(YESTERDAY, TODAY), 'Wczoraj, 27 września')
+
+    def test_other_days_include_weekday_and_cross_year_includes_year(self):
+        self.assertEqual(
+            parent_day_heading(TODAY + datetime.timedelta(days=2), TODAY),
+            'Środa, 30 września',
+        )
+        self.assertEqual(
+            parent_day_heading(datetime.date(2027, 1, 1), TODAY),
+            'Piątek, 1 stycznia 2027',
+        )
+
+    def test_relative_day_in_another_year_includes_the_year(self):
+        new_year = datetime.date(2027, 1, 1)
+        self.assertEqual(
+            parent_day_heading(new_year, datetime.date(2026, 12, 31)), 'Jutro, 1 stycznia 2027'
+        )
+        self.assertEqual(
+            parent_day_heading(datetime.date(2026, 12, 31), new_year), 'Wczoraj, 31 grudnia 2026'
+        )
+
+    def test_uses_polish_locale_regardless_of_active_language(self):
+        with translation.override('en'):
+            self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, 29 września')
 
 
 class GroupByDayTests(FamilyFixtureMixin, TestCase):

@@ -231,47 +231,47 @@ No database migration or data backfill is required. Rollback is limited to the p
 
 #### Automated
 
-- [ ] 1.1 Parent view tests prove both default 14-day ranges and exact inclusive boundaries.
-- [ ] 1.2 Tests cover valid, malformed, and out-of-mode `start` values.
-- [ ] 1.3 Tests prove navigation shifts by 14 days and cannot cross today's mode boundary.
-- [ ] 1.4 Tests prove family isolation and existing role/access behavior remain unchanged.
-- [ ] 1.5 Tests prove detail and back links preserve `view` and `start`.
+- [x] 1.1 Parent view tests prove both default 14-day ranges and exact inclusive boundaries. — b3d4265
+- [x] 1.2 Tests cover valid, malformed, and out-of-mode `start` values. — b3d4265
+- [x] 1.3 Tests prove navigation shifts by 14 days and cannot cross today's mode boundary. — b3d4265
+- [x] 1.4 Tests prove family isolation and existing role/access behavior remain unchanged. — b3d4265
+- [x] 1.5 Tests prove detail and back links preserve `view` and `start`. — b3d4265
 
 #### Manual
 
-- [ ] 1.6 Upcoming initially opens on today and past initially ends on yesterday.
-- [ ] 1.7 Moving between fortnights and returning from an entry detail preserves the expected window.
+- [x] 1.6 Upcoming initially opens on today and past initially ends on yesterday.
+- [x] 1.7 Moving between fortnights and returning from an entry detail preserves the expected window.
 
 ### Phase 2: Calendar Presentation
 
 #### Automated
 
-- [ ] 2.1 Template tests assert exactly 14 ordered day boxes for each window.
-- [ ] 2.2 Tests assert relative full-date headings, a regular weekday heading, and a cross-year heading.
-- [ ] 2.3 Tests assert populated-day assignee grouping and exactly-once entry rendering.
-- [ ] 2.4 Tests assert `Brak wpisów` for empty dates.
-- [ ] 2.5 Accessibility tests preserve one h1, sequential h2/h3 hierarchy, labelled lists, and Polish navigation labels.
-- [ ] 2.6 Token/style tests reject literal colors and horizontal-overflow regressions.
+- [x] 2.1 Template tests assert exactly 14 ordered day boxes for each window. — 08b463c
+- [x] 2.2 Tests assert relative full-date headings, a regular weekday heading, and a cross-year heading. — 08b463c
+- [x] 2.3 Tests assert populated-day assignee grouping and exactly-once entry rendering. — 08b463c
+- [x] 2.4 Tests assert `Brak wpisów` for empty dates. — 08b463c
+- [x] 2.5 Accessibility tests preserve one h1, sequential h2/h3 hierarchy, labelled lists, and Polish navigation labels. — 08b463c
+- [x] 2.6 Token/style tests reject literal colors and horizontal-overflow regressions. — 08b463c
 
 #### Manual
 
-- [ ] 2.7 At 320 CSS px, boxes form one readable column without horizontal scrolling.
-- [ ] 2.8 At a wide viewport, boxes form seven columns and two rows.
-- [ ] 2.9 Empty and populated boxes are visually distinct, readable, and aligned.
-- [ ] 2.10 Focus indicators and keyboard navigation remain visible.
+- [x] 2.7 At 320 CSS px, boxes form one readable column without horizontal scrolling.
+- [x] 2.8 At a wide viewport, boxes form seven columns and two rows.
+- [x] 2.9 Empty and populated boxes are visually distinct, readable, and aligned.
+- [x] 2.10 Focus indicators and keyboard navigation remain visible.
 
 ### Phase 3: Regression and Acceptance Coverage
 
 #### Automated
 
-- [ ] 3.1 Focused parent list, state-gallery, and accessibility tests pass.
-- [ ] 3.2 Relevant listing, family-isolation, access, and token/style tests pass.
-- [ ] 3.3 `uv run python manage.py check` passes.
-- [ ] 3.4 `uv run python manage.py makemigrations --check --dry-run` reports no model changes.
-- [ ] 3.5 The focused Playwright grouping test passes when the existing E2E environment is available.
+- [x] 3.1 Focused parent list, state-gallery, and accessibility tests pass. — 5d76437
+- [x] 3.2 Relevant listing, family-isolation, access, and token/style tests pass. — 5d76437
+- [x] 3.3 `uv run python manage.py check` passes. — 5d76437
+- [x] 3.4 `uv run python manage.py makemigrations --check --dry-run` reports no model changes. — 5d76437
+- [x] 3.5 The focused Playwright grouping test passes when the existing E2E environment is available. — 5d76437
 
 #### Manual
 
-- [ ] 3.6 A parent can inspect upcoming and historical fortnights without losing entries or crossing list-mode boundaries.
-- [ ] 3.7 An entry created for tomorrow appears once in tomorrow's box under the correct assignee.
-- [ ] 3.8 A fortnight containing no entries still shows all 14 dated boxes.
+- [x] 3.6 A parent can inspect upcoming and historical fortnights without losing entries or crossing list-mode boundaries.
+- [x] 3.7 An entry created for tomorrow appears once in tomorrow's box under the correct assignee.
+- [x] 3.8 A fortnight containing no entries still shows all 14 dated boxes.

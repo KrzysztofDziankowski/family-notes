@@ -1,27 +1,36 @@
 {% comment %}
-Parent family entry list body. Parameters: mode, modes, days, is_empty, empty_message.
-days: list of {key, heading, groups}, one per day as in the child list (key is the ISO date
-or "undated" for the final "Bez daty" group in upcoming mode); each day's groups are
-{key, heading, entries}, one per assignee (children, parents, then "Cała rodzina"), never
-empty. Rows hide the date and assignee: the day and assignee headings carry them.
+Parent family entry calendar body. Parameters: mode, modes, days, previous_url, next_url,
+detail_query.
+days: exactly fourteen chronological {key, heading, groups}, one per calendar date (key is the
+ISO date), including dates without entries; each day's groups are {key, heading, entries}, one
+per assignee (children, parents, then "Cała rodzina"), never empty. An empty day shows
+"Brak wpisów". Rows hide the date and assignee: the day and assignee headings carry them, and
+each list's aria-label ("Jutro, 8 października, Kasia") repeats both for assistive technology.
+previous_url / next_url move the window by two weeks; the one crossing today is None.
 {% endcomment %}
 {% include "entries/_list_modes.html" with url_name="entries:index" %}
-{% if is_empty %}
-    <p class="fn-empty fn-muted" data-state-part="empty-{{ mode }}">{{ empty_message }}</p>
-{% else %}
+<nav class="fn-calendar-nav" aria-label="Nawigacja kalendarza" data-state-part="calendar-nav">
+    <ul>
+        {% if previous_url %}<li><a href="{{ previous_url }}">Poprzednie 2 tygodnie</a></li>{% endif %}
+        {% if next_url %}<li><a href="{{ next_url }}">Następne 2 tygodnie</a></li>{% endif %}
+    </ul>
+</nav>
+<div class="fn-calendar" data-state-part="calendar-{{ mode }}">
     {% for day in days %}
-    <section data-day-group="{{ day.key }}">
+    <section class="fn-calendar-day{% if not day.groups %} fn-calendar-day--empty{% endif %}" data-day-group="{{ day.key }}">
         <h2 class="fn-day-heading">{{ day.heading }}</h2>
         {% for group in day.groups %}
         <section data-assignee-group="{{ group.key }}">
             <h3 class="fn-manage-subsection-title">{{ group.heading }}</h3>
-            <ul class="fn-entry-list">
+            <ul class="fn-entry-list" aria-label="{{ day.heading }}, {{ group.heading }}">
                 {% for entry in group.entries %}
-                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" hide_type=True hide_assignee=True hide_date=True %}
+                    {% include "entries/_entry_row.html" with entry=entry detail_url_name="entries:detail" detail_query=detail_query hide_type=True hide_assignee=True hide_date=True %}
                 {% endfor %}
             </ul>
         </section>
+        {% empty %}
+        <p class="fn-calendar-empty fn-muted" data-state-part="day-empty">Brak wpisów</p>
         {% endfor %}
     </section>
     {% endfor %}
-{% endif %}
+</div>

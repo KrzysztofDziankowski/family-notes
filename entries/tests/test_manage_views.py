@@ -18,7 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from entries.classification.types import EntryType, SchoolItemKind
-from entries.listing import day_heading
+from entries.listing import parent_day_heading
 from entries.models import Entry
 from family_access.models import FamilyMember
 
@@ -31,6 +31,7 @@ ROW_PATTERN = re.compile(r'data-entry-row="(\d+)"')
 DAY_PATTERN = re.compile(r'data-day-group="([\w-]+)"')
 GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
 DAY_HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading">([^<]*)</h2>')
+EMPTY_DAY = '>Brak wpisów</p>'
 GROUP_HEADING_PATTERN = re.compile(r'<h3 class="fn-manage-subsection-title">([^<]*)</h3>')
 
 
@@ -187,7 +188,7 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         )
         self.assertEqual(
             DAY_PATTERN.findall(response.content.decode()),
-            [self.today.isoformat(), self.days(1).isoformat(), self.days(7).isoformat(), self.days(10).isoformat()],
+            [self.days(offset).isoformat() for offset in range(14)],
         )
         self.assertContains(response, 'aria-current="page">Nadchodzące<')
 
@@ -196,11 +197,11 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
 
         self.assertEqual(
             self.rendered_rows(response),
-            [self.yesterday_noon.pk, self.yesterday_untimed.pk, self.last_month.pk],
+            [self.yesterday_noon.pk, self.yesterday_untimed.pk],
         )
         self.assertEqual(
             DAY_PATTERN.findall(response.content.decode()),
-            [self.days(-1).isoformat(), self.days(-30).isoformat()],
+            [self.days(offset).isoformat() for offset in range(-14, 0)],
         )
         self.assertContains(response, 'aria-current="page">Minione<')
 
@@ -225,7 +226,10 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
 
         response = self.client.get(INDEX_URL)
 
-        self.assertContains(response, f'href="{detail_url(self.tomorrow.pk)}"')
+        self.assertContains(
+            response,
+            f'href="{detail_url(self.tomorrow.pk)}?view=upcoming&amp;start={self.today.isoformat()}"',
+        )
         # Owner 2026-10-05: no type label and no "Edytuj" on list rows; editing
         # stays on the detail page.
         self.assertNotContains(response, f'href="{edit_url(self.tomorrow.pk)}"')
@@ -235,31 +239,189 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         # the assignee; the row shows only the time.
         html = response.content.decode()
         tomorrow = day_html(html, self.days(1).isoformat())
-        self.assertEqual(DAY_HEADING_PATTERN.findall(tomorrow), ['Jutro'])
+        self.assertEqual(
+            DAY_HEADING_PATTERN.findall(tomorrow),
+            [parent_day_heading(self.days(1), self.today)],
+        )
         self.assertEqual(group_heading(tomorrow, f'member-{self.child.pk}'), 'Michał')
         row = group_html(tomorrow, f'member-{self.child.pk}')
         self.assertIn(f'data-entry-row="{self.tomorrow.pk}"', row)
         self.assertIn('<span>08:00</span>', row)
         self.assertNotIn('<span>Michał</span>', row)
         later = day_html(html, self.days(10).isoformat())
-        self.assertEqual(DAY_HEADING_PATTERN.findall(later), [day_heading(self.days(10), self.today)])
+        self.assertEqual(
+            DAY_HEADING_PATTERN.findall(later),
+            [parent_day_heading(self.days(10), self.today)],
+        )
         self.assertNotIn('Bez daty</span>', html)
 
 
 class EmptyIndexTests(ManageViewMixin, TestCase):
-    def test_each_mode_has_a_distinct_empty_state(self):
+    def test_empty_fortnight_still_renders_fourteen_empty_day_boxes(self):
         self.entry(FOREIGN_SENTINEL, family=self.other_family, date=self.today)
+        for view, offsets in (('upcoming', range(14)), ('past', range(-14, 0))):
+            with self.subTest(view=view):
+                response = self.client.get(INDEX_URL, {'view': view})
+                html = response.content.decode()
+
+                self.assertEqual(
+                    DAY_PATTERN.findall(html),
+                    [self.days(offset).isoformat() for offset in offsets],
+                )
+                self.assertEqual(html.count(EMPTY_DAY), 14)
+                self.assertEqual(html.count('fn-calendar-day fn-calendar-day--empty'), 14)
+                self.assertNotContains(response, 'data-entry-row')
+                self.assertNotContains(response, FOREIGN_SENTINEL)
+                self.assertNotContains(response, 'fn-empty')
+                self.assertContains(response, f'data-state-part="calendar-{view}"')
+
+
+class CalendarPresentationTests(ManageViewMixin, TestCase):
+    def test_only_dates_without_entries_show_brak_wpisow(self):
+        first = self.entry('Pierwszy', date=self.days(1), assigned_member=self.child)
+        second = self.entry('Drugi', date=self.days(1))
+        later = self.entry('Później', date=self.days(9))
+
+        html = self.client.get(INDEX_URL).content.decode()
+
+        for offset in range(14):
+            with self.subTest(offset=offset):
+                day = day_html(html, self.days(offset).isoformat())
+                populated = offset in (1, 9)
+                self.assertEqual(EMPTY_DAY in day, not populated)
+                self.assertEqual(
+                    f'fn-calendar-day--empty" data-day-group="{self.days(offset).isoformat()}"' in html,
+                    not populated,
+                )
+        rows = ROW_PATTERN.findall(html)
+        for entry in (first, second, later):
+            with self.subTest(entry=entry.content):
+                self.assertEqual(rows.count(str(entry.pk)), 1)
+        self.assertEqual(
+            GROUP_PATTERN.findall(day_html(html, self.days(1).isoformat())),
+            [f'member-{self.child.pk}', 'family'],
+        )
+
+    def test_assignee_lists_are_labelled_with_day_and_assignee(self):
+        self.entry('Pierwszy', date=self.days(1), assigned_member=self.child)
+
+        html = self.client.get(INDEX_URL).content.decode()
+
+        heading = parent_day_heading(self.days(1), self.today)
+        self.assertIn(
+            f'<ul class="fn-entry-list" aria-label="{heading}, Michał">',
+            day_html(html, self.days(1).isoformat()),
+        )
+
+    def test_navigation_uses_polish_labels_and_omits_the_boundary_link(self):
+        upcoming = self.client.get(INDEX_URL)
+        later = self.client.get(INDEX_URL, {'start': self.days(14).isoformat()})
+        past = self.client.get(INDEX_URL, {'view': 'past'})
+
+        self.assertContains(upcoming, 'aria-label="Nawigacja kalendarza"')
+        self.assertContains(upcoming, '>Następne 2 tygodnie</a>')
+        self.assertNotContains(upcoming, 'Poprzednie 2 tygodnie')
+        self.assertContains(
+            later,
+            f'<a href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}">'
+            'Poprzednie 2 tygodnie</a>',
+        )
+        self.assertContains(past, '>Poprzednie 2 tygodnie</a>')
+        self.assertNotContains(past, 'Następne 2 tygodnie')
+
+
+class CalendarWindowTests(ManageViewMixin, TestCase):
+    def keys(self, response):
+        return [day['key'] for day in response.context['days']]
+
+    def test_default_windows_have_exactly_fourteen_inclusive_days(self):
         upcoming = self.client.get(INDEX_URL)
         past = self.client.get(INDEX_URL, {'view': 'past'})
 
-        self.assertContains(upcoming, 'Nie ma nadchodzących wpisów.')
-        self.assertContains(past, 'Nie ma minionych wpisów.')
-        self.assertNotContains(upcoming, 'data-entry-row')
-        self.assertNotContains(past, 'data-entry-row')
-        self.assertContains(
-            upcoming, '<p class="fn-empty fn-muted" data-state-part="empty-upcoming">'
+        self.assertEqual(
+            self.keys(upcoming),
+            [self.days(offset).isoformat() for offset in range(14)],
         )
-        self.assertContains(past, '<p class="fn-empty fn-muted" data-state-part="empty-past">')
+        self.assertEqual(
+            self.keys(past),
+            [self.days(offset).isoformat() for offset in range(-14, 0)],
+        )
+
+    def test_valid_start_selects_the_requested_window(self):
+        start = self.days(28)
+        response = self.client.get(INDEX_URL, {'start': start.isoformat()})
+
+        self.assertEqual(self.keys(response)[0], start.isoformat())
+        self.assertEqual(self.keys(response)[-1], self.days(41).isoformat())
+
+    def test_malformed_and_out_of_mode_start_use_the_mode_default(self):
+        cases = (
+            ({'start': 'not-a-date'}, self.today),
+            ({'start': self.days(-1).isoformat()}, self.today),
+            ({'view': 'past', 'start': self.today.isoformat()}, self.days(-14)),
+        )
+        for params, expected in cases:
+            with self.subTest(params=params):
+                response = self.client.get(INDEX_URL, params)
+                self.assertEqual(self.keys(response)[0], expected.isoformat())
+
+    def test_rows_inside_a_day_run_earliest_first_in_both_modes(self):
+        evening = self.entry('Wieczór', date=self.days(-2), time=datetime.time(18, 0))
+        morning = self.entry('Rano', date=self.days(-2), time=datetime.time(8, 0))
+        untimed = self.entry('Bez godziny', date=self.days(-2))
+
+        past = self.client.get(INDEX_URL, {'view': 'past'})
+
+        self.assertEqual(
+            [pk for pk in self.rendered_rows(past) if pk in {evening.pk, morning.pk, untimed.pk}],
+            [morning.pk, evening.pk, untimed.pk],
+        )
+
+    def test_out_of_range_start_uses_the_mode_default_instead_of_failing(self):
+        cases = (
+            ({'start': '9999-12-31'}, self.today),
+            ({'start': '9999-12-10'}, self.today),
+            ({'view': 'past', 'start': '0001-01-01'}, self.days(-14)),
+        )
+        for params, expected in cases:
+            with self.subTest(params=params):
+                response = self.client.get(INDEX_URL, params)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(self.keys(response)[0], expected.isoformat())
+        entry = self.entry()
+        self.assertContains(
+            self.client.get(detail_url(entry.pk), {'view': 'upcoming', 'start': '9999-12-31'}),
+            f'href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}"',
+        )
+        response = self.client.post(
+            delete_url(entry.pk), {'view': 'past', 'start': '0001-01-01'}
+        )
+        self.assertRedirects(
+            response, f'{INDEX_URL}?view=past&start={self.days(-14).isoformat()}'
+        )
+
+    def test_navigation_moves_fourteen_days_and_stops_at_mode_boundary(self):
+        upcoming = self.client.get(INDEX_URL)
+        self.assertIsNone(upcoming.context['previous_url'])
+        self.assertEqual(
+            upcoming.context['next_url'],
+            f'{INDEX_URL}?view=upcoming&start={self.days(14).isoformat()}',
+        )
+        past = self.client.get(INDEX_URL, {'view': 'past'})
+        self.assertIsNone(past.context['next_url'])
+        self.assertEqual(
+            past.context['previous_url'],
+            f'{INDEX_URL}?view=past&start={self.days(-28).isoformat()}',
+        )
+
+    def test_only_entries_inside_the_selected_window_are_queried(self):
+        visible = self.entry('Widoczny', date=self.days(14))
+        hidden = self.entry('Poza oknem', date=self.days(28))
+
+        response = self.client.get(INDEX_URL, {'start': self.days(14).isoformat()})
+
+        self.assertIn(visible.pk, self.rendered_rows(response))
+        self.assertNotIn(hidden.pk, self.rendered_rows(response))
 
 
 class DetailTests(ManageViewMixin, TestCase):
@@ -328,10 +490,43 @@ class DetailTests(ManageViewMixin, TestCase):
         later = self.entry()
 
         self.assertContains(
-            self.client.get(detail_url(past_entry.pk)), f'href="{INDEX_URL}?view=past"'
+            self.client.get(detail_url(past_entry.pk)),
+            f'href="{INDEX_URL}?view=past&amp;start={self.days(-14).isoformat()}"',
         )
         self.assertContains(
-            self.client.get(detail_url(later.pk)), f'href="{INDEX_URL}?view=upcoming"'
+            self.client.get(detail_url(later.pk)),
+            f'href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}"',
+        )
+
+    def test_detail_preserves_a_normalized_list_mode_and_window(self):
+        entry = self.entry(date=self.days(20))
+        start = self.days(14)
+
+        response = self.client.get(
+            detail_url(entry.pk), {'view': 'upcoming', 'start': start.isoformat()}
+        )
+
+        self.assertContains(
+            response,
+            f'href="{INDEX_URL}?view=upcoming&amp;start={start.isoformat()}"',
+        )
+
+    def test_detail_without_list_query_returns_to_the_fortnight_holding_the_entry(self):
+        later = self.entry(date=self.days(20))
+        older = self.entry(date=self.days(-20))
+
+        self.assertContains(
+            self.client.get(detail_url(later.pk)),
+            f'href="{INDEX_URL}?view=upcoming&amp;start={self.days(14).isoformat()}"',
+        )
+        self.assertContains(
+            self.client.get(detail_url(older.pk)),
+            f'href="{INDEX_URL}?view=past&amp;start={self.days(-28).isoformat()}"',
+        )
+        # An unknown view falls back to the entry's own list, not to upcoming.
+        self.assertContains(
+            self.client.get(detail_url(older.pk), {'view': 'xyz'}),
+            f'href="{INDEX_URL}?view=past&amp;start={self.days(-28).isoformat()}"',
         )
 
     def test_foreign_and_missing_ids_are_indistinguishable(self):
@@ -592,11 +787,13 @@ class DeleteTests(ManageViewMixin, TestCase):
     def test_delete_removes_entry_and_returns_to_allowlisted_list_mode(self):
         """2.5"""
         cases = {
-            'past': f'{INDEX_URL}?view=past',
-            'upcoming': f'{INDEX_URL}?view=upcoming',
-            '': f'{INDEX_URL}?view=upcoming',
-            'https://evil.example/': f'{INDEX_URL}?view=upcoming',
-            '//evil.example': f'{INDEX_URL}?view=upcoming',
+            'past': f'{INDEX_URL}?view=past&start={self.days(-14).isoformat()}',
+            'upcoming': f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}',
+            '': f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}',
+            'https://evil.example/': (
+                f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}'
+            ),
+            '//evil.example': f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}',
         }
         for posted, expected in cases.items():
             with self.subTest(view=posted):
@@ -802,19 +999,22 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
 
     def day_groups(self, html):
         """``{day key: [assignee keys]}`` in render order."""
-        return {key: GROUP_PATTERN.findall(day_html(html, key)) for key in DAY_PATTERN.findall(html)}
+        return {
+            key: groups
+            for key in DAY_PATTERN.findall(html)
+            if (groups := GROUP_PATTERN.findall(day_html(html, key)))
+        }
 
     def test_upcoming_groups_by_day_then_children_parents_family(self):
         html = self.client.get(INDEX_URL).content.decode()
 
         self.assertEqual(
             DAY_PATTERN.findall(html),
-            [self.today.isoformat(), self.days(1).isoformat(), self.days(7).isoformat(), self.days(10).isoformat()],
+            [self.days(offset).isoformat() for offset in range(14)],
         )
-        self.assertEqual(
-            DAY_HEADING_PATTERN.findall(html),
-            ['Dziś', 'Jutro', day_heading(self.days(7), self.today), day_heading(self.days(10), self.today)],
-        )
+        headings = DAY_HEADING_PATTERN.findall(html)
+        self.assertEqual(headings[0], parent_day_heading(self.today, self.today))
+        self.assertEqual(headings[1], parent_day_heading(self.days(1), self.today))
         self.assertEqual(
             self.day_groups(html),
             {
@@ -868,16 +1068,16 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         upcoming = self.client.get(INDEX_URL).content.decode()
         past = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
 
-        self.assertEqual(DAY_PATTERN.findall(upcoming)[-1], self.days(10).isoformat())
-        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming)[-1], day_heading(self.days(10), self.today))
+        self.assertEqual(DAY_PATTERN.findall(upcoming)[-1], self.days(13).isoformat())
+        self.assertIn(parent_day_heading(self.days(10), self.today), upcoming)
         self.assertEqual(
             [int(pk) for pk in ROW_PATTERN.findall(group_html(day_html(upcoming, self.days(10).isoformat()), self.key(self.parent)))],
             [self.ewa_later.pk],
         )
         self.assertNotIn(self.days(10).isoformat(), DAY_PATTERN.findall(past))
-        self.assertNotIn(day_heading(self.days(10), self.today), past)
+        self.assertNotIn(parent_day_heading(self.days(10), self.today), past)
 
-    def test_past_shows_newest_day_first_then_children_parents_family(self):
+    def test_past_shows_chronological_days_then_children_parents_family(self):
         html = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
 
         self.assertEqual(
@@ -890,9 +1090,13 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             },
         )
         self.assertEqual(
-            DAY_PATTERN.findall(html), [self.days(-1).isoformat(), self.days(-7).isoformat()]
+            DAY_PATTERN.findall(html),
+            [self.days(offset).isoformat() for offset in range(-14, 0)],
         )
-        self.assertEqual(DAY_HEADING_PATTERN.findall(html)[0], 'Wczoraj')
+        self.assertEqual(
+            DAY_HEADING_PATTERN.findall(html)[-1],
+            parent_day_heading(self.days(-1), self.today),
+        )
         self.assertEqual(
             group_heading(day_html(html, self.days(-1).isoformat()), self.key(self.inactive_parent)),
             'Jolanta (nieaktywne konto)',

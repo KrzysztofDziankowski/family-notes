@@ -397,6 +397,88 @@ main[tabindex="-1"]:focus {
   margin: 0 0 var(--fn-space-2);
 }
 
+/* Parent calendar (parent-entries-calendar-layout): fourteen day boxes, one column on phones,
+   seven equal columns (two chronological rows) on wide screens. minmax(0, 1fr) and
+   min-width: 0 let long entry text wrap instead of widening the page (SC 1.4.10). */
+.fn-calendar-nav ul,
+.fn-calendar-nav ul:first-of-type,
+.fn-calendar-nav ul:last-of-type {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--fn-space-2) var(--fn-space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--fn-space-3);
+}
+
+.fn-calendar-nav li {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.fn-calendar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fn-space-2);
+  margin-bottom: var(--fn-space-4);
+}
+
+.fn-calendar-day {
+  min-width: 0;
+  background: var(--fn-color-surface);
+  border: 1px solid var(--fn-color-border);
+  border-radius: var(--fn-radius);
+  padding: var(--fn-space-2);
+  overflow-wrap: anywhere;
+}
+
+.fn-calendar-day--empty {
+  background: var(--fn-color-bg);
+  border-style: dashed;
+}
+
+.fn-calendar-day .fn-entry-list {
+  margin-bottom: var(--fn-space-2);
+}
+
+.fn-calendar-day > :last-child,
+.fn-calendar-day > section:last-child .fn-entry-list {
+  margin-bottom: 0;
+}
+
+.fn-calendar-empty {
+  margin: 0;
+  font-size: 0.875em;
+}
+
+/* Seven columns are narrow (about 10rem each inside the 1200px container): the day box tightens its type and row padding
+   so ordinary words such as "października" fit on one line. */
+@media (min-width: 80rem) {
+  .fn-calendar {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  /* Pico raises the root size to 20px here, so 0.75rem is 15px. */
+  .fn-calendar-day {
+    font-size: 0.75rem;
+  }
+
+  .fn-calendar-day .fn-day-heading {
+    font-size: 1em;
+  }
+
+  .fn-calendar-day .fn-manage-subsection-title {
+    font-size: 0.875em;
+  }
+
+  .fn-calendar-day .fn-entry-row {
+    padding: var(--fn-space-1) var(--fn-space-2);
+    font-size: 1em;
+  }
+}
+
 /* Sign-in (allauth) */
 .fn-login-google {
   display: block;

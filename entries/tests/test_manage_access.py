@@ -223,7 +223,11 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
         self.assertContains(self.client.get(detail), 'Podpisać zgodę — poprawione')
 
         response = self.client.post(reverse('entries:delete', args=[entry.pk]), {'view': 'past'})
-        self.assertRedirects(response, f"{reverse('entries:index')}?view=past")
+        past_start = timezone.localdate() - datetime.timedelta(days=14)
+        self.assertRedirects(
+            response,
+            f"{reverse('entries:index')}?view=past&start={past_start.isoformat()}",
+        )
         self.assertFalse(Entry.objects.exists())
 
     def test_eduvulcan_entry_correction_preserves_source_then_deletes(self):
@@ -268,5 +272,10 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
 
         index = self.client.get(reverse('entries:index'))
 
-        self.assertContains(index, f'href="{reverse("entries:detail", args=[entry.pk])}"')
+        today = timezone.localdate().isoformat()
+        self.assertContains(
+            index,
+            f'href="{reverse("entries:detail", args=[entry.pk])}'
+            f'?view=upcoming&amp;start={today}"',
+        )
         self.assertContains(index, 'Wpis z rozpoznawania')

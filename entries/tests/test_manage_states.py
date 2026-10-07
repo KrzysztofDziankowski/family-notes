@@ -59,9 +59,9 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         expectations = {
             'list_upcoming': ['data-day-group="2026-10-05"', 'data-day-group="2026-10-08"',
                               'aria-current="page">Nadchodzące<',
-                              '<h2 class="fn-day-heading">Czwartek</h2>'],
+                              '<h2 class="fn-day-heading">Czwartek, 8 października</h2>'],
             'list_past': ['data-day-group="2026-09-21"', 'aria-current="page">Minione<'],
-            'list_empty': ['Nie ma nadchodzących wpisów.'],
+            'list_empty': ['>Brak wpisów</p>', 'data-state-part="calendar-upcoming"'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
                               '<dt>Przedmiot</dt>', 'historia'],
             'detail_eduvulcan': ['EduVulcan', 'kartkówka', '<dt>Przedmiot</dt>', 'matematyka'],
@@ -155,8 +155,14 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         upcoming = state_html(html, 'list_upcoming')
-        self.assertEqual(DAY_PATTERN.findall(upcoming), ['2026-10-05', '2026-10-07', '2026-10-08'])
-        self.assertEqual(DAY_HEADING_PATTERN.findall(upcoming), ['Dziś', 'Środa', 'Czwartek'])
+        self.assertEqual(
+            DAY_PATTERN.findall(upcoming), [f'2026-10-{day:02}' for day in range(5, 19)]
+        )
+        self.assertEqual(
+            DAY_HEADING_PATTERN.findall(upcoming)[:4],
+            ['Dziś, 5 października', 'Jutro, 6 października',
+             'Środa, 7 października', 'Czwartek, 8 października'],
+        )
         self.assertEqual(
             GROUP_PATTERN.findall(upcoming),
             ['member-900101', 'member-900102', 'member-900103', 'family', 'member-900102', 'family'],
@@ -166,11 +172,11 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
             ['Kasia', 'Tymek', 'Marta', 'Cała rodzina', 'Tymek', 'Cała rodzina'],
         )
         for text, day, heading in (
-            ('Sprawdzian z historii o średniowieczu', 'Dziś', 'Kasia'),
-            ('Odebrać paczkę z paczkomatu', 'Dziś', 'Marta'),
-            ('Zebranie z wychowawczynią', 'Dziś', 'Cała rodzina'),
-            ('Wycieczka klasowa do muzeum techniki', 'Środa', 'Tymek'),
-            ('Oddać książkę do biblioteki', 'Czwartek', 'Cała rodzina'),
+            ('Sprawdzian z historii o średniowieczu', 'Dziś, 5 października', 'Kasia'),
+            ('Odebrać paczkę z paczkomatu', 'Dziś, 5 października', 'Marta'),
+            ('Zebranie z wychowawczynią', 'Dziś, 5 października', 'Cała rodzina'),
+            ('Wycieczka klasowa do muzeum techniki', 'Środa, 7 października', 'Tymek'),
+            ('Oddać książkę do biblioteki', 'Czwartek, 8 października', 'Cała rodzina'),
         ):
             with self.subTest(text=text):
                 self.assertIn(
@@ -188,9 +194,45 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         past = state_html(html, 'list_past')
-        self.assertEqual(DAY_PATTERN.findall(past), ['2026-09-21'])
+        self.assertEqual(
+            DAY_PATTERN.findall(past),
+            [f'2026-09-{day}' for day in range(21, 31)] + [f'2026-10-0{day}' for day in range(1, 5)],
+        )
         self.assertEqual(GROUP_PATTERN.findall(past), ['family'])
+        self.assertTrue(day_group_of(past, 'data-assignee-group="family"').startswith('data-day-group="2026-09-21"'))
         self.assertEqual(HEADING_PATTERN.findall(past), ['Cała rodzina'])
         empty = state_html(html, 'list_empty')
-        self.assertEqual(DAY_PATTERN.findall(empty), [])
+        self.assertEqual(
+            DAY_PATTERN.findall(empty), [f'2026-10-{day:02}' for day in range(5, 19)]
+        )
+        self.assertEqual(empty.count('>Brak wpisów</p>'), 14)
         self.assertEqual(GROUP_PATTERN.findall(empty), [])
+
+    @override_settings(DEBUG=True)
+    def test_calendar_states_show_empty_days_and_both_navigation_directions(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        upcoming = state_html(html, 'list_upcoming')
+        past = state_html(html, 'list_past')
+        # Mixed fortnight: populated 5, 7, 8 October; the other eleven days are empty.
+        self.assertEqual(upcoming.count('>Brak wpisów</p>'), 11)
+        self.assertEqual(past.count('>Brak wpisów</p>'), 13)
+        self.assertIn('?view=upcoming&amp;start=2026-10-19">Następne 2 tygodnie</a>', upcoming)
+        self.assertNotIn('Poprzednie 2 tygodnie', upcoming)
+        self.assertIn('?view=past&amp;start=2026-09-07">Poprzednie 2 tygodnie</a>', past)
+        self.assertNotIn('Następne 2 tygodnie', past)
+        self.assertIn('/entries/900002/?view=upcoming&amp;start=2026-10-05"', upcoming)
+
+    @override_settings(DEBUG=True)
+    def test_detail_states_return_to_their_pinned_fortnight(self):
+        self.client.force_login(self.parent.user)
+        html = self.client.get(STATES_URL).content.decode()
+
+        self.assertIn(
+            'href="/entries/?view=upcoming&amp;start=2026-10-05">Wróć do listy</a>',
+            state_html(html, 'detail_manual'),
+        )
+        delete_open = state_html(html, 'delete_open')
+        self.assertIn('href="/entries/?view=past&amp;start=2026-09-21">Wróć do listy</a>', delete_open)
+        self.assertIn('<input type="hidden" name="start" value="2026-09-21">', delete_open)

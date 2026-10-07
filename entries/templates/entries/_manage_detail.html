@@ -1,7 +1,8 @@
 {% load family_context %}
 {% comment %}
 Entry details with provenance and the no-JavaScript delete disclosure.
-Parameters: entry, list_mode, delete_open (optional; renders the disclosure open).
+Parameters: entry, list_mode, list_query and list_start (the list fortnight that "Wróć do
+listy" and the delete redirect return to), delete_open (optional; renders the disclosure open).
 {% endcomment %}
 <article class="fn-manage-detail" data-state-part="detail">
     <dl class="fn-details">
@@ -35,7 +36,7 @@ Parameters: entry, list_mode, delete_open (optional; renders the disclosure open
     </dl>
     <div class="fn-actions fn-manage-actions">
         <a role="button" href="{% url 'entries:edit' entry.pk %}">Edytuj</a>
-        <a href="{% url 'entries:index' %}?view={{ list_mode }}">Wróć do listy</a>
+        <a href="{% url 'entries:index' %}?{{ list_query }}">Wróć do listy</a>
     </div>
     <details class="fn-manage-delete" data-state-part="delete"{% if delete_open %} open{% endif %}>
         <summary>Usuń wpis</summary>
@@ -44,6 +45,7 @@ Parameters: entry, list_mode, delete_open (optional; renders the disclosure open
             {% csrf_token %}
             {% family_context_field %}
             <input type="hidden" name="view" value="{{ list_mode }}">
+            <input type="hidden" name="start" value="{{ list_start|date:'Y-m-d' }}">
             <button type="submit" class="fn-manage-danger">Usuń na stałe</button>
         </form>
     </details>

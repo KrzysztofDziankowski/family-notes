@@ -150,6 +150,17 @@ def day_heading(day, today):
         return capfirst(date_format(day, pattern))
 
 
+def parent_day_heading(day, today):
+    """Full Polish calendar heading for one day in the parent's calendar."""
+    relative = RELATIVE_DAY_HEADINGS.get((day - today).days)
+    pattern = 'j E' if day.year == today.year else 'j E Y'
+    with translation.override(settings.LANGUAGE_CODE):
+        calendar_date = date_format(day, pattern)
+        if relative:
+            return f'{relative}, {calendar_date}'
+        return capfirst(date_format(day, f'l, {pattern}'))
+
+
 def group_by_day(entries, today):
     """Split ordered ``entries`` into consecutive ``(heading, entries)`` groups by
     ``effective_date``, keeping the input order. Every entry must carry an
