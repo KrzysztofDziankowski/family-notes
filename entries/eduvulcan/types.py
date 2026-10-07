@@ -23,6 +23,8 @@ class OutputKind(str, Enum):
     RULE_REMAINDER = ('rule_remainder', 'Unparsed rule remainder')
     CLASSIFICATION = ('classification', 'Classification')
     GENERAL_NOTE = ('general_note', 'General note fallback')
+    DUPLICATE = ('duplicate', 'Duplicate of existing entry')
+    MERGED = ('merged', 'Merged into existing entry')
 
     def __new__(cls, value: str, label: str):
         member = str.__new__(cls, value)
