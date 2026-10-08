@@ -160,7 +160,7 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         )
         self.assertEqual(
             DAY_HEADING_PATTERN.findall(upcoming)[:4],
-            ['Dziś, 5 października', 'Jutro, 6 października',
+            ['Dziś, poniedziałek 5 października', 'Jutro, wtorek 6 października',
              'Środa, 7 października', 'Czwartek, 8 października'],
         )
         self.assertEqual(
@@ -172,9 +172,9 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
             ['Kasia', 'Tymek', 'Marta', 'Cała rodzina', 'Tymek', 'Cała rodzina'],
         )
         for text, day, heading in (
-            ('Sprawdzian z historii o średniowieczu', 'Dziś, 5 października', 'Kasia'),
-            ('Odebrać paczkę z paczkomatu', 'Dziś, 5 października', 'Marta'),
-            ('Zebranie z wychowawczynią', 'Dziś, 5 października', 'Cała rodzina'),
+            ('Sprawdzian z historii o średniowieczu', 'Dziś, poniedziałek 5 października', 'Kasia'),
+            ('Odebrać paczkę z paczkomatu', 'Dziś, poniedziałek 5 października', 'Marta'),
+            ('Zebranie z wychowawczynią', 'Dziś, poniedziałek 5 października', 'Cała rodzina'),
             ('Wycieczka klasowa do muzeum techniki', 'Środa, 7 października', 'Tymek'),
             ('Oddać książkę do biblioteki', 'Czwartek, 8 października', 'Cała rodzina'),
         ):

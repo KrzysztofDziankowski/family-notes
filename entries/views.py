@@ -1333,17 +1333,18 @@ def _child_list_context(mode, sections, today):
     """Template context for the child list body; ``sections`` are evaluated here.
 
     Dated sections become day groups headed relative to ``today``; the undated
-    section is one group under ``UNDATED_DAY_HEADING``."""
+    section is one group under ``UNDATED_DAY_HEADING``. Each group's ``key`` (the
+    ISO date, or ``"undated"``) is unique within the list and names its heading."""
     child_sections = []
     for section in sections:
         entries = list(section.entries)
         if not entries:
             continue
         if section.key == SECTION_UNDATED:
-            groups = [{'heading': UNDATED_DAY_HEADING, 'entries': entries}]
+            groups = [{'key': SECTION_UNDATED, 'heading': UNDATED_DAY_HEADING, 'entries': entries}]
         else:
             groups = [
-                {'heading': heading, 'entries': rows}
+                {'key': rows[0].effective_date.isoformat(), 'heading': heading, 'entries': rows}
                 for heading, rows in group_by_day(entries, today)
             ]
         child_sections.append({'key': section.key, 'groups': groups})

@@ -232,8 +232,8 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Automated
 
-- [ ] 1.1 Formatter and rendering tests cover expanded relative headings
-- [ ] 1.2 Heading accessibility tests pass
+- [x] 1.1 Formatter and rendering tests cover expanded relative headings
+- [x] 1.2 Heading accessibility tests pass
 
 #### Manual
 
