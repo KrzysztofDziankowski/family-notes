@@ -9,5 +9,5 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{% static 'js/list-refresh.js' %}" defer></script>
+<script src="{% static 'js/list-refresh.js' %}" data-health-url="{% url 'healthz' %}" defer></script>
 {% endblock %}

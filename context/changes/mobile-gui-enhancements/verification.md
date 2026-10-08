@@ -49,6 +49,22 @@ allows this, and there is no overflow.
 | Entry added elsewhere, then child list resumes | new entry visible after the refresh |
 | Capture form, text typed, then resume signals | text kept, no request, script not loaded |
 
+### Re-run after implementation review (F1, F2)
+
+The script now reloads only after at least 30 s hidden, and only after a `HEAD /healthz/` probe answers `ok`.
+
+| Check | Result |
+|---|---|
+| Cold launch | 1 document request, no probe |
+| `blur`/`focus` only | 0 requests |
+| Brief switch (< 30 s) | 0 requests, same document |
+| Long switch (≥ 30 s, clock advanced) | 1 `HEAD` probe, then 1 reload of the same URL (`?view=past` kept) |
+| Long switch + persisted `pageshow` together | 1 probe, 1 reload |
+| Offline (`navigator.onLine` false) | 0 requests, content stays; reconnect → 1 reload, same URL |
+| Server unreachable, `navigator.onLine` true | probe fails, 0 reloads, list stays visible; next resume (even brief) → 1 reload |
+| Health probe answers 503 | 0 reloads, same document |
+| Capture form with typed text, long resume signals | text kept, 0 requests |
+
 ## 4. Accessibility
 
 | Check | Result |

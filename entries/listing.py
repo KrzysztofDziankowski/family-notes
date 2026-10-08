@@ -156,13 +156,15 @@ def day_heading(day, today):
     differs from ``today.year``. Names come from Django's date formatting in
     ``LANGUAGE_CODE``, whatever locale the request activated.
     """
-    delta = (day - today).days
-    if abs(delta) <= WEEKDAY_HEADING_MAX_DAYS and delta not in RELATIVE_DAY_HEADINGS:
-        pattern = 'l'
-    else:
-        pattern = f'l, {_calendar_pattern(day, today)}'
     with translation.override(settings.LANGUAGE_CODE):
-        return _relative_day_heading(day, today) or capfirst(date_format(day, pattern))
+        relative = _relative_day_heading(day, today)
+        if relative:
+            return relative
+        if abs((day - today).days) <= WEEKDAY_HEADING_MAX_DAYS:
+            pattern = 'l'
+        else:
+            pattern = f'l, {_calendar_pattern(day, today)}'
+        return capfirst(date_format(day, pattern))
 
 
 def parent_day_heading(day, today):

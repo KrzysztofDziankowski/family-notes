@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
 from django.templatetags.static import static
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from entries.models import Entry
@@ -26,7 +26,9 @@ REGISTER_SCRIPT = (
     f'<script src="{static("js/pwa-register.js")}" data-sw-url="/sw.js" defer></script>'
 )
 LIST_REFRESH_PATH = 'js/list-refresh.js'
-LIST_REFRESH_SCRIPT = f'<script src="{static(LIST_REFRESH_PATH)}" defer></script>'
+LIST_REFRESH_SCRIPT = (
+    f'<script src="{static(LIST_REFRESH_PATH)}" data-health-url="/healthz/" defer></script>'
+)
 
 
 def root_token(name):
@@ -310,7 +312,7 @@ class ListRefreshWiringTests(FamilyFixtureMixin, TestCase):
                 self.assertNotContains(self.client.get(reverse(url_name)), LIST_REFRESH_PATH)
 
 
-class ListRefreshSourceTests(SimpleTestCase):
+class ListRefreshSourceTests(TestCase):
     """The resume contract, pinned in source; behaviour is in the manual matrix."""
 
     def source(self):
@@ -319,7 +321,7 @@ class ListRefreshSourceTests(SimpleTestCase):
     def test_resume_signals_only(self):
         source = self.source()
 
-        for event in ('visibilitychange', 'pageshow', 'online'):
+        for event in ('visibilitychange', 'pagehide', 'pageshow', 'online'):
             with self.subTest(event=event):
                 self.assertRegex(source, rf"""addEventListener\(\s*'{event}'""")
         for event in ('focus', 'load', 'DOMContentLoaded', 'resize'):
@@ -328,11 +330,37 @@ class ListRefreshSourceTests(SimpleTestCase):
         self.assertIn('event.persisted', source)
         self.assertIn('navigator.onLine', source)
 
-    def test_reloads_the_current_url_without_storage_or_fetching(self):
+    def test_brief_switches_do_not_reload(self):
+        # Review F2: a return within 30 s keeps focus and flash messages.
+        source = self.source()
+
+        self.assertIn('var MIN_HIDDEN_MS = 30000;', source)
+        self.assertIn('Date.now() - hiddenAt >= MIN_HIDDEN_MS', source)
+
+    def test_reloads_only_after_a_head_probe_of_the_health_url(self):
+        # Review F1: navigator.onLine can be true with the server unreachable; a reload
+        # then would swap the list for the service worker's offline page.
+        source = self.source()
+
+        self.assertEqual(source.count('fetch('), 1)
+        self.assertIn(
+            "fetch(healthUrl, {method: 'HEAD', cache: 'no-store', credentials: 'same-origin'})",
+            source,
+        )
+        self.assertIn('script.dataset.healthUrl', source)
+        self.assertLess(source.index('response.ok'), source.index('location.reload()'))
+
+    def test_health_url_is_anonymous_and_carries_no_family_data(self):
+        response = self.client.head(reverse('healthz'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'')
+
+    def test_reloads_the_current_url_without_storage(self):
         source = self.source()
 
         self.assertEqual(source.count('location.reload()'), 1)
-        for forbidden in ('location.href =', 'location.assign', 'location.replace', 'fetch(',
+        for forbidden in ('location.href =', 'location.assign', 'location.replace',
                           'XMLHttpRequest', 'localStorage', 'sessionStorage', 'indexedDB',
                           'caches', 'document.cookie', 'setInterval', 'setTimeout'):
             with self.subTest(forbidden=forbidden):
