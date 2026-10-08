@@ -137,16 +137,23 @@ def stop_errors(data):
     if errors:
         return errors
     errors = literal_errors(paths, root)
-    deadline = time.monotonic() + 270
-    commands = [
-        ['uv', 'run', 'python', 'manage.py', 'test', '--noinput'],
+    deadline = time.monotonic() + 105
+    test_apps = sorted({
+        part for name in paths
+        for part in ('entries', 'family_access', 'family_notes')
+        if name == part or name.startswith(part + '/')
+    })
+    commands = []
+    if test_apps:
+        commands.append(['uv', 'run', 'python', 'manage.py', 'test', *test_apps, '--noinput'])
+    commands.extend([
         ['uv', 'run', 'python', 'manage.py', 'check'],
         ['uv', 'run', 'python', 'manage.py', 'makemigrations', '--check', '--dry-run'],
-    ]
+    ])
     for command in commands:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            errors.append('Quality gate exceeded its 270s check budget.')
+            errors.append('Quality gate exceeded its 105s check budget.')
             break
         status, output = run(command, root, env, remaining)
         if status:

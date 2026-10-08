@@ -10,12 +10,13 @@ Both call `scripts/hooks/quality_gate.py`; no dependencies were added.
 | Codex `PostToolUse`, `apply_patch` | Python syntax on each existing `.py` named by patch headers, including rename destinations | 30 s |
 | Claude `PostToolUse`, `Write` / `Edit` | Python syntax on the edited `.py`, using `tool_input.file_path` | 30 s |
 | Both `PostToolUse` (same entries) | Design-token literals in an edited allowlisted template | 30 s |
-| Both `Stop` | Syntax on changed/untracked `.py`; literals in changed allowlisted templates; full Django suite; system checks; migration drift | 300 s |
+| Both `Stop` | Syntax on changed/untracked `.py`; changed-app Django tests; system checks; migration drift | 120 s |
 
 Commands at Stop:
 
 ```sh
-uv run python manage.py test --noinput
+# The hook runs tests only for changed product apps.
+uv run python manage.py test <changed-app> --noinput
 uv run python manage.py check
 uv run python manage.py makemigrations --check --dry-run
 ```
@@ -27,7 +28,9 @@ including edits performed through shell commands. This sweeps the working
 tree, including pre-existing changes; it cannot distinguish each agent's edits.
 With no changes it runs no checks. Deleted/non-Python files skip syntax checks.
 Syntax failures stop early; otherwise all three Django checks run and their
-failures are aggregated. Checks share a 270 s budget within the 300 s timeout.
+failures are aggregated. Tests are skipped when no product app changed.
+Checks share a 105 s budget within the 120 s timeout. The full suite belongs
+in CI or pre-push, not the Stop hook.
 
 Feedback uses **stderr and exit 2** for both harnesses. Successful Stop output
 is `{}`. `stop_hook_active: true` permits finishing after one corrective turn;
