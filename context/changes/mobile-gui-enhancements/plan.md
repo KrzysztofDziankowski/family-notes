@@ -237,7 +237,7 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Manual
 
-- [x] 1.3 Polish headings and screen-reader labels are verified
+- [x] 1.3 Polish headings and screen-reader labels are verified — e035917
 
 ### Phase 2: Seven-Day Phone Landscape Calendar
 
@@ -248,7 +248,7 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Manual
 
-- [x] 2.3 Portrait and landscape reflow is verified on representative phone viewports
+- [x] 2.3 Portrait and landscape reflow is verified on representative phone viewports — e035917
 
 ### Phase 3: Refresh Lists on Resume
 
@@ -259,15 +259,15 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Manual
 
-- [x] 3.3 Cold launch, online resume, offline resume, and form preservation are verified
+- [x] 3.3 Cold launch, online resume, offline resume, and form preservation are verified — e035917
 
 ### Phase 4: Integrated Verification
 
 #### Automated
 
-- [x] 4.1 Relevant Django tests and system checks pass
-- [x] 4.2 Migration dry run confirms no model changes
+- [x] 4.1 Relevant Django tests and system checks pass — e035917
+- [x] 4.2 Migration dry run confirms no model changes — e035917
 
 #### Manual
 
-- [x] 4.3 Android PWA, orientation, and accessibility matrix is completed
+- [x] 4.3 Android PWA, orientation, and accessibility matrix is completed — e035917
