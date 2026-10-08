@@ -237,7 +237,7 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Manual
 
-- [ ] 1.3 Polish headings and screen-reader labels are verified
+- [x] 1.3 Polish headings and screen-reader labels are verified
 
 ### Phase 2: Seven-Day Phone Landscape Calendar
 
@@ -248,26 +248,26 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Manual
 
-- [ ] 2.3 Portrait and landscape reflow is verified on representative phone viewports
+- [x] 2.3 Portrait and landscape reflow is verified on representative phone viewports
 
 ### Phase 3: Refresh Lists on Resume
 
 #### Automated
 
-- [x] 3.1 Static-file and template-wiring contracts pass
-- [x] 3.2 PWA privacy and caching contracts remain green
+- [x] 3.1 Static-file and template-wiring contracts pass — 8a6b960
+- [x] 3.2 PWA privacy and caching contracts remain green — 8a6b960
 
 #### Manual
 
-- [ ] 3.3 Cold launch, online resume, offline resume, and form preservation are verified
+- [x] 3.3 Cold launch, online resume, offline resume, and form preservation are verified
 
 ### Phase 4: Integrated Verification
 
 #### Automated
 
-- [ ] 4.1 Relevant Django tests and system checks pass
-- [ ] 4.2 Migration dry run confirms no model changes
+- [x] 4.1 Relevant Django tests and system checks pass
+- [x] 4.2 Migration dry run confirms no model changes
 
 #### Manual
 
-- [ ] 4.3 Android PWA, orientation, and accessibility matrix is completed
+- [x] 4.3 Android PWA, orientation, and accessibility matrix is completed
