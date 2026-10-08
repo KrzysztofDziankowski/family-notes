@@ -243,8 +243,8 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Automated
 
-- [x] 2.1 Responsive CSS contracts pass
-- [x] 2.2 Calendar structure and accessibility tests pass
+- [x] 2.1 Responsive CSS contracts pass — 63929e7
+- [x] 2.2 Calendar structure and accessibility tests pass — 63929e7
 
 #### Manual
 
@@ -254,8 +254,8 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Automated
 
-- [ ] 3.1 Static-file and template-wiring contracts pass
-- [ ] 3.2 PWA privacy and caching contracts remain green
+- [x] 3.1 Static-file and template-wiring contracts pass
+- [x] 3.2 PWA privacy and caching contracts remain green
 
 #### Manual
 

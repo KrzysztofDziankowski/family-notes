@@ -1,5 +1,6 @@
 """Installable web app shell (S-06): manifest, service worker, offline page."""
 
+import datetime
 import json
 import re
 from pathlib import Path
@@ -8,9 +9,11 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles import finders
 from django.templatetags.static import static
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
+from entries.models import Entry
+from entries.tests.test_classification_service import FamilyFixtureMixin
 from family_access.models import Family, FamilyMember
 
 MANIFEST_URL = reverse('web_manifest')
@@ -22,6 +25,8 @@ FORBIDDEN_EVENTS = ('push', 'sync', 'periodicsync', 'notificationclick', 'messag
 REGISTER_SCRIPT = (
     f'<script src="{static("js/pwa-register.js")}" data-sw-url="/sw.js" defer></script>'
 )
+LIST_REFRESH_PATH = 'js/list-refresh.js'
+LIST_REFRESH_SCRIPT = f'<script src="{static(LIST_REFRESH_PATH)}" defer></script>'
 
 
 def root_token(name):
@@ -249,3 +254,86 @@ class LayoutWiringTests(ParentFixtureMixin, TestCase):
 
     def test_registration_script_resolves(self):
         self.assertIsNotNone(finders.find('js/pwa-register.js'))
+
+
+class ListRefreshWiringTests(FamilyFixtureMixin, TestCase):
+    """mobile-gui-enhancements: only the two entry lists refresh on resume."""
+
+    def setUp(self):
+        super().setUp()
+        self.entry = Entry.objects.create(
+            date=datetime.date(2026, 10, 8),
+            family=self.family,
+            entry_type='note',
+            content='Wpis do odświeżenia',
+            assigned_member=self.child,
+        )
+
+    def test_script_resolves(self):
+        self.assertIsNotNone(finders.find(LIST_REFRESH_PATH))
+
+    def test_parent_and_child_lists_load_it_once_in_both_modes(self):
+        for member, url_name in ((self.parent, 'entries:index'), (self.child, 'entries:child_list')):
+            self.client.force_login(member.user)
+            for params in ({}, {'view': 'past'}):
+                with self.subTest(url=url_name, params=params):
+                    response = self.client.get(reverse(url_name), params)
+                    self.assertContains(response, LIST_REFRESH_SCRIPT, count=1, html=True)
+
+    def test_forms_details_and_account_pages_do_not_load_it(self):
+        pages = {
+            self.parent: [
+                reverse('entries:capture'),
+                reverse('entries:create'),
+                reverse('entries:detail', args=[self.entry.pk]),
+                reverse('entries:edit', args=[self.entry.pk]),
+                reverse('account_status'),
+            ],
+            self.child: [reverse('entries:child_detail', args=[self.entry.pk])],
+            None: [reverse('account_login'), OFFLINE_URL],
+        }
+        for member, urls in pages.items():
+            self.client.logout()
+            if member:
+                self.client.force_login(member.user)
+            for url in urls:
+                with self.subTest(url=url):
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertNotContains(response, LIST_REFRESH_PATH)
+
+    @override_settings(DEBUG=True)
+    def test_state_galleries_do_not_load_it(self):
+        for member, url_name in ((self.parent, 'entries:states'), (self.child, 'entries:child_states')):
+            self.client.force_login(member.user)
+            with self.subTest(url=url_name):
+                self.assertNotContains(self.client.get(reverse(url_name)), LIST_REFRESH_PATH)
+
+
+class ListRefreshSourceTests(SimpleTestCase):
+    """The resume contract, pinned in source; behaviour is in the manual matrix."""
+
+    def source(self):
+        return Path(finders.find(LIST_REFRESH_PATH)).read_text(encoding='utf-8')
+
+    def test_resume_signals_only(self):
+        source = self.source()
+
+        for event in ('visibilitychange', 'pageshow', 'online'):
+            with self.subTest(event=event):
+                self.assertRegex(source, rf"""addEventListener\(\s*'{event}'""")
+        for event in ('focus', 'load', 'DOMContentLoaded', 'resize'):
+            with self.subTest(event=event):
+                self.assertNotRegex(source, rf"""addEventListener\(\s*'{event}'""")
+        self.assertIn('event.persisted', source)
+        self.assertIn('navigator.onLine', source)
+
+    def test_reloads_the_current_url_without_storage_or_fetching(self):
+        source = self.source()
+
+        self.assertEqual(source.count('location.reload()'), 1)
+        for forbidden in ('location.href =', 'location.assign', 'location.replace', 'fetch(',
+                          'XMLHttpRequest', 'localStorage', 'sessionStorage', 'indexedDB',
+                          'caches', 'document.cookie', 'setInterval', 'setTimeout'):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, source)
