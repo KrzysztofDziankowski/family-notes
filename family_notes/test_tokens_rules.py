@@ -25,6 +25,10 @@ def split_top_level(selector_list):
     return [*parts, current]
 
 
+# A phone held in landscape (mobile-gui-enhancements): 667x375 and 844x390, not 568x320.
+LANDSCAPE_PHONE = '(orientation: landscape) and (min-width: 36rem) and (max-height: 32rem)'
+
+
 class TokensRuleTests(SimpleTestCase):
     def setUp(self):
         self.css = TOKENS_CSS.read_text(encoding='utf-8')
@@ -80,12 +84,12 @@ class TokensRuleTests(SimpleTestCase):
         self.assertEqual(day.get('overflow-wrap'), 'anywhere')
 
     def calendar_media_queries(self):
-        """``[(media query list split on top-level commas, body)]`` of blocks laying out
-        ``.fn-calendar``."""
+        """``[(media query list split on top-level commas, body)]`` of blocks giving
+        ``.fn-calendar`` columns."""
         return [
             ([' '.join(q.split()) for q in split_top_level(query)], body)
             for query, body in self.media_blocks().items()
-            if '.fn-calendar {' in body
+            if '.fn-calendar {' in body and 'grid-template-columns' in body
         ]
 
     def test_parent_calendar_is_seven_columns_on_wide_screens_and_landscape_phones(self):
@@ -96,7 +100,7 @@ class TokensRuleTests(SimpleTestCase):
         self.assertEqual(
             queries,
             ['(min-width: 80rem)',
-             '(orientation: landscape) and (min-width: 36rem) and (max-height: 32rem)'],
+             LANDSCAPE_PHONE],
         )
         for selector, declaration in (
             ('.fn-calendar {', 'grid-template-columns: repeat(7, minmax(0, 1fr));'),
@@ -106,6 +110,23 @@ class TokensRuleTests(SimpleTestCase):
             with self.subTest(selector):
                 rule = body[body.index(selector):]
                 self.assertIn(declaration, rule[:rule.index('}')])
+
+    def test_landscape_phone_calendar_page_uses_the_full_width(self):
+        # Pico caps .container at 510px from 576px up, which leaves seven columns too narrow
+        # for "października": only the calendar page, only on a landscape phone, widens.
+        body = self.media_blocks()[LANDSCAPE_PHONE]
+        for selector, declarations in (
+            ('body:has(.fn-calendar) > .container {',
+             ('max-width: none;', 'padding-inline: var(--fn-space-2);')),
+            ('.fn-calendar {', ('gap: var(--fn-space-1);',)),
+            ('.fn-calendar-day .fn-entry-row {', ('padding: var(--fn-space-1);',)),
+        ):
+            rule = body[body.index(selector):]
+            for declaration in declarations:
+                with self.subTest(selector=selector, declaration=declaration):
+                    self.assertIn(declaration, rule[:rule.index('}')])
+        self.assertNotIn('grid-template-columns', body)
+        self.assertNotIn('max-width: none', self.css.replace(body, ''))
 
     def test_parent_calendar_rules_use_tokens_not_literal_colours(self):
         literal = re.compile(r'#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(')

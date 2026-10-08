@@ -493,6 +493,26 @@ main[tabindex="-1"]:focus {
   }
 }
 
+/* A landscape phone has under 6rem per column: Pico caps .container at 510px (with no side
+   padding) from 576px up, so the calendar page (header and main alike) takes the full screen
+   width less a small gutter, and the day boxes and rows drop to the smallest padding so Polish
+   words wrap between, not inside, syllables where they can. */
+@media (orientation: landscape) and (min-width: 36rem) and (max-height: 32rem) {
+  body:has(.fn-calendar) > .container {
+    max-width: none;
+    padding-inline: var(--fn-space-2);
+  }
+
+  .fn-calendar {
+    gap: var(--fn-space-1);
+  }
+
+  .fn-calendar-day,
+  .fn-calendar-day .fn-entry-row {
+    padding: var(--fn-space-1);
+  }
+}
+
 /* Sign-in (allauth) */
 .fn-login-google {
   display: block;
