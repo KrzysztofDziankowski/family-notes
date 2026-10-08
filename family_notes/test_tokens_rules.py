@@ -72,12 +72,40 @@ class TokensRuleTests(SimpleTestCase):
         self.assertEqual(
             self.outside_media('.fn-calendar').get('grid-template-columns'), 'minmax(0, 1fr)'
         )
-        wide = [body for query, body in self.media_blocks().items() if '.fn-calendar {' in body]
-        self.assertEqual(len(wide), 1)
-        self.assertIn('grid-template-columns: repeat(7, minmax(0, 1fr));', wide[0])
+        seven = self.calendar_media_queries()
+        self.assertEqual(len(seven), 1)
+        self.assertIn('grid-template-columns: repeat(7, minmax(0, 1fr));', seven[0][1])
         day = self.outside_media('.fn-calendar-day')
         self.assertEqual(day.get('min-width'), '0')
         self.assertEqual(day.get('overflow-wrap'), 'anywhere')
+
+    def calendar_media_queries(self):
+        """``[(media query list split on top-level commas, body)]`` of blocks laying out
+        ``.fn-calendar``."""
+        return [
+            ([' '.join(q.split()) for q in split_top_level(query)], body)
+            for query, body in self.media_blocks().items()
+            if '.fn-calendar {' in body
+        ]
+
+    def test_parent_calendar_is_seven_columns_on_wide_screens_and_landscape_phones(self):
+        # mobile-gui-enhancements: the 80rem desktop rule stays; a landscape phone at least
+        # 36rem wide and at most 32rem tall (667x375, 844x390, not 568x320) gets the same seven
+        # columns and compact type. Portrait phones never match: they keep the base column.
+        [(queries, body)] = self.calendar_media_queries()
+        self.assertEqual(
+            queries,
+            ['(min-width: 80rem)',
+             '(orientation: landscape) and (min-width: 36rem) and (max-height: 32rem)'],
+        )
+        for selector, declaration in (
+            ('.fn-calendar {', 'grid-template-columns: repeat(7, minmax(0, 1fr));'),
+            ('.fn-calendar-day {', 'font-size: 0.75rem;'),
+            ('.fn-calendar-day .fn-entry-row {', 'padding: var(--fn-space-1) var(--fn-space-2);'),
+        ):
+            with self.subTest(selector):
+                rule = body[body.index(selector):]
+                self.assertIn(declaration, rule[:rule.index('}')])
 
     def test_parent_calendar_rules_use_tokens_not_literal_colours(self):
         literal = re.compile(r'#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(')

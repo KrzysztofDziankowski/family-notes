@@ -232,8 +232,8 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Automated
 
-- [x] 1.1 Formatter and rendering tests cover expanded relative headings
-- [x] 1.2 Heading accessibility tests pass
+- [x] 1.1 Formatter and rendering tests cover expanded relative headings — 30016cd
+- [x] 1.2 Heading accessibility tests pass — 30016cd
 
 #### Manual
 
@@ -243,8 +243,8 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Automated
 
-- [ ] 2.1 Responsive CSS contracts pass
-- [ ] 2.2 Calendar structure and accessibility tests pass
+- [x] 2.1 Responsive CSS contracts pass
+- [x] 2.2 Calendar structure and accessibility tests pass
 
 #### Manual
 

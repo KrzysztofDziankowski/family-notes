@@ -407,7 +407,8 @@ main[tabindex="-1"]:focus {
 }
 
 /* Parent calendar (parent-entries-calendar-layout): fourteen day boxes, one column on phones,
-   seven equal columns (two chronological rows) on wide screens. minmax(0, 1fr) and
+   seven equal columns (two chronological rows) on wide screens and on phones held in landscape
+   (mobile-gui-enhancements). minmax(0, 1fr) and
    min-width: 0 let long entry text wrap instead of widening the page (SC 1.4.10). */
 .fn-calendar-nav ul,
 .fn-calendar-nav ul:first-of-type,
@@ -462,14 +463,18 @@ main[tabindex="-1"]:focus {
   font-size: 0.875em;
 }
 
-/* Seven columns are narrow (about 10rem each inside the 1200px container): the day box tightens its type and row padding
-   so ordinary words such as "października" fit on one line. */
-@media (min-width: 80rem) {
+/* Seven columns are narrow (about 10rem each inside the 1200px container, under 6rem on a
+   landscape phone): the day box tightens its type and row padding so ordinary words such as
+   "października" fit on one line. The second query is a phone in landscape: short (at most
+   32rem tall) but at least 36rem wide, so 568x320 keeps one column while 667x375 and 844x390
+   get two rows of seven. Orientation itself is never locked (SC 1.3.4). */
+@media (min-width: 80rem), (orientation: landscape) and (min-width: 36rem) and (max-height: 32rem) {
   .fn-calendar {
     grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 
-  /* Pico raises the root size to 20px here, so 0.75rem is 15px. */
+  /* Pico raises the root size to 20px on wide screens (0.75rem is 15px) and to about 17px on
+     a landscape phone (0.75rem is about 13px). */
   .fn-calendar-day {
     font-size: 0.75rem;
   }
