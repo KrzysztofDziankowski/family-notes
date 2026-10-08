@@ -129,36 +129,51 @@ RELATIVE_DAY_HEADINGS = {0: 'Dziś', 1: 'Jutro', -1: 'Wczoraj'}
 WEEKDAY_HEADING_MAX_DAYS = 6
 
 
+def _calendar_pattern(day, today):
+    """``"j E"`` (``"12 października"``), plus the year when it differs from today's."""
+    return 'j E' if day.year == today.year else 'j E Y'
+
+
+def _relative_day_heading(day, today):
+    """``"Dziś, czwartek 8 października"`` for an adjacent day, else ``None``.
+
+    Shared by the parent and child headings so ``Dziś``/``Jutro``/``Wczoraj``
+    always name the weekday and the calendar date (year added when it differs
+    from ``today.year``). Callers must hold the ``LANGUAGE_CODE`` override."""
+    relative = RELATIVE_DAY_HEADINGS.get((day - today).days)
+    if relative is None:
+        return None
+    weekday = date_format(day, 'l').lower()
+    return f'{relative}, {weekday} {date_format(day, _calendar_pattern(day, today))}'
+
+
 def day_heading(day, today):
     """Capitalised Polish heading for ``day`` relative to ``today``.
 
-    ``Dziś``/``Jutro``/``Wczoraj`` for the adjacent days, the weekday name within
-    six days either way, otherwise ``"Poniedziałek, 12 października"`` with the
-    year appended when it differs from ``today.year``. Names come from Django's
-    date formatting in ``LANGUAGE_CODE``, whatever locale the request activated.
+    ``"Dziś, poniedziałek 28 września"`` (likewise ``Jutro``/``Wczoraj``) for the
+    adjacent days, the weekday name within six days either way, otherwise
+    ``"Poniedziałek, 12 października"``; full dates carry the year when it
+    differs from ``today.year``. Names come from Django's date formatting in
+    ``LANGUAGE_CODE``, whatever locale the request activated.
     """
-    delta = (day - today).days
-    if delta in RELATIVE_DAY_HEADINGS:
-        return RELATIVE_DAY_HEADINGS[delta]
-    if abs(delta) <= WEEKDAY_HEADING_MAX_DAYS:
-        pattern = 'l'
-    elif day.year == today.year:
-        pattern = 'l, j E'
-    else:
-        pattern = 'l, j E Y'
     with translation.override(settings.LANGUAGE_CODE):
+        relative = _relative_day_heading(day, today)
+        if relative:
+            return relative
+        if abs((day - today).days) <= WEEKDAY_HEADING_MAX_DAYS:
+            pattern = 'l'
+        else:
+            pattern = f'l, {_calendar_pattern(day, today)}'
         return capfirst(date_format(day, pattern))
 
 
 def parent_day_heading(day, today):
-    """Full Polish calendar heading for one day in the parent's calendar."""
-    relative = RELATIVE_DAY_HEADINGS.get((day - today).days)
-    pattern = 'j E' if day.year == today.year else 'j E Y'
+    """Full Polish calendar heading for one day in the parent's calendar:
+    ``"Dziś, czwartek 8 października"`` or ``"Sobota, 10 października"``."""
     with translation.override(settings.LANGUAGE_CODE):
-        calendar_date = date_format(day, pattern)
-        if relative:
-            return f'{relative}, {calendar_date}'
-        return capfirst(date_format(day, f'l, {pattern}'))
+        return _relative_day_heading(day, today) or capfirst(
+            date_format(day, f'l, {_calendar_pattern(day, today)}')
+        )
 
 
 def group_by_day(entries, today):

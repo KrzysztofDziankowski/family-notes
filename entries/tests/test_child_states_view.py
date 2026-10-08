@@ -25,8 +25,13 @@ STATE_NAMES = (
 )
 # STATES_DATE is Monday 2026-10-05; each list covers every day-heading kind.
 EXPECTED_DAY_HEADINGS = {
-    'upcoming': ['Dziś', 'Jutro', 'Czwartek', 'Poniedziałek, 26 października'],
-    'past': ['Wczoraj', 'Piątek', 'Środa', 'Sobota, 5 września'],
+    'upcoming': [
+        'Dziś, poniedziałek 5 października',
+        'Jutro, wtorek 6 października',
+        'Czwartek',
+        'Poniedziałek, 26 października',
+    ],
+    'past': ['Wczoraj, niedziela 4 października', 'Piątek', 'Środa', 'Sobota, 5 września'],
 }
 
 
@@ -114,10 +119,16 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
 
         for name, headings in EXPECTED_DAY_HEADINGS.items():
             with self.subTest(state=name):
+                state = _state_html(html, name)
                 self.assertEqual(
-                    re.findall(r'<h2 class="fn-day-heading">(.*?)</h2>', _state_html(html, name)),
-                    headings,
+                    re.findall(r'<h2 class="fn-day-heading"[^>]*>(.*?)</h2>', state), headings
                 )
+                # Every list is labelled by its own heading; ids are page-unique.
+                ids = re.findall(r'<h2 class="fn-day-heading" id="([^"]+)"', state)
+                self.assertEqual(re.findall(r'aria-labelledby="([^"]+)"', state), ids)
+                self.assertTrue(all(i.startswith(f'{name}-day-') for i in ids))
+        all_ids = re.findall(r'\bid="([^"]+)"', html)
+        self.assertEqual(len(all_ids), len(set(all_ids)))
         error = _state_html(html, 'error_forbidden')
         self.assertIn('fn-panel--danger', error)
         self.assertIn('Brak dostępu', error)

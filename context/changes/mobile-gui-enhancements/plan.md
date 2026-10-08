@@ -232,42 +232,42 @@ No database, data, API, service-worker cache-version, or deployment migration is
 
 #### Automated
 
-- [ ] 1.1 Formatter and rendering tests cover expanded relative headings
-- [ ] 1.2 Heading accessibility tests pass
+- [x] 1.1 Formatter and rendering tests cover expanded relative headings — 30016cd
+- [x] 1.2 Heading accessibility tests pass — 30016cd
 
 #### Manual
 
-- [ ] 1.3 Polish headings and screen-reader labels are verified
+- [x] 1.3 Polish headings and screen-reader labels are verified — e035917
 
 ### Phase 2: Seven-Day Phone Landscape Calendar
 
 #### Automated
 
-- [ ] 2.1 Responsive CSS contracts pass
-- [ ] 2.2 Calendar structure and accessibility tests pass
+- [x] 2.1 Responsive CSS contracts pass — 63929e7
+- [x] 2.2 Calendar structure and accessibility tests pass — 63929e7
 
 #### Manual
 
-- [ ] 2.3 Portrait and landscape reflow is verified on representative phone viewports
+- [x] 2.3 Portrait and landscape reflow is verified on representative phone viewports — e035917
 
 ### Phase 3: Refresh Lists on Resume
 
 #### Automated
 
-- [ ] 3.1 Static-file and template-wiring contracts pass
-- [ ] 3.2 PWA privacy and caching contracts remain green
+- [x] 3.1 Static-file and template-wiring contracts pass — 8a6b960
+- [x] 3.2 PWA privacy and caching contracts remain green — 8a6b960
 
 #### Manual
 
-- [ ] 3.3 Cold launch, online resume, offline resume, and form preservation are verified
+- [x] 3.3 Cold launch, online resume, offline resume, and form preservation are verified — e035917
 
 ### Phase 4: Integrated Verification
 
 #### Automated
 
-- [ ] 4.1 Relevant Django tests and system checks pass
-- [ ] 4.2 Migration dry run confirms no model changes
+- [x] 4.1 Relevant Django tests and system checks pass — e035917
+- [x] 4.2 Migration dry run confirms no model changes — e035917
 
 #### Manual
 
-- [ ] 4.3 Android PWA, orientation, and accessibility matrix is completed
+- [x] 4.3 Android PWA, orientation, and accessibility matrix is completed — e035917

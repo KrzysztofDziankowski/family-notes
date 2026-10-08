@@ -19,7 +19,7 @@ from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMix
 LIST_URL = reverse('entries:child_list')
 PARENT_LIST_URL = reverse('entries:index')
 FIXED_TODAY = datetime.date(2026, 9, 28)  # a Monday
-HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading">([^<]*)</h2>')
+HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading"[^>]*>([^<]*)</h2>')
 FORBIDDEN_HREFS = ('/entries/new/', '/entries/confirm/', 'edit', 'delete')
 
 
@@ -221,11 +221,16 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
 
         response = self.client.get(LIST_URL)
 
-        self.assertEqual(self.headings(response), ['Dziś', 'Jutro', 'Poniedziałek, 5 października'])
+        self.assertEqual(
+            self.headings(response),
+            ['Dziś, poniedziałek 28 września', 'Jutro, wtorek 29 września',
+             'Poniedziałek, 5 października'],
+        )
         body = response.content.decode()
         order = [
             body.index(marker)
-            for marker in ('>Dziś<', 'SENTINEL-TODAY', '>Jutro<', 'SENTINEL-TOMORROW',
+            for marker in ('>Dziś, poniedziałek 28 września<', 'SENTINEL-TODAY',
+                           '>Jutro, wtorek 29 września<', 'SENTINEL-TOMORROW',
                            '>Poniedziałek, 5 października<', 'SENTINEL-LATER')
         ]
         self.assertEqual(order, sorted(order))
@@ -234,7 +239,20 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         )
         # Rows under a day heading show only the time, never the date.
         self.assertContains(response, '<span>08:15</span>', html=True)
-        self.assertNotContains(response, 'września')
+        self.assertNotIn('września', HEADING_PATTERN.sub('', body))
+
+    def test_each_day_list_is_labelled_by_its_visible_heading(self):
+        self.client.force_login(self.child.user)
+
+        for view, keys in (
+            ('upcoming', ['2026-09-28', '2026-09-29', '2026-10-05']),
+            ('past', ['2026-09-27', '2026-09-18']),
+        ):
+            with self.subTest(view=view):
+                body = self.client.get(LIST_URL, {'view': view}).content.decode()
+                ids = re.findall(r'<h2 class="fn-day-heading" id="([^"]+)"', body)
+                self.assertEqual(ids, [f'day-{key}' for key in keys])
+                self.assertEqual(re.findall(r'<ul [^>]*aria-labelledby="([^"]+)"', body), ids)
 
     def test_past_reads_newest_day_first(self):
         self.client.force_login(self.child.user)
@@ -242,7 +260,7 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         response = self.client.get(LIST_URL, {'view': 'past'})
 
         self.assertEqual(
-            self.headings(response), ['Wczoraj', 'Piątek, 18 września']
+            self.headings(response), ['Wczoraj, niedziela 27 września', 'Piątek, 18 września']
         )
         body = response.content.decode()
         self.assertLess(body.index('SENTINEL-YESTERDAY'), body.index('SENTINEL-OLDER'))
@@ -269,13 +287,16 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
             self.headings(past),
             [parent_day_heading(FIXED_TODAY + n * day, FIXED_TODAY) for n in range(-14, 0)],
         )
-        self.assertEqual(self.headings(response)[:2], ['Dziś, 28 września', 'Jutro, 29 września'])
-        self.assertEqual(self.headings(past)[-1], 'Wczoraj, 27 września')
+        self.assertEqual(
+            self.headings(response)[:2],
+            ['Dziś, poniedziałek 28 września', 'Jutro, wtorek 29 września'],
+        )
+        self.assertEqual(self.headings(past)[-1], 'Wczoraj, niedziela 27 września')
         body = response.content.decode()
         order = [
             body.index(marker)
-            for marker in ('>Dziś, 28 września<', 'SENTINEL-TODAY',
-                           '>Jutro, 29 września<', 'SENTINEL-TOMORROW',
+            for marker in ('>Dziś, poniedziałek 28 września<', 'SENTINEL-TODAY',
+                           '>Jutro, wtorek 29 września<', 'SENTINEL-TOMORROW',
                            '>Poniedziałek, 5 października<', 'SENTINEL-LATER')
         ]
         self.assertEqual(order, sorted(order))

@@ -244,10 +244,26 @@ class DayHeadingTests(TestCase):
     def _heading(self, days):
         return day_heading(TODAY + datetime.timedelta(days=days), TODAY)
 
-    def test_relative_days(self):
-        self.assertEqual(self._heading(0), 'Dziś')
-        self.assertEqual(self._heading(1), 'Jutro')
-        self.assertEqual(self._heading(-1), 'Wczoraj')
+    def test_relative_days_include_weekday_and_calendar_date(self):
+        self.assertEqual(self._heading(0), 'Dziś, poniedziałek 28 września')
+        self.assertEqual(self._heading(1), 'Jutro, wtorek 29 września')
+        self.assertEqual(self._heading(-1), 'Wczoraj, niedziela 27 września')
+
+    def test_relative_day_in_another_year_includes_the_year(self):
+        new_year = datetime.date(2027, 1, 1)
+        self.assertEqual(
+            day_heading(new_year, datetime.date(2026, 12, 31)), 'Jutro, piątek 1 stycznia 2027'
+        )
+        self.assertEqual(
+            day_heading(datetime.date(2026, 12, 31), new_year),
+            'Wczoraj, czwartek 31 grudnia 2026',
+        )
+
+    def test_relative_days_match_the_parent_heading(self):
+        for days in (-1, 0, 1):
+            with self.subTest(days=days):
+                day = TODAY + datetime.timedelta(days=days)
+                self.assertEqual(day_heading(day, TODAY), parent_day_heading(day, TODAY))
 
     def test_weekday_name_within_six_days(self):
         self.assertEqual(self._heading(2), 'Środa')
@@ -268,15 +284,18 @@ class DayHeadingTests(TestCase):
 
     def test_polish_regardless_of_active_language(self):
         with translation.override('en'):
+            self.assertEqual(self._heading(0), 'Dziś, poniedziałek 28 września')
             self.assertEqual(self._heading(2), 'Środa')
             self.assertEqual(self._heading(7), 'Poniedziałek, 5 października')
 
 
 class ParentDayHeadingTests(TestCase):
     def test_relative_days_include_the_calendar_date(self):
-        self.assertEqual(parent_day_heading(TODAY, TODAY), 'Dziś, 28 września')
-        self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, 29 września')
-        self.assertEqual(parent_day_heading(YESTERDAY, TODAY), 'Wczoraj, 27 września')
+        self.assertEqual(parent_day_heading(TODAY, TODAY), 'Dziś, poniedziałek 28 września')
+        self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, wtorek 29 września')
+        self.assertEqual(
+            parent_day_heading(YESTERDAY, TODAY), 'Wczoraj, niedziela 27 września'
+        )
 
     def test_other_days_include_weekday_and_cross_year_includes_year(self):
         self.assertEqual(
@@ -291,15 +310,17 @@ class ParentDayHeadingTests(TestCase):
     def test_relative_day_in_another_year_includes_the_year(self):
         new_year = datetime.date(2027, 1, 1)
         self.assertEqual(
-            parent_day_heading(new_year, datetime.date(2026, 12, 31)), 'Jutro, 1 stycznia 2027'
+            parent_day_heading(new_year, datetime.date(2026, 12, 31)),
+            'Jutro, piątek 1 stycznia 2027',
         )
         self.assertEqual(
-            parent_day_heading(datetime.date(2026, 12, 31), new_year), 'Wczoraj, 31 grudnia 2026'
+            parent_day_heading(datetime.date(2026, 12, 31), new_year),
+            'Wczoraj, czwartek 31 grudnia 2026',
         )
 
     def test_uses_polish_locale_regardless_of_active_language(self):
         with translation.override('en'):
-            self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, 29 września')
+            self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, wtorek 29 września')
 
 
 class GroupByDayTests(FamilyFixtureMixin, TestCase):
@@ -326,14 +347,14 @@ class GroupByDayTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(
             contents(group_by_day(upcoming, TODAY)),
             [
-                ('Dziś', ['today-09', 'grade-today']),
-                ('Jutro', ['tomorrow']),
+                ('Dziś, poniedziałek 28 września', ['today-09', 'grade-today']),
+                ('Jutro, wtorek 29 września', ['tomorrow']),
                 ('Poniedziałek, 5 października', ['in-a-week']),
             ],
         )
         self.assertEqual(
             contents(group_by_day(past, TODAY)),
-            [('Wczoraj', ['yesterday']), ('Sobota', ['two-days-ago'])],
+            [('Wczoraj, niedziela 27 września', ['yesterday']), ('Sobota', ['two-days-ago'])],
         )
 
     def test_empty_input_has_no_groups(self):
