@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 1
 status: draft
 created: 2026-09-22
-updated: 2026-10-04
+updated: 2026-10-10
 prd_version: 2
 main_goal: speed
 top_blocker: capacity
@@ -46,7 +46,7 @@ FamilyNotes replaces scattered family tasks, events, and notes with one shared f
 | S-01 | first-school-event-capture           | parent can classify, review, correct, and save one school event            | F-01, F-02    | US-01, FR-001, FR-002, FR-003, FR-004, FR-005, FR-008 | done        |
 | S-02 | parent-family-entry-management       | parent can manage saved family entries in a shared family view             | F-01, S-01    | FR-006, FR-008                  | done     |
 | S-03 | child-assigned-entry-view            | child can read only entries assigned to that child                         | F-01, S-01    | FR-007, FR-008                  | done     |
-| S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | in-progress |
+| S-04 | missing-info-follow-up               | parent gets a follow-up question when required classification data is missing | F-02, S-01 | FR-004, FR-005, Business Logic  | done |
 | S-05 | eduvulcan-school-event-intake        | stored EduVulcan notifications are converted asynchronously into school entries | S-01, F-02, F-04 | US-02, FR-010, FR-011, Business Logic, NFR fast intake | in-progress |
 | S-06 | family-entries-rest-api               | parent-owned automation can retrieve all entries of its family through a read-only REST API | F-04, S-01 | MS-01, NFR family privacy, NFR token revocation | done |
 
@@ -179,7 +179,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 - **Unknowns:**
   - What validation and follow-up rules apply beyond tests, homework, and calendar entries? - Owner: user. Block: no.
 - **Risk:** Sequenced after the first capture case so missing-field behavior extends proven classification rather than delaying the initial end-to-end flow.
-- **Status:** in-progress
+- **Status:** done
 
 ### S-05: EduVulcan School Event Intake
 
@@ -257,6 +257,7 @@ Foundations below assume these are present and do NOT re-scaffold them.
 
 ## Done
 
+- **S-04: parent gets a follow-up question before confirmation when required classification data is missing.** — Archived 2026-10-10 → `context/archive/2026-10-01-missing-info-follow-up/`. Lesson: —.
 - **F-01: (foundation) family members can be represented with external identity, preassigned parent/child roles, and a single-family access boundary.** — Archived 2026-09-26 → `context/archive/2026-09-23-identity-and-family-access-contract/`. Lesson: —.
 - **F-03: (foundation) the app has a minimal release health gate for database-backed readiness before family data is trusted in production.** — Archived 2026-09-26 → `context/archive/2026-09-24-production-health-release-gate/`. Lesson: —.
 - **F-02: (foundation) classification requests can be made while limiting submitted text to producing and saving the requested family entry.** — Archived 2026-09-27 → `context/archive/2026-09-24-classification-privacy-boundary/`. Lesson: —.
