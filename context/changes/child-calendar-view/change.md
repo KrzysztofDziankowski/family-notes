@@ -1,7 +1,7 @@
 ---
 change_id: child-calendar-view
 title: Shared 14-day calendar for parent and child, with date navigation and child filters
-status: implementing
+status: implemented
 created: 2026-10-10
 updated: 2026-10-10
 archived_at: null
