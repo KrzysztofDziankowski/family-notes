@@ -1,9 +1,9 @@
 ---
 change_id: title-keeps-action-only
 title: Entry title keeps only the action after person and date are extracted
-status: implementing
+status: impl_reviewed
 created: 2026-10-04
-updated: 2026-10-05
+updated: 2026-10-10
 archived_at: null
 ---
 
