@@ -1,8 +1,10 @@
 {% load family_context %}
 {% comment %}
 Entry details with provenance and the no-JavaScript delete disclosure.
-Parameters: entry, list_query ("start=<iso>") and list_start (the calendar fortnight that "Wróć do
-listy" and the delete redirect return to), delete_open (optional; renders the disclosure open).
+Parameters: entry, list_query ("start=<iso>", plus "&member=<pk>" with a child filter) and
+list_start (the calendar fortnight that "Wróć do listy" and the delete redirect return to),
+list_member (optional; the calendar's selected child, kept by the delete redirect) and delete_open
+(optional; renders the disclosure open).
 {% endcomment %}
 <article class="fn-manage-detail" data-state-part="detail">
     <dl class="fn-details">
@@ -45,6 +47,7 @@ listy" and the delete redirect return to), delete_open (optional; renders the di
             {% csrf_token %}
             {% family_context_field %}
             <input type="hidden" name="start" value="{{ list_start|date:'Y-m-d' }}">
+            {% if list_member %}<input type="hidden" name="member" value="{{ list_member.pk }}">{% endif %}
             <button type="submit" class="fn-manage-danger">Usuń na stałe</button>
         </form>
     </details>

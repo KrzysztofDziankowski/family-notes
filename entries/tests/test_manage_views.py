@@ -31,7 +31,8 @@ ROW_PATTERN = re.compile(r'data-entry-row="(\d+)"')
 DAY_PATTERN = re.compile(r'data-day-group="([\w-]+)"')
 GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)"')
 DAY_HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading">([^<]*)</h2>')
-EMPTY_DAY = '>Brak wpisów</p>'
+# A visible "Brak wpisów" (it is always rendered, ``hidden`` while the day shows a group).
+EMPTY_DAY = 'data-day-empty>Brak wpisów</p>'
 GROUP_HEADING_PATTERN = re.compile(r'<h3 class="fn-manage-subsection-title">([^<]*)</h3>')
 
 
@@ -207,7 +208,7 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
             DAY_PATTERN.findall(response.content.decode()),
             [self.days(offset).isoformat() for offset in range(-14, 0)],
         )
-        self.assertNotContains(response, 'aria-current')
+        self.assertNotContains(response, 'aria-current="page">Dzisiaj<')
 
     def test_view_parameter_is_ignored(self):
         default = self.client.get(INDEX_URL)
@@ -374,7 +375,7 @@ class CalendarPresentationTests(ManageViewMixin, TestCase):
         )
         for response in (today, earlier):
             for text in ('Poprzednie 2 tygodnie', 'Następne 2 tygodnie', 'Rodzaj listy',
-                         'view=', 'fn-tabs'):
+                         'view=', 'Minione'):
                 with self.subTest(text=text):
                     self.assertNotContains(response, text)
 
@@ -1299,3 +1300,230 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         with CaptureQueriesContext(connection) as queries:
             self.client.get(INDEX_URL)
         return len(queries.captured_queries)
+
+
+FILTER_LINK_PATTERN = re.compile(
+    r'<a href="([^"]*)" data-member-key="([\w-]+)"( aria-current="page")?>([^<]*)</a>'
+)
+VISIBLE_GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)">')
+HIDDEN_GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)" hidden>')
+
+
+class MemberFilterTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
+    """Phase 4: the parent calendar's child filter, rendered by the server for every window."""
+
+    def setUp(self):
+        super().setUp()
+        e = self.entry
+        self.michal_today = e('Michał dziś', date=self.today, assigned_member=self.child)
+        self.ania_today = e('Ania dziś', date=self.today, assigned_member=self.other_child)
+        self.ewa_today = e('Ewa dziś', date=self.today, assigned_member=self.parent)
+        self.zosia_today = e('Zosia dziś', date=self.today, assigned_member=self.inactive_child)
+        self.family_today = e('Rodzina dziś', date=self.today)
+        self.ania_tomorrow = e('Ania jutro', date=self.days(1), assigned_member=self.other_child)
+        self.pawel_later = e('Paweł później', date=self.days(3), assigned_member=self.second_parent)
+        self.foreign = e(
+            FOREIGN_SENTINEL, family=self.other_family, date=self.today,
+            assigned_member=self.other_family_child,
+        )
+
+    def get(self, **params):
+        return self.client.get(INDEX_URL, params).content.decode()
+
+    def filter_links(self, html):
+        """``[(href, key, current, label)]`` of the "Filtr wpisów" nav."""
+        start = html.index('aria-label="Filtr wpisów"')
+        nav = html[start:html.index('</nav>', start)]
+        return [
+            (href.replace('&amp;', '&'), key, bool(current), label)
+            for href, key, current, label in FILTER_LINK_PATTERN.findall(nav)
+        ]
+
+    def assert_unfiltered(self, html):
+        self.assertEqual(HIDDEN_GROUP_PATTERN.findall(html), [])
+        self.assertEqual(
+            [(key, current) for _href, key, current, _label in self.filter_links(html)],
+            [('all', True), (f'member-{self.child.pk}', False), (f'member-{self.other_child.pk}', False)],
+        )
+        self.assertNotIn('member=', html.split('data-state-part="calendar-nav"', 1)[1])
+
+    def test_filter_lists_all_then_each_active_child_in_pk_order(self):
+        html = self.get()
+        start = self.today.isoformat()
+
+        self.assertEqual(
+            self.filter_links(html),
+            [
+                (f'{INDEX_URL}?start={start}', 'all', True, 'Wszyscy'),
+                (f'{INDEX_URL}?start={start}&member={self.child.pk}', f'member-{self.child.pk}',
+                 False, 'Michał'),
+                (f'{INDEX_URL}?start={start}&member={self.other_child.pk}',
+                 f'member-{self.other_child.pk}', False, 'Ania'),
+            ],
+        )
+        labels = [label for *_rest, label in self.filter_links(html)]
+        for absent in ('Ewa', 'Paweł', 'Jolanta', 'Zosia', 'Kuba', 'Tomek'):
+            with self.subTest(absent=absent):
+                self.assertNotIn(absent, labels)
+        self.assertIn('<p data-member-state="all" hidden>Pokazano: wszystkie wpisy</p>', html)
+        self.assertIn(
+            f'<p data-member-state="member-{self.child.pk}" hidden>Pokazano: Michał i Ogólne</p>', html
+        )
+        self.assertIn('role="status" aria-live="polite" data-live-region', html)
+
+    def test_filter_links_keep_the_current_window(self):
+        start = self.days(-14).isoformat()
+        html = self.get(start=start, member=str(self.child.pk))
+
+        for href, *_rest in self.filter_links(html):
+            with self.subTest(href=href):
+                self.assertTrue(href.startswith(f'{INDEX_URL}?start={start}'))
+
+    def test_selected_child_renders_every_row_and_hides_other_groups(self):
+        response = self.client.get(INDEX_URL, {'member': str(self.child.pk)})
+        html = response.content.decode()
+
+        self.assertEqual(
+            sorted(self.rendered_rows(response)),
+            sorted(entry.pk for entry in (
+                self.michal_today, self.ania_today, self.ewa_today, self.zosia_today,
+                self.family_today, self.ania_tomorrow, self.pawel_later,
+            )),
+        )
+        today = day_html(html, self.today.isoformat())
+        self.assertEqual(VISIBLE_GROUP_PATTERN.findall(today), [f'member-{self.child.pk}', 'family'])
+        self.assertEqual(
+            HIDDEN_GROUP_PATTERN.findall(today),
+            [f'member-{self.other_child.pk}', f'member-{self.inactive_child.pk}',
+             f'member-{self.parent.pk}'],
+        )
+        self.assertEqual(
+            [(key, current) for _href, key, current, _label in self.filter_links(html)],
+            [('all', False), (f'member-{self.child.pk}', True), (f'member-{self.other_child.pk}', False)],
+        )
+        self.assertNotContains(response, FOREIGN_SENTINEL)
+
+    def test_empty_marker_follows_the_visible_groups(self):
+        html = self.get(member=str(self.child.pk))
+
+        cases = {
+            # Michał and "Ogólne" are visible.
+            self.today: False,
+            # Only Ania's (hidden) group.
+            self.days(1): True,
+            # Only Paweł's (hidden) group.
+            self.days(3): True,
+            # No entries at all.
+            self.days(2): True,
+        }
+        for day, empty in cases.items():
+            with self.subTest(day=day):
+                block = day_html(html, day.isoformat())
+                self.assertEqual(EMPTY_DAY in block, empty)
+                self.assertEqual('data-day-empty hidden>Brak wpisów' in block, not empty)
+                self.assertEqual(
+                    f'fn-calendar-day--empty" data-day-group="{day.isoformat()}"' in html, empty
+                )
+        unfiltered = self.get()
+        self.assertNotIn(EMPTY_DAY, day_html(unfiltered, self.days(1).isoformat()))
+        self.assertNotIn(EMPTY_DAY, day_html(unfiltered, self.days(3).isoformat()))
+
+    def test_invalid_member_means_everyone_without_echoing_it(self):
+        values = {
+            'another family child': str(self.other_family_child.pk),
+            'another family parent': str(self.other_family_parent.pk),
+            'own parent': str(self.parent.pk),
+            'second parent': str(self.second_parent.pk),
+            'inactive parent': str(self.inactive_parent.pk),
+            'inactive child': str(self.inactive_child.pk),
+            'missing': '99999',
+            'padded': f' {self.child.pk}',
+            'leading zero': f'0{self.child.pk}',
+            'negative': '-1',
+            'junk': 'abc',
+            'empty': '',
+            'key form': f'member-{self.child.pk}',
+        }
+        for name, value in values.items():
+            with self.subTest(name):
+                response = self.client.get(INDEX_URL, {'member': value})
+                html = response.content.decode()
+                self.assert_unfiltered(html)
+                self.assertNotContains(response, FOREIGN_SENTINEL)
+                self.assertNotIn(f'member-{self.other_family_child.pk}"', html)
+                self.assertNotIn(f'member={self.other_family_child.pk}', html)
+                self.assertNotIn(f'member={self.other_family_parent.pk}', html)
+
+    def test_member_is_carried_by_the_calendar_and_entry_links(self):
+        html = self.get(member=str(self.child.pk))
+        member = f'member={self.child.pk}'
+
+        nav = html[html.index('data-state-part="calendar-nav"'):]
+        nav = nav[:nav.index('</nav>')]
+        self.assertEqual(
+            re.findall(r'<a href="([^"]*)" data-member-link', nav),
+            [
+                f'{INDEX_URL}?start={self.days(-14).isoformat()}&amp;{member}',
+                f'{INDEX_URL}?start={self.today.isoformat()}&amp;{member}',
+                f'{INDEX_URL}?start={self.days(14).isoformat()}&amp;{member}',
+            ],
+        )
+        self.assertIn(
+            f'href="{detail_url(self.ania_today.pk)}?start={self.today.isoformat()}&amp;{member}"'
+            ' data-member-link>',
+            html,
+        )
+        unfiltered = self.get()
+        self.assertIn(
+            f'href="{detail_url(self.ania_today.pk)}?start={self.today.isoformat()}" data-member-link>',
+            unfiltered,
+        )
+
+    def test_detail_back_link_and_delete_form_carry_a_validated_member(self):
+        start = self.days(-14).isoformat()
+        url = detail_url(self.michal_today.pk)
+
+        html = self.client.get(url, {'start': start, 'member': str(self.child.pk)}).content.decode()
+        self.assertIn(
+            f'href="{INDEX_URL}?start={start}&amp;member={self.child.pk}">Wróć do listy</a>', html
+        )
+        self.assertIn(f'<input type="hidden" name="member" value="{self.child.pk}">', html)
+
+        for value in (str(self.other_family_child.pk), str(self.parent.pk),
+                      str(self.inactive_child.pk), 'abc'):
+            with self.subTest(member=value):
+                html = self.client.get(url, {'start': start, 'member': value}).content.decode()
+                self.assertIn(f'href="{INDEX_URL}?start={start}">Wróć do listy</a>', html)
+                self.assertNotIn('name="member"', html)
+                self.assertNotIn(f'member={value}', html)
+
+    def test_delete_returns_to_the_filtered_window_only_for_a_valid_member(self):
+        start = self.days(14).isoformat()
+        cases = {
+            str(self.other_child.pk): f'{INDEX_URL}?start={start}&member={self.other_child.pk}',
+            str(self.other_family_child.pk): f'{INDEX_URL}?start={start}',
+            str(self.second_parent.pk): f'{INDEX_URL}?start={start}',
+            str(self.inactive_child.pk): f'{INDEX_URL}?start={start}',
+            'junk': f'{INDEX_URL}?start={start}',
+        }
+        for member, expected in cases.items():
+            with self.subTest(member=member):
+                entry = self.entry('Do usunięcia')
+                response = self.client.post(
+                    delete_url(entry.pk), {'start': start, 'member': member}
+                )
+                self.assertRedirects(response, expected)
+                self.assertFalse(Entry.objects.filter(pk=entry.pk).exists())
+
+    def test_family_without_active_children_has_no_filter(self):
+        FamilyMember.objects.filter(pk__in=[self.child.pk, self.other_child.pk]).update(
+            is_active=False
+        )
+
+        response = self.client.get(INDEX_URL, {'member': str(self.child.pk)})
+
+        self.assertNotContains(response, 'data-member-filter')
+        self.assertNotContains(response, 'Filtr wpisów')
+        self.assertNotContains(response, 'data-live-region')
+        self.assertNotContains(response, 'member=')
+        self.assertEqual(HIDDEN_GROUP_PATTERN.findall(response.content.decode()), [])

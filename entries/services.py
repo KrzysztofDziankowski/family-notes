@@ -194,6 +194,14 @@ def parent_family_entries(membership):
     return _family_entries(require_parent_membership(membership))
 
 
+def active_family_children(membership):
+    """Active child memberships of the parent's family, by pk (the calendar filter's choices)."""
+    return scope_queryset_to_family(
+        FamilyMember.objects.filter(is_active=True, role=FamilyMember.Role.CHILD),
+        require_parent_membership(membership),
+    ).order_by('pk')
+
+
 def get_parent_family_entry(membership, entry_id):
     """Resolve one entry within the parent's family.
 

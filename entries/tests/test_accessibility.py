@@ -306,6 +306,37 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
                     main.count('aria-current="page">Dzisiaj</a>'), 1 if window == 'today' else 0
                 )
 
+    def test_filtered_and_unfiltered_windows(self):
+        """Phase 4: the "Filtr wpisów" nav and its live region pass, with and without a child."""
+        self.entry('Zebranie', days=2, assigned_member=self.child)
+        self.entry('Basen', days=2, assigned_member=self.other_child)
+        self.entry('Odebrać paczkę', days=3, assigned_member=self.parent)
+        self.entry('Wynieść śmieci', days=2)
+        cases = {
+            'unfiltered': {},
+            'filtered': {'member': str(self.child.pk)},
+            'filtered earlier': {**self.window(-14), 'member': str(self.other_child.pk)},
+            'invalid member': {'member': str(self.other_family_child.pk)},
+        }
+        for name, params in cases.items():
+            with self.subTest(name):
+                response = self.client.get(reverse('entries:index'), params)
+                assert_accessible(self, response)
+                html = response.content.decode()
+                main = html[html.index('<main'):html.index('</main>')]
+                self.assertEqual(main.count('aria-label="Filtr wpisów"'), 1)
+                self.assertEqual(main.count('data-live-region'), 1)
+                self.assertEqual(main.count('data-member-key='), 3)
+                self.assertEqual(
+                    re.findall(r'data-member-key="([\w-]+)" aria-current="page"', main),
+                    [f'member-{self.child.pk}' if name == 'filtered'
+                     else f'member-{self.other_child.pk}' if name == 'filtered earlier' else 'all'],
+                )
+        entry = self.entry('Zebranie', days=2, assigned_member=self.child)
+        assert_accessible(self, self.client.get(
+            reverse('entries:detail', args=[entry.pk]), {'member': str(self.child.pk)}
+        ))
+
     def test_detail_and_open_delete_disclosure(self):
         entry = self.entry('Zebranie', days=2, assigned_member=self.child)
         assert_accessible(self, self.client.get(reverse('entries:detail', args=[entry.pk])))

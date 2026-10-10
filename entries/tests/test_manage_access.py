@@ -136,6 +136,49 @@ class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
                 response = self.client.get(reverse('entries:index'), {'start': start.isoformat()})
                 self.assertNotContains(response, FOREIGN_SENTINEL)
 
+    def test_member_filter_never_selects_or_leaks_another_family(self):
+        """Phase 4: ``?member`` only selects an active child of the request's own family."""
+        foreign_child = self.other_family_child
+        Entry.objects.filter(pk=self.foreign.pk).update(assigned_member=foreign_child)
+        self.client.force_login(self.parent.user)
+
+        response = self.client.get(reverse('entries:index'), {'member': str(foreign_child.pk)})
+        html = response.content.decode()
+        self.assertNotContains(response, FOREIGN_SENTINEL)
+        self.assertNotIn(f'member={foreign_child.pk}', html)
+        self.assertNotIn(f'member-{foreign_child.pk}', html)
+        self.assertNotIn('Kuba', html)
+        self.assertIn('data-member-key="all" aria-current="page"', html)
+
+        detail = self.client.get(
+            reverse('entries:detail', args=[self.own.pk]), {'member': str(foreign_child.pk)}
+        )
+        self.assertNotContains(detail, f'member={foreign_child.pk}')
+        self.assertNotContains(detail, 'name="member"')
+
+        # The other family's parent cannot select our child, and sees only their own rows.
+        self.client.force_login(self.other_family_parent.user)
+        response = self.client.get(reverse('entries:index'), {'member': str(self.child.pk)})
+        html = response.content.decode()
+        self.assertContains(response, FOREIGN_SENTINEL)
+        self.assertNotContains(response, 'Własny wpis')
+        self.assertNotIn(f'member={self.child.pk}', html)
+        self.assertNotIn('Michał', html)
+        self.assertIn('data-member-key="all" aria-current="page"', html)
+
+    def test_member_filter_does_not_open_the_calendar_to_non_parents(self):
+        for name, make_user in self.denied_users().items():
+            with self.subTest(user=name):
+                self.client.force_login(make_user())
+                response = self.client.get(reverse('entries:index'), {'member': str(self.child.pk)})
+                self.assertEqual(response.status_code, 403)
+                self.parent.refresh_from_db()
+                self.family.refresh_from_db()
+                self.parent.is_active = True
+                self.parent.save()
+                self.family.is_active = True
+                self.family.save()
+
     def test_denied_users_get_403_on_every_path_without_mutation(self):
         for name, make_user in self.denied_users().items():
             with self.subTest(user=name):

@@ -521,9 +521,9 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [x] 3.1 Entries tests pass: `uv run python manage.py test entries`
-- [x] 3.2 No list-mode symbols remain: `grep -rn "partition_entries\|normalize_list_mode\|LIST_MODES\|_list_modes\|Nadchodzące\|Minione" entries scripts family_notes --include=*.py --include=*.html` returns nothing
-- [x] 3.3 Full test suite passes: `uv run python manage.py test`
+- [x] 3.1 Entries tests pass: `uv run python manage.py test entries` — 9c3e508
+- [x] 3.2 No list-mode symbols remain: `grep -rn "partition_entries\|normalize_list_mode\|LIST_MODES\|_list_modes\|Nadchodzące\|Minione" entries scripts family_notes --include=*.py --include=*.html` returns nothing — 9c3e508
+- [x] 3.3 Full test suite passes: `uv run python manage.py test` — 9c3e508
 
 #### Manual
 
@@ -534,11 +534,11 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [ ] 4.1 Entries tests pass: `uv run python manage.py test entries`
-- [ ] 4.2 Full test suite passes: `uv run python manage.py test`
-- [ ] 4.3 Django checks pass: `uv run python manage.py check`
-- [ ] 4.4 No migrations needed: `uv run python manage.py makemigrations --check --dry-run`
-- [ ] 4.5 Filter E2E passes: `npx playwright test tests/e2e/member-filter.spec.ts`
+- [x] 4.1 Entries tests pass: `uv run python manage.py test entries`
+- [x] 4.2 Full test suite passes: `uv run python manage.py test`
+- [x] 4.3 Django checks pass: `uv run python manage.py check`
+- [x] 4.4 No migrations needed: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 4.5 Filter E2E passes: `npx playwright test tests/e2e/member-filter.spec.ts`
 
 #### Manual
 

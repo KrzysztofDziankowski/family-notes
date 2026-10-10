@@ -1,12 +1,13 @@
 {% comment %}
 Calendar window navigation shared by the parent and child calendars.
 Parameters: previous_url, today_url, next_url (all always set) and is_today (true when the
-shown window starts today; "Dzisiaj" then carries aria-current="page").
+shown window starts today; "Dzisiaj" then carries aria-current="page"), and optional member_links
+(marks the links data-member-link so js/member-filter.js can rewrite their member parameter).
 {% endcomment %}
 <nav class="fn-calendar-nav" aria-label="Nawigacja kalendarza" data-state-part="calendar-nav">
     <ul>
-        <li><a href="{{ previous_url }}">Wcześniejsze</a></li>
-        <li><a href="{{ today_url }}"{% if is_today %} aria-current="page"{% endif %}>Dzisiaj</a></li>
-        <li><a href="{{ next_url }}">Następne</a></li>
+        <li><a href="{{ previous_url }}"{% if member_links %} data-member-link{% endif %}>Wcześniejsze</a></li>
+        <li><a href="{{ today_url }}"{% if member_links %} data-member-link{% endif %}{% if is_today %} aria-current="page"{% endif %}>Dzisiaj</a></li>
+        <li><a href="{{ next_url }}"{% if member_links %} data-member-link{% endif %}>Następne</a></li>
     </ul>
 </nav>

@@ -89,6 +89,17 @@ IDs by design.
   renders the hidden hint „Enter wysyła, Shift+Enter dodaje nową linię.” as
   `<auto_id>-enter-hint`; the field is described by it on valid and invalid renders; the script
   reveals it.
+- **Member filter (`js/member-filter.js`).** The parent calendar's `nav.fn-tabs`
+  (`aria-label="Filtr wpisów"`, `data-member-filter`) holds real links („Wszyscy”, then one per
+  active child) with `?member=<pk>` and `aria-current="page"` on the active one; the server renders
+  every row of the window and marks hidden assignee groups, so filtering works without JavaScript.
+  Next to it, one visually hidden `role="status" aria-live="polite"` region marked
+  `data-live-region` (never under a `hidden` ancestor) holds one `hidden` state block per filter
+  („Pokazano: wszystkie wpisy”, „Pokazano: Kasia i Ogólne”). A plain click switches without a
+  request: it toggles the groups, each day's „Brak wpisów” and `fn-calendar-day--empty` by the
+  server's rule, moves `aria-current`, reveals the matching state block (announced once), rewrites
+  `member` in every `[data-member-link]` href and calls `history.replaceState`. Modifier and middle
+  clicks follow the link. Focus stays on the clicked link.
 
 ## Enforcement
 

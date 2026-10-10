@@ -14,6 +14,7 @@ from .test_classification_service import FamilyFixtureMixin
 STATES_URL = reverse('entries:states')
 MANAGE_STATES = (
     'list_today',
+    'list_filtered',
     'list_earlier',
     'list_empty',
     'detail_manual',
@@ -60,6 +61,15 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
             'list_today': ['data-day-group="2026-10-05"', 'data-day-group="2026-10-08"',
                            'aria-current="page">Dzisiaj<',
                            '<h2 class="fn-day-heading">Czwartek, 8 października</h2>'],
+            'list_filtered': ['aria-label="Filtr wpisów"',
+                              'data-member-key="member-900101" aria-current="page">Kasia</a>',
+                              'Pokazano: Kasia i Ogólne', 'Pokazano: wszystkie wpisy',
+                              'data-assignee-group="member-900101">',
+                              'data-assignee-group="family">',
+                              'data-assignee-group="member-900102" hidden>',
+                              'data-assignee-group="member-900103" hidden>',
+                              '/entries/900002/?start=2026-10-05&amp;member=900101" data-member-link>',
+                              '/entries/?start=2026-10-19&amp;member=900101" data-member-link>'],
             'list_earlier': ['data-day-group="2026-09-21"', 'data-state-part="calendar-nav"'],
             'list_empty': ['>Brak wpisów</p>', 'data-state-part="calendar"'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
@@ -80,6 +90,16 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('data-state-part="delete" open', state_html(html, 'detail_manual'))
         self.assertNotIn('name="submission_key"', state_html(html, 'edit'))
         self.assertNotIn('aria-current', state_html(html, 'list_earlier'))
+        for name in ('list_today', 'list_earlier', 'list_empty'):
+            with self.subTest(state=name, unfiltered=True):
+                self.assertNotRegex(state_html(html, name), r'data-assignee-group="[\w-]+" hidden')
+        # The filtered window keeps Tymek's trip (7 October) as a hidden row: the day shows "Brak wpisów".
+        filtered = state_html(html, 'list_filtered')
+        trip_day = filtered[filtered.index('data-day-group="2026-10-07"'):]
+        trip_day = trip_day[:trip_day.index('data-day-group="2026-10-08"')]
+        self.assertIn('data-day-empty>Brak wpisów</p>', trip_day)
+        self.assertIn('fn-calendar-day--empty" data-day-group="2026-10-07"', filtered)
+        self.assertIn('data-entry-row="900003"', trip_day)
         for removed in ('fn-tabs', 'Rodzaj listy', '2 tygodnie', 'name="view"', 'view='):
             for name in ('list_today', 'list_earlier', 'list_empty', 'delete_open'):
                 with self.subTest(state=name, removed=removed):
@@ -221,16 +241,16 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         upcoming = state_html(html, 'list_today')
         past = state_html(html, 'list_earlier')
         # Mixed fortnight: populated 5, 7, 8 October; the other eleven days are empty.
-        self.assertEqual(upcoming.count('>Brak wpisów</p>'), 11)
-        self.assertEqual(past.count('>Brak wpisów</p>'), 13)
-        self.assertIn('<a href="/entries/?start=2026-09-21">Wcześniejsze</a>', upcoming)
+        self.assertEqual(upcoming.count('data-day-empty>Brak wpisów</p>'), 11)
+        self.assertEqual(past.count('data-day-empty>Brak wpisów</p>'), 13)
+        self.assertIn('<a href="/entries/?start=2026-09-21" data-member-link>Wcześniejsze</a>', upcoming)
         self.assertIn(
-            '<a href="/entries/?start=2026-10-05" aria-current="page">Dzisiaj</a>', upcoming
+            '<a href="/entries/?start=2026-10-05" data-member-link aria-current="page">Dzisiaj</a>', upcoming
         )
-        self.assertIn('<a href="/entries/?start=2026-10-19">Następne</a>', upcoming)
-        self.assertIn('<a href="/entries/?start=2026-09-07">Wcześniejsze</a>', past)
-        self.assertIn('<a href="/entries/?start=2026-10-05">Dzisiaj</a>', past)
-        self.assertIn('<a href="/entries/?start=2026-10-05">Następne</a>', past)
+        self.assertIn('<a href="/entries/?start=2026-10-19" data-member-link>Następne</a>', upcoming)
+        self.assertIn('<a href="/entries/?start=2026-09-07" data-member-link>Wcześniejsze</a>', past)
+        self.assertIn('<a href="/entries/?start=2026-10-05" data-member-link>Dzisiaj</a>', past)
+        self.assertIn('<a href="/entries/?start=2026-10-05" data-member-link>Następne</a>', past)
         self.assertIn('/entries/900002/?start=2026-10-05"', upcoming)
         self.assertIn('/entries/900006/?start=2026-09-21"', past)
 

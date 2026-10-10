@@ -33,7 +33,8 @@ async function deleteEntriesTitled(page: Page, title: string) {
     await rows.first().click();
     await page.getByText('Usuń wpis', { exact: true }).click();
     await page.getByRole('button', { name: 'Usuń na stałe' }).click();
-    await expect(page.getByRole('status')).toHaveText('Usunięto wpis.');
+    // The calendar also holds the child filter's status region, so pick the message by its text.
+    await expect(page.getByRole('status').filter({ hasText: 'Usunięto wpis.' })).toHaveText('Usunięto wpis.');
   }
   await expect(rows).toHaveCount(0);
 }

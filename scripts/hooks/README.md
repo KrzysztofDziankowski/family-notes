@@ -46,7 +46,7 @@ templates cleaned by `context/changes/child-list-ui/` (`LITERAL_TEMPLATES` in
 `quality_gate.py`): `family_notes/templates/{base,403,404,500,_error}.html`,
 `family_notes/templates/allauth/layouts/base.html`,
 `family_notes/templates/account/login.html` and
-`entries/templates/entries/{child_list,child_detail,child_states,_child_calendar,_child_entry_detail,_entry_row,_calendar_nav,_calendar_days}.html`.
+`entries/templates/entries/{child_list,child_detail,child_states,_child_calendar,_child_entry_detail,_entry_row,_calendar_nav,_calendar_days,_member_filter}.html`.
 Paths match relative or absolute. `tokens.css` and other templates are never
 scanned. Colours and inline styles belong in `family_notes/static/css/tokens.css`.
 At Stop, literal hits do not skip the Django checks; their failures are

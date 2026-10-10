@@ -62,6 +62,7 @@ from .forms import (
     skip_review_form,
 )
 from .listing import (
+    GROUP_FAMILY,
     is_weekend,
     parent_day_heading,
     split_by_assignee,
@@ -69,6 +70,7 @@ from .listing import (
 )
 from .models import Entry
 from .services import (
+    active_family_children,
     child_entries,
     create_family_entry,
     delete_family_entry,
@@ -881,8 +883,8 @@ ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
 ENTRY_DELETED_MESSAGE = 'Usunięto wpis.'
 
 
-def _index_url(start):
-    return f"{reverse('entries:index')}?{_calendar_query(start)}"
+def _index_url(start, member=None):
+    return f"{reverse('entries:index')}?{_with_member(_calendar_query(start), member)}"
 
 
 def _calendar_window(value, today):
@@ -911,6 +913,60 @@ def _window_containing(day, today):
 
 def _calendar_query(start):
     return f'start={start.isoformat()}'
+
+
+# --- Parent calendar filter by child ---
+
+ALL_MEMBERS_KEY = 'all'
+ALL_MEMBERS_LABEL = 'Wszyscy'
+ALL_MEMBERS_STATUS = 'Pokazano: wszystkie wpisy'
+
+
+def _member_query(member):
+    """``member=<pk>`` for a selected child, empty for "Wszyscy"."""
+    return f'member={member.pk}' if member else ''
+
+
+def _with_member(query, member):
+    member_query = _member_query(member)
+    return f'{query}&{member_query}' if member_query else query
+
+
+def _member_key(member):
+    """Assignee group key of the selected child (``split_by_assignee``), ``None`` for all."""
+    return f'member-{member.pk}' if member else None
+
+
+def _member_filter(membership, value):
+    """``(children, selected)``: the family's active children and the one ``value`` names.
+
+    Only the pk of an active child in the request's family selects; any other value (another
+    family, a parent, an inactive child, junk) means "Wszyscy" and is never echoed back."""
+    children = list(active_family_children(membership))
+    selected = next((child for child in children if str(child.pk) == value), None)
+    return children, selected
+
+
+def _member_filters(children, selected, start):
+    """Filter links of the parent calendar: "Wszyscy", then one per child (empty without children)."""
+    if not children:
+        return []
+    filters = [{
+        'key': ALL_MEMBERS_KEY,
+        'label': ALL_MEMBERS_LABEL,
+        'status': ALL_MEMBERS_STATUS,
+        'url': _index_url(start),
+        'current': selected is None,
+    }]
+    for child in children:
+        filters.append({
+            'key': _member_key(child),
+            'label': child.display_name,
+            'status': f'Pokazano: {child.display_name} i {FAMILY_GROUP_HEADING}',
+            'url': _index_url(start, child),
+            'current': selected is not None and selected.pk == child.pk,
+        })
+    return filters
 
 
 def _calendar_navigation(url_name, start, today, query_extra=''):
@@ -949,43 +1005,58 @@ def _assignee_heading(member):
     return member.display_name
 
 
-def _index_days(entries, start, today):
+def _group_visible(group_key, member_key):
+    """The filter's visibility rule (mirrored by ``js/member-filter.js``): every group without a
+    selected child, otherwise only the child's own group and the unassigned "Ogólne" group."""
+    return member_key is None or group_key in (member_key, GROUP_FAMILY)
+
+
+def _index_days(entries, start, today, member_key=None):
     """Build all fourteen chronological calendar days, including empty dates.
 
-    Shared by the parent and child calendars; the child's days hold one group each."""
+    Shared by the parent and child calendars; the child's days hold one group each. Every row is
+    kept: with ``member_key`` the other groups are only marked ``hidden``, and a day without a
+    visible group is ``is_empty``."""
     rows_by_date = {}
     for entry in entries:
         rows_by_date.setdefault(entry.effective_date, []).append(entry)
     days = []
     for offset in range(CALENDAR_WINDOW_DAYS):
         day = start + datetime.timedelta(days=offset)
-        rows = rows_by_date.get(day, [])
+        groups = [
+            {
+                'key': group.key,
+                'heading': _assignee_heading(group.member),
+                'entries': group.entries,
+                'hidden': not _group_visible(group.key, member_key),
+            }
+            for group in split_by_assignee(rows_by_date.get(day, []))
+        ]
         days.append(
             {
                 'key': day.isoformat(),
                 'heading': parent_day_heading(day, today),
                 'is_weekend': is_weekend(day),
-                'groups': [
-                    {
-                        'key': group.key,
-                        'heading': _assignee_heading(group.member),
-                        'entries': group.entries,
-                    }
-                    for group in split_by_assignee(rows)
-                ],
+                'groups': groups,
+                'is_empty': all(group['hidden'] for group in groups),
             }
         )
     return days
 
 
-def _index_context(entries, today, start=None, url_name='entries:index'):
+def _index_context(entries, today, start=None, url_name='entries:index', member=None,
+                   children=()):
     """Calendar context for the window starting at ``start`` (today by default);
-    ``url_name`` is the calendar the navigation links point to."""
+    ``url_name`` is the calendar the navigation links point to. ``member`` (a validated child)
+    and ``children`` (the filter's choices) are the parent calendar's filter."""
     start = start or today
+    member_query = _member_query(member)
     return {
-        'days': _index_days(entries, start, today),
-        'detail_query': _calendar_query(start),
-        **_calendar_navigation(url_name, start, today),
+        'days': _index_days(entries, start, today, _member_key(member)),
+        'detail_query': _with_member(_calendar_query(start), member),
+        'filters': _member_filters(children, member, start),
+        'member_query': member_query,
+        **_calendar_navigation(url_name, start, today, member_query),
     }
 
 
@@ -1007,11 +1078,12 @@ def _detail_list_start(request, entry, today):
     return list_start
 
 
-def _detail_context(entry, list_start, delete_open=False):
+def _detail_context(entry, list_start, delete_open=False, member=None):
     return {
         'entry': entry,
         'list_start': list_start,
-        'list_query': _calendar_query(list_start),
+        'list_query': _with_member(_calendar_query(list_start), member),
+        'list_member': member,
         'delete_open': delete_open,
     }
 
@@ -1027,20 +1099,30 @@ def index(request):
     membership = _require_parent(request)
     today = timezone.localdate()
     start, end = _calendar_window(request.GET.get('start'), today)
+    children, member = _member_filter(membership, request.GET.get('member'))
+    # Every row of the window is rendered; the filter only hides groups (instant switching).
     rows = _calendar_rows(
         parent_family_entries(membership).exclude(school_item=SchoolItemKind.LUCKY_NUMBER.value),
         start,
         end,
     )
-    return render(request, 'entries/manage_index.html', _index_context(rows, today, start))
+    return render(
+        request,
+        'entries/manage_index.html',
+        _index_context(rows, today, start, member=member, children=children),
+    )
 
 
 @require_http_methods(['GET'])
 @login_required
 def detail(request, pk):
-    entry = _managed_entry_or_404(_require_parent(request), pk)
+    membership = _require_parent(request)
+    entry = _managed_entry_or_404(membership, pk)
     list_start = _detail_list_start(request, entry, timezone.localdate())
-    return render(request, 'entries/manage_detail.html', _detail_context(entry, list_start))
+    _, member = _member_filter(membership, request.GET.get('member'))
+    return render(
+        request, 'entries/manage_detail.html', _detail_context(entry, list_start, member=member)
+    )
 
 
 @sensitive_post_parameters('content')
@@ -1119,13 +1201,15 @@ def edit(request, pk):
 @require_POST
 @login_required
 def delete(request, pk):
+    membership = _require_parent(request)
     try:
-        delete_family_entry(_require_parent(request), pk)
+        delete_family_entry(membership, pk)
     except Entry.DoesNotExist:
         raise Http404 from None
     messages.success(request, ENTRY_DELETED_MESSAGE)
     start, _ = _calendar_window(request.POST.get('start'), timezone.localdate())
-    return redirect(_index_url(start))
+    _, member = _member_filter(membership, request.POST.get('member'))
+    return redirect(_index_url(start, member))
 
 
 # Fictional management kitchen-sink data (DEBUG gallery): unsaved rows only.
@@ -1160,8 +1244,8 @@ def _states_member(display_name):
     raise ValueError(f'Unknown gallery member: {display_name}')
 
 
-def _synthetic_list(entries, start=STATES_DATE):
-    return _index_context(entries, STATES_DATE, start)
+def _synthetic_list(entries, start=STATES_DATE, member=None, children=()):
+    return _index_context(entries, STATES_DATE, start, member=member, children=children)
 
 
 def _manage_state_sections(membership):
@@ -1257,6 +1341,15 @@ def _manage_state_sections(membership):
             'label': 'Lista: bieżące dwa tygodnie',
             'list': _synthetic_list(
                 [test_entry, parent_note, family_meeting, long_note, trip, library_task],
+            ),
+        },
+        {
+            'name': 'list_filtered',
+            'label': 'Lista: filtr „Kasia”',
+            'list': _synthetic_list(
+                [test_entry, parent_note, family_meeting, long_note, trip, library_task],
+                member=_states_member('Kasia'),
+                children=[_states_member('Kasia'), _states_member('Tymek')],
             ),
         },
         {

@@ -466,8 +466,10 @@ main[tabindex="-1"]:focus {
   margin-bottom: var(--fn-space-2);
 }
 
+/* The last visible assignee group ends the box: a group hidden by the child filter
+   (child-calendar-view) and the hidden "Brak wpisów" never keep its bottom margin. */
 .fn-calendar-day > :last-child,
-.fn-calendar-day > section:last-child .fn-entry-list {
+.fn-calendar-day > section:not([hidden]):not(:has(~ section:not([hidden]))) .fn-entry-list {
   margin-bottom: 0;
 }
 

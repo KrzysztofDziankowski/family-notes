@@ -1,0 +1,24 @@
+{% comment %}
+Parent calendar filter by child. Parameter: filters, a list of {key, label, status, url, current}:
+"Wszyscy" (key "all") first, then one per active child of the family (key "member-<pk>", the
+child's assignee group key), in pk order. Renders nothing when filters is empty (no active children).
+Every link is a real link (url keeps the window's start and adds member=<pk> except for "Wszyscy"),
+so filtering works without JavaScript; js/member-filter.js switches instantly instead. A selected
+child shows that child's group and the "Ogólne" group. The status region follows the S-06
+live-region contract: always rendered, never under a hidden ancestor, one hidden state block per
+filter; the script reveals the selected one so the change is announced.
+{% endcomment %}
+{% if filters %}
+<nav class="fn-tabs" aria-label="Filtr wpisów" data-member-filter data-state-part="member-filter">
+    <ul>
+        {% for filter in filters %}
+        <li><a href="{{ filter.url }}" data-member-key="{{ filter.key }}"{% if filter.current %} aria-current="page"{% endif %}>{{ filter.label }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+<div class="fn-visually-hidden" role="status" aria-live="polite" data-live-region data-member-status>
+    {% for filter in filters %}
+    <p data-member-state="{{ filter.key }}" hidden>{{ filter.status }}</p>
+    {% endfor %}
+</div>
+{% endif %}

@@ -127,15 +127,16 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         self.assertEqual(self.rows(html, 10), [self.own_later.pk])
         self.assertNotContains(response, 'SENTINEL-OWN-PAST')
         # Every day without an own entry is an empty box.
-        self.assertEqual(html.count('>Brak wpisów</p>'), 12)
+        self.assertEqual(html.count('data-day-empty>Brak wpisów</p>'), 12)
         self.assertEqual(html.count('fn-calendar-day--empty'), 12)
-        self.assertIn('>Brak wpisów</p>', day_html(html, days(1).isoformat()))
+        self.assertIn('data-day-empty>Brak wpisów</p>', day_html(html, days(1).isoformat()))
         self.assertIn(f'<section class="fn-calendar-day" data-day-group="{days(2).isoformat()}"', html)
         self.assertIn(
             f'<section class="fn-calendar-day fn-calendar-day--empty" data-day-group="{days(1).isoformat()}"',
             html,
         )
-        self.assertNotIn('Brak wpisów', day_html(html, days(2).isoformat()))
+        self.assertNotIn('data-day-empty>Brak wpisów', day_html(html, days(2).isoformat()))
+        self.assertIn('data-day-empty hidden>Brak wpisów', day_html(html, days(2).isoformat()))
 
     def test_only_own_entries_without_assignee_subheadings(self):
         response = self.client.get(LIST_URL)
