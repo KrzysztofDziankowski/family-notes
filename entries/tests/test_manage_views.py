@@ -627,6 +627,14 @@ class DetailTests(ManageViewMixin, TestCase):
         self.assertContains(
             self.client.get(detail_url(older.pk)), self.back_link(self.days(-28)), html=True
         )
+        # An invalid start behaves like a missing one.
+        for start in ('not-a-date', '20261013', ''):
+            with self.subTest(start=start):
+                self.assertContains(
+                    self.client.get(detail_url(older.pk), {'start': start}),
+                    self.back_link(self.days(-28)),
+                    html=True,
+                )
         # A legacy view parameter is ignored.
         response = self.client.get(detail_url(older.pk), {'view': 'upcoming'})
         self.assertContains(response, self.back_link(self.days(-28)), html=True)
@@ -1307,6 +1315,27 @@ FILTER_LINK_PATTERN = re.compile(
 )
 VISIBLE_GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)">')
 HIDDEN_GROUP_PATTERN = re.compile(r'data-assignee-group="([\w-]+)" hidden>')
+
+
+class CalendarQueryCountTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
+    """The parent calendar's query count does not grow with rows or assignees (no N+1)."""
+
+    def count_queries(self, params):
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(self.client.get(INDEX_URL, params).status_code, 200)
+        return len(queries)
+
+    def test_parent_calendar_queries_do_not_grow_with_assignees(self):
+        self.entry('Jeden', date=self.today, assigned_member=self.child)
+        cases = [{}, {'member': str(self.child.pk)}]
+        baseline = [self.count_queries(params) for params in cases]
+        members = (self.other_child, self.parent, self.second_parent, self.inactive_child, None)
+        for offset, member in enumerate(members, start=1):
+            self.entry(f'Wpis {offset}', date=self.days(offset), assigned_member=member)
+            self.entry(f'Drugi {offset}', date=self.days(offset), assigned_member=member)
+        for params, expected in zip(cases, baseline):
+            with self.subTest(params=params):
+                self.assertEqual(self.count_queries(params), expected)
 
 
 class MemberFilterTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):

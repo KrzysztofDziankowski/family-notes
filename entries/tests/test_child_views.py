@@ -5,7 +5,9 @@ import re
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from entries.classification.types import EntryType, SchoolItemKind
@@ -414,11 +416,12 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
             with self.subTest(entry=entry.content):
                 self.assertContains(self.client.get(detail_url(entry.pk)), self.back_link(start))
 
-    def test_invalid_start_falls_back_to_today(self):
+    def test_invalid_start_falls_back_to_the_window_containing_the_entry(self):
+        # An invalid start behaves like a missing one (impl-review F5).
         for value in ('"><script>x</script>', '2026-9-1', '9999-12-31'):
             with self.subTest(value=value):
                 response = self.client.get(detail_url(self.own_past.pk), {'start': value})
-                self.assertContains(response, self.back_link(days(0)))
+                self.assertContains(response, self.back_link(days(-14)))
                 self.assertNotContains(response, '<script>x')
 
     def test_note_shows_writing_date_without_time(self):
@@ -549,3 +552,19 @@ class TwoParentChildIsolationTests(TwoParentFixtureMixin, ChildViewFixtureMixin,
                 response = self.client.get(detail_url(entry.pk))
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse('account_login'), response['Location'])
+
+
+class ChildCalendarQueryCountTests(ChildViewFixtureMixin, TestCase):
+    """The child calendar's query count does not grow with the child's rows (no N+1)."""
+
+    def count_queries(self):
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(self.client.get(LIST_URL).status_code, 200)
+        return len(queries)
+
+    def test_child_calendar_queries_do_not_grow_with_entries(self):
+        self.client.force_login(self.child.user)
+        baseline = self.count_queries()
+        for offset in range(1, 6):
+            self._entry(f'Dodatkowy {offset}', self.child, date=self.today + datetime.timedelta(days=offset))
+        self.assertEqual(self.count_queries(), baseline)

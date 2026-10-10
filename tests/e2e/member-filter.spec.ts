@@ -52,9 +52,11 @@ test.describe('member-filter', () => {
   test('selecting a child filters the calendar instantly and the filter survives navigation', async ({ page }) => {
     test.info().annotations.push({ type: 'test-data', description: `${kasiaTitle}; ${tymekTitle}; ${generalTitle}` });
 
-    await createEntry(page, kasiaTitle, warsawDateInDays(0), 'Kasia');
-    await createEntry(page, tymekTitle, warsawDateInDays(1), 'Tymek');
-    await createEntry(page, generalTitle, warsawDateInDays(1), 'Ogólne');
+    // A few days into the default window, so a run crossing Warsaw midnight still finds them
+    // (and cleans them up) in the window starting today.
+    await createEntry(page, kasiaTitle, warsawDateInDays(2), 'Kasia');
+    await createEntry(page, tymekTitle, warsawDateInDays(3), 'Tymek');
+    await createEntry(page, generalTitle, warsawDateInDays(3), 'Ogólne');
 
     await page.goto('/entries/');
     const filter = page.getByRole('navigation', { name: 'Filtr wpisów' });
@@ -86,13 +88,18 @@ test.describe('member-filter', () => {
 
     // "Następne" then "Wcześniejsze" keep the filter (real page loads, so the server renders it).
     const calendarNav = page.getByRole('navigation', { name: 'Nawigacja kalendarza' });
-    await calendarNav.getByRole('link', { name: 'Następne', exact: true }).click();
-    await page.waitForURL((url) => url.searchParams.get('start') === warsawDateInDays(14));
+    // The expected windows come from the links themselves, not the runner's clock.
+    const nextLink = calendarNav.getByRole('link', { name: 'Następne', exact: true });
+    const nextStart = new URL((await nextLink.getAttribute('href'))!, page.url()).searchParams.get('start');
+    await nextLink.click();
+    await page.waitForURL((url) => url.searchParams.get('start') === nextStart);
     expect(new URL(page.url()).searchParams.get('member')).toBe(member);
     await expect(filter.getByRole('link', { name: 'Kasia', exact: true })).toHaveAttribute('aria-current', 'page');
 
-    await calendarNav.getByRole('link', { name: 'Wcześniejsze', exact: true }).click();
-    await page.waitForURL((url) => url.searchParams.get('start') === warsawDateInDays(0));
+    const earlierLink = calendarNav.getByRole('link', { name: 'Wcześniejsze', exact: true });
+    const earlierStart = new URL((await earlierLink.getAttribute('href'))!, page.url()).searchParams.get('start');
+    await earlierLink.click();
+    await page.waitForURL((url) => url.searchParams.get('start') === earlierStart);
     expect(new URL(page.url()).searchParams.get('member')).toBe(member);
     await expect(filter.getByRole('link', { name: 'Kasia', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(kasiaEntry).toBeVisible();

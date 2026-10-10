@@ -1070,10 +1070,19 @@ def _calendar_rows(entries, start, end):
 
 
 def _detail_list_start(request, entry, today):
-    """Window "Wróć do listy" returns to: a valid ``?start``, else the one containing the entry."""
+    """Window "Wróć do listy" returns to: a valid ``?start``, else the one containing the entry.
+
+    A missing and an invalid ``?start`` behave alike: neither may strand the back link in
+    today's window when the entry lives in another fortnight."""
     requested_start = request.GET.get('start')
-    if not requested_start and entry.effective_date:
+    if requested_start:
+        list_start, _ = _calendar_window(requested_start, today)
+        if list_start.isoformat() == requested_start:
+            return list_start
+    if entry.effective_date:
         requested_start = _window_containing(entry.effective_date, today).isoformat()
+    else:
+        requested_start = None
     list_start, _ = _calendar_window(requested_start, today)
     return list_start
 
