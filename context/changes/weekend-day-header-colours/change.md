@@ -1,7 +1,7 @@
 ---
 change_id: weekend-day-header-colours
 title: Colour weekend day headers differently
-status: planned
+status: implementing
 created: 2026-10-10
 updated: 2026-10-10
 archived_at: null

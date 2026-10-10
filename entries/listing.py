@@ -176,6 +176,11 @@ def parent_day_heading(day, today):
         )
 
 
+def is_weekend(day):
+    """True for Saturday and Sunday; their day headings get the weekend colour."""
+    return day.weekday() >= 5
+
+
 def group_by_day(entries, today):
     """Split ordered ``entries`` into consecutive ``(heading, entries)`` groups by
     ``effective_date``, keeping the input order. Every entry must carry an

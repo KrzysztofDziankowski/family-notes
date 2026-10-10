@@ -302,6 +302,25 @@ class CalendarPresentationTests(ManageViewMixin, TestCase):
             [f'member-{self.child.pk}', 'family'],
         )
 
+    def test_only_saturday_and_sunday_boxes_carry_the_weekend_marker(self):
+        saturday = next(self.days(offset) for offset in range(14) if self.days(offset).weekday() == 5)
+        self.entry('Sobota', date=saturday)
+
+        for view, offsets in (('upcoming', range(14)), ('past', range(-14, 0))):
+            with self.subTest(view=view):
+                html = self.client.get(INDEX_URL, {'view': view}).content.decode()
+
+                weekend = [
+                    self.days(offset).isoformat()
+                    for offset in offsets
+                    if self.days(offset).weekday() >= 5
+                ]
+                self.assertEqual(len(weekend), 4)
+                self.assertEqual(
+                    re.findall(r'data-day-group="([\w-]+)" data-weekend>', html), weekend
+                )
+                self.assertEqual(html.count('data-weekend'), 4)
+
     def test_assignee_lists_are_labelled_with_day_and_assignee(self):
         self.entry('Pierwszy', date=self.days(1), assigned_member=self.child)
 

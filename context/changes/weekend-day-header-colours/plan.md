@@ -217,9 +217,9 @@ None.
 
 #### Automated
 
-- [ ] 1.1 New and existing entries tests pass: `uv run python manage.py test entries`
-- [ ] 1.2 Django checks pass: `uv run python manage.py check`
-- [ ] 1.3 No migrations needed: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 New and existing entries tests pass: `uv run python manage.py test entries`
+- [x] 1.2 Django checks pass: `uv run python manage.py check`
+- [x] 1.3 No migrations needed: `uv run python manage.py makemigrations --check --dry-run`
 
 #### Manual
 

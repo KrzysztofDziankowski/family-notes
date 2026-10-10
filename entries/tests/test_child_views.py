@@ -254,6 +254,22 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
                 self.assertEqual(ids, [f'day-{key}' for key in keys])
                 self.assertEqual(re.findall(r'<ul [^>]*aria-labelledby="([^"]+)"', body), ids)
 
+    def test_only_weekend_headings_carry_the_weekend_marker(self):
+        self._entry('SENTINEL-SATURDAY', self.child, date=FIXED_TODAY + datetime.timedelta(days=5))
+        self.client.force_login(self.child.user)
+
+        for view, weekend_ids in (
+            ('upcoming', ['day-2026-10-03']),
+            ('past', ['day-2026-09-27']),
+        ):
+            with self.subTest(view=view):
+                body = self.client.get(LIST_URL, {'view': view}).content.decode()
+                self.assertEqual(
+                    re.findall(r'<h2 class="fn-day-heading" id="([^"]+)" data-weekend>', body),
+                    weekend_ids,
+                )
+                self.assertEqual(body.count('data-weekend'), len(weekend_ids))
+
     def test_past_reads_newest_day_first(self):
         self.client.force_login(self.child.user)
 

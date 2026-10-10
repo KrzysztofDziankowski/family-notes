@@ -1,10 +1,11 @@
 {% comment %}
 Parent family entry calendar body. Parameters: mode, modes, days, previous_url, next_url,
 detail_query.
-days: exactly fourteen chronological {key, heading, groups}, one per calendar date (key is the
-ISO date), including dates without entries; each day's groups are {key, heading, entries}, one
-per assignee (children, parents, then "Cała rodzina"), never empty. An empty day shows
-"Brak wpisów". Rows hide the date and assignee: the day and assignee headings carry them, and
+days: exactly fourteen chronological {key, heading, is_weekend, groups}, one per calendar date
+(key is the ISO date), including dates without entries; is_weekend adds data-weekend to Saturday and
+Sunday boxes (the weekend heading colour); each day's groups are
+{key, heading, entries}, one per assignee (children, parents, then "Cała rodzina"), never
+empty. An empty day shows "Brak wpisów". Rows hide the date and assignee: the day and assignee headings carry them, and
 each list's aria-label ("Jutro, czwartek 8 października, Kasia") repeats both for assistive technology.
 previous_url / next_url move the window by two weeks; the one crossing today is None.
 {% endcomment %}
@@ -17,7 +18,7 @@ previous_url / next_url move the window by two weeks; the one crossing today is 
 </nav>
 <div class="fn-calendar" data-state-part="calendar-{{ mode }}">
     {% for day in days %}
-    <section class="fn-calendar-day{% if not day.groups %} fn-calendar-day--empty{% endif %}" data-day-group="{{ day.key }}">
+    <section class="fn-calendar-day{% if not day.groups %} fn-calendar-day--empty{% endif %}" data-day-group="{{ day.key }}"{% if day.is_weekend %} data-weekend{% endif %}>
         <h2 class="fn-day-heading">{{ day.heading }}</h2>
         {% for group in day.groups %}
         <section data-assignee-group="{{ group.key }}">

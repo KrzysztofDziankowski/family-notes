@@ -20,6 +20,7 @@ from entries.listing import (
     UPCOMING,
     day_heading,
     group_by_day,
+    is_weekend,
     normalize_list_mode,
     partition_entries,
     parent_day_heading,
@@ -321,6 +322,18 @@ class ParentDayHeadingTests(TestCase):
     def test_uses_polish_locale_regardless_of_active_language(self):
         with translation.override('en'):
             self.assertEqual(parent_day_heading(TOMORROW, TODAY), 'Jutro, wtorek 29 września')
+
+
+class IsWeekendTests(TestCase):
+    def test_only_saturday_and_sunday_are_weekend_days(self):
+        for day, expected in (
+            (datetime.date(2026, 10, 9), False),  # Friday
+            (datetime.date(2026, 10, 10), True),  # Saturday
+            (datetime.date(2026, 10, 11), True),  # Sunday
+            (datetime.date(2026, 10, 12), False),  # Monday
+        ):
+            with self.subTest(day=day):
+                self.assertIs(is_weekend(day), expected)
 
 
 class GroupByDayTests(FamilyFixtureMixin, TestCase):

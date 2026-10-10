@@ -70,6 +70,7 @@ from .listing import (
     UPCOMING,
     EntrySection,
     group_by_day,
+    is_weekend,
     normalize_list_mode,
     parent_day_heading,
     partition_entries,
@@ -993,6 +994,7 @@ def _index_days(entries, start, today):
             {
                 'key': day.isoformat(),
                 'heading': parent_day_heading(day, today),
+                'is_weekend': is_weekend(day),
                 'groups': [
                     {
                         'key': group.key,
@@ -1341,10 +1343,22 @@ def _child_list_context(mode, sections, today):
         if not entries:
             continue
         if section.key == SECTION_UNDATED:
-            groups = [{'key': SECTION_UNDATED, 'heading': UNDATED_DAY_HEADING, 'entries': entries}]
+            groups = [
+                {
+                    'key': SECTION_UNDATED,
+                    'heading': UNDATED_DAY_HEADING,
+                    'is_weekend': False,
+                    'entries': entries,
+                }
+            ]
         else:
             groups = [
-                {'key': rows[0].effective_date.isoformat(), 'heading': heading, 'entries': rows}
+                {
+                    'key': rows[0].effective_date.isoformat(),
+                    'heading': heading,
+                    'is_weekend': is_weekend(rows[0].effective_date),
+                    'entries': rows,
+                }
                 for heading, rows in group_by_day(entries, today)
             ]
         child_sections.append({'key': section.key, 'groups': groups})
