@@ -2,7 +2,9 @@
 Child entry detail body (S-03), shared by child_detail.html and the child_states gallery.
 Parameters: entry (with the effective_date annotation when loaded from the database),
 list_query (query string without "?" of the calendar window "Wróć do listy" returns to,
-e.g. "start=2026-10-05").
+e.g. "start=2026-10-05&privacy=private"), and for the creator-only privacy control
+can_change_privacy, list_start and list_privacy (see _privacy_control.html). The privacy control
+is the child's only action on a saved entry.
 {% endcomment %}
 <article class="fn-panel" data-entry-detail="{{ entry.pk }}">
     <dl class="fn-details">
@@ -27,5 +29,8 @@ e.g. "start=2026-10-05").
         <dt>Źródło</dt>
         <dd>{{ entry.get_source_display }}</dd>
     </dl>
+    {% if can_change_privacy %}
+        {% include "entries/_privacy_control.html" with entry=entry action_url_name="entries:child_privacy" list_start=list_start list_privacy=list_privacy %}
+    {% endif %}
 </article>
 <p><a href="{% url 'entries:child_list' %}?{{ list_query }}" data-back-link>Wróć do listy</a></p>

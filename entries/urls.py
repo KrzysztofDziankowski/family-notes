@@ -21,10 +21,13 @@ urlpatterns = [
     path('mine/confirm/', views.child_confirm, name='child_confirm'),
     path('mine/confirm-batch/', views.child_confirm_batch, name='child_confirm_batch'),
     path('mine/<int:pk>/', views.child_detail, name='child_detail'),
+    # Creator-only privacy change: the child's only post-creation action
+    path('mine/<int:pk>/privacy/', views.child_privacy, name='child_privacy'),
     # S-02 parent management
     path('', views.index, name='index'),
     path('create/', views.create, name='create'),
     path('<int:pk>/', views.detail, name='detail'),
     path('<int:pk>/edit/', views.edit, name='edit'),
     path('<int:pk>/delete/', views.delete, name='delete'),
+    path('<int:pk>/privacy/', views.privacy, name='privacy'),
 ]

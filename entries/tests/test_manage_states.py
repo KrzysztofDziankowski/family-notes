@@ -15,10 +15,14 @@ STATES_URL = reverse('entries:states')
 MANAGE_STATES = (
     'list_today',
     'list_filtered',
+    'list_private',
+    'list_not_private',
     'list_earlier',
     'list_empty',
     'detail_manual',
     'detail_eduvulcan',
+    'detail_private',
+    'detail_own_public',
     'create',
     'invalid',
     'edit',
@@ -70,11 +74,29 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
                               'data-assignee-group="member-900103" hidden>',
                               '/entries/900002/?start=2026-10-05&amp;member=900101" data-member-link>',
                               '/entries/?start=2026-10-19&amp;member=900101" data-member-link>'],
+            'list_private': ['data-privacy-key="private" data-member-link aria-current="page">Prywatne',
+                             'data-entry-private>Prywatny</span>',
+                             '/entries/900010/?start=2026-10-05&amp;privacy=private"',
+                             '/entries/?start=2026-10-19&amp;privacy=private" data-member-link>'],
+            'list_not_private': [
+                'data-privacy-key="public" data-member-link aria-current="page">Nieprywatne',
+                'data-member-key="member-900101" aria-current="page">Kasia</a>',
+                '/entries/?start=2026-10-05&amp;member=900101&amp;privacy=private"',
+                '/entries/?start=2026-10-05&amp;privacy=public" data-member-key="all"',
+            ],
             'list_earlier': ['data-day-group="2026-09-21"', 'data-state-part="calendar-nav"'],
             'list_empty': ['>Brak wpisów</p>', 'data-state-part="calendar"'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
                               '<dt>Przedmiot</dt>', 'historia'],
             'detail_eduvulcan': ['EduVulcan', 'kartkówka', '<dt>Przedmiot</dt>', 'matematyka'],
+            'detail_private': ['data-state-part="privacy"',
+                               'Wpis jest prywatny — widoczny tylko dla Ciebie.',
+                               'action="/entries/900010/privacy/"',
+                               'name="is_private" value="false"',
+                               'name="privacy" value="private"', 'Oznacz jako nieprywatny',
+                               'href="/entries/?start=2026-10-05&amp;privacy=private">Wróć do listy'],
+            'detail_own_public': ['data-state-part="privacy"', 'Wpis nie jest prywatny.',
+                                  'name="is_private" value="true"', 'Oznacz jako prywatny'],
             'create': ['data-state-part="create-form"', 'name="submission_key"', 'Kasia'],
             'invalid': ['aria-invalid="true"', 'Popraw zaznaczone pola.',
                         'Ten element szkolny wymaga rodzaju'],
@@ -88,8 +110,12 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
                 with self.subTest(state=name, marker=marker):
                     self.assertIn(marker, section)
         self.assertNotIn('data-state-part="delete" open', state_html(html, 'detail_manual'))
+        for name in ('detail_manual', 'detail_eduvulcan', 'delete_open'):
+            with self.subTest(state=name, creator=False):
+                self.assertNotIn('data-state-part="privacy"', state_html(html, name))
         self.assertNotIn('name="submission_key"', state_html(html, 'edit'))
-        self.assertNotIn('aria-current', state_html(html, 'list_earlier'))
+        earlier_nav = state_html(html, 'list_earlier').split('data-state-part="calendar-nav"', 1)[1]
+        self.assertNotIn('aria-current', earlier_nav)
         for name in ('list_today', 'list_earlier', 'list_empty'):
             with self.subTest(state=name, unfiltered=True):
                 self.assertNotRegex(state_html(html, name), r'data-assignee-group="[\w-]+" hidden')
@@ -100,7 +126,7 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         self.assertIn('data-day-empty>Brak wpisów</p>', trip_day)
         self.assertIn('fn-calendar-day--empty" data-day-group="2026-10-07"', filtered)
         self.assertIn('data-entry-row="900003"', trip_day)
-        for removed in ('fn-tabs', 'Rodzaj listy', '2 tygodnie', 'name="view"', 'view='):
+        for removed in ('Filtr wpisów', 'Rodzaj listy', '2 tygodnie', 'name="view"', 'view='):
             for name in ('list_today', 'list_earlier', 'list_empty', 'delete_open'):
                 with self.subTest(state=name, removed=removed):
                     self.assertNotIn(removed, state_html(html, name))

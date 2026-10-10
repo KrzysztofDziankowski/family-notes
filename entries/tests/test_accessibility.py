@@ -543,3 +543,87 @@ class ChildCaptureAuditTests(FamilyFixtureMixin, TestCase):
         response = self.client.get(reverse('entries:child_list'))
         self.assertContains(response, f'href="{CHILD_CAPTURE_URL}"')
         assert_accessible(self, response)
+
+
+class PrivacyAuditTests(FamilyFixtureMixin, TestCase):
+    """Privacy selection, creator-only privacy changes and both calendars' privacy filters."""
+
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+        self.parent_private = self.entry('Prezent dla Michała', self.parent, is_private=True)
+        self.parent_public = self.entry('Zebranie', self.parent)
+        self.child_private = self.entry('Mój sekret', self.child, is_private=True)
+        self.child_public = self.entry('Trening', self.child)
+
+    def entry(self, content, creator, **fields):
+        return Entry.objects.create(
+            family=self.family, entry_type=EntryType.TODO.value, content=content,
+            date=self.today, assigned_member=self.child, created_by=creator, **fields,
+        )
+
+    def test_parent_review_offers_the_privacy_choice(self):
+        self.client.force_login(self.parent.user)
+        batch = ParentBatchClassification(
+            items=(ParentClassification(result=proposal(), member=self.child),)
+        )
+        with mock.patch('entries.views.classify_entries_for_parent', return_value=batch):
+            response = self.client.post(CAPTURE_URL, {'text': 'Michał ma sprawdzian'})
+        self.assertContains(response, 'for="id_is_private"')
+        assert_accessible(self, response)
+
+    def test_parent_calendar_privacy_filter_states(self):
+        self.client.force_login(self.parent.user)
+        for params in ({}, {'privacy': 'private'}, {'privacy': 'public'},
+                       {'privacy': 'private', 'member': str(self.child.pk)}, {'privacy': 'x'}):
+            with self.subTest(params=params):
+                response = self.client.get(reverse('entries:index'), params)
+                self.assertContains(response, 'aria-label="Filtr prywatności"')
+                # One current link each: child filter, privacy filter and "Dzisiaj".
+                self.assertContains(response, 'aria-current="page">', count=3)
+                assert_accessible(self, response)
+
+    def test_child_calendar_privacy_filter_states(self):
+        self.client.force_login(self.child.user)
+        for params in ({}, {'privacy': 'private'}, {'privacy': 'public'}, {'privacy': 'x'}):
+            with self.subTest(params=params):
+                response = self.client.get(reverse('entries:child_list'), params)
+                self.assertContains(response, 'aria-label="Filtr prywatności"')
+                assert_accessible(self, response)
+
+    def test_creator_privacy_control_on_parent_detail(self):
+        self.client.force_login(self.parent.user)
+        for entry in (self.parent_private, self.parent_public):
+            with self.subTest(entry=entry.content):
+                url = reverse('entries:detail', args=[entry.pk])
+                response = self.client.get(url, {'privacy': 'private'})
+                self.assertContains(response, 'data-state-part="privacy"')
+                assert_accessible(self, response)
+                changed = self.client.post(
+                    reverse('entries:privacy', args=[entry.pk]),
+                    {'is_private': 'false' if entry.is_private else 'true'},
+                    follow=True,
+                )
+                self.assertContains(changed, 'role="status"')
+                assert_accessible(self, changed)
+
+    def test_creator_privacy_control_on_child_detail(self):
+        self.client.force_login(self.child.user)
+        for entry in (self.child_private, self.child_public):
+            with self.subTest(entry=entry.content):
+                response = self.client.get(reverse('entries:child_detail', args=[entry.pk]))
+                self.assertContains(response, 'data-state-part="privacy"')
+                assert_accessible(self, response)
+                changed = self.client.post(
+                    reverse('entries:child_privacy', args=[entry.pk]),
+                    {'is_private': 'false' if entry.is_private else 'true'},
+                    follow=True,
+                )
+                self.assertContains(changed, 'role="status"')
+                assert_accessible(self, changed)
+
+    def test_non_creator_detail_has_no_privacy_control(self):
+        self.client.force_login(self.child.user)
+        response = self.client.get(reverse('entries:child_detail', args=[self.parent_public.pk]))
+        self.assertNotContains(response, 'data-state-part="privacy"')
+        assert_accessible(self, response)

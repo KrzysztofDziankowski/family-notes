@@ -273,8 +273,8 @@ class EntryReviewForm(EntryFieldsForm):
 
     ``correction`` is the „Popraw opis” box. Saving refuses a non-blank
     correction, so a typed but unapplied correction is never dropped silently.
-    A child's form (``self_assignee``) also offers ``is_private``, unchecked
-    (public) by default; a parent's form has no privacy field yet.
+    Every form (parent or child, single or batch) offers ``is_private``,
+    unchecked (public) by default; the person confirming becomes the creator.
     """
 
     submission_key = forms.UUIDField(widget=forms.HiddenInput)
@@ -286,8 +286,6 @@ class EntryReviewForm(EntryFieldsForm):
 
     def __init__(self, membership, *args, missing=None, today=None, **kwargs):
         super().__init__(membership, *args, today=today, **kwargs)
-        if self.self_assignee is None:
-            del self.fields['is_private']
         # Stable markup for Enter-to-„Popraw” (S-05): the box names its button.
         self.fields['correction'].widget.attrs['data-enter-submitter'] = self.correct_submit_id
         self.missing = dict(missing or {})
@@ -316,7 +314,7 @@ class EntryReviewForm(EntryFieldsForm):
         """Visible fields paired with the hint shown for a missing value.
 
         A child's form has no assignee row (``self_assignee`` is shown as
-        text instead) and ends with the privacy choice.
+        text instead). Every form ends with the privacy choice.
         """
         return [
             {'field': self[name], 'hint': self.missing.get(name, '')}
@@ -372,6 +370,23 @@ def proposal_values_from_form(form):
         member_name=member.display_name if member else None,
     )
     return values, member
+
+
+PRIVACY_VALUES = (('true', 'Prywatny'), ('false', 'Nieprywatny'))
+
+
+class EntryPrivacyForm(forms.Form):
+    """The creator's privacy switch for a saved entry: only ``is_private`` is posted.
+
+    The value must be posted explicitly (``true`` or ``false``); a missing or
+    unknown value is invalid, so a stray POST never makes an entry public.
+    """
+
+    is_private = forms.TypedChoiceField(
+        choices=PRIVACY_VALUES,
+        coerce=lambda value: value == 'true',
+        widget=forms.HiddenInput,
+    )
 
 
 class ManagedEntryForm(EntryFieldsForm):

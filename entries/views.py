@@ -50,6 +50,7 @@ from .forms import (
     CaptureForm,
     EntryCreateForm,
     EntryEditForm,
+    EntryPrivacyForm,
     EntryReviewForm,
     FollowUpAnswerForm,
     ProposalCorrectionForm,
@@ -83,6 +84,7 @@ from .services import (
     save_child_entry,
     save_confirmed_entries,
     save_confirmed_entry,
+    set_entry_privacy,
     update_family_entry,
     visible_family_entries,
 )
@@ -735,6 +737,17 @@ def states(request):
         time=datetime.time(8, 0),
         assigned_member=FamilyMember(display_name='Kasia'),
     )
+    private_review = synthetic_review(
+        replace(proposal, content='Prezent urodzinowy dla Kasi'), member_value='s1'
+    )
+    private_review.initial['is_private'] = True
+    saved_private_entry = Entry(
+        entry_type=EntryType.TODO.value,
+        content='Prezent urodzinowy dla Kasi',
+        date=STATES_DATE,
+        assigned_member=FamilyMember(display_name='Kasia'),
+        is_private=True,
+    )
 
     def synthetic_question(draft, text):
         return follow_up_form_from_classification(
@@ -859,6 +872,11 @@ def states(request):
             'review_form': synthetic_review(proposal, member_value='s1'),
         },
         {
+            'name': 'proposal_private',
+            'label': 'Propozycja oznaczona jako prywatna',
+            'review_form': private_review,
+        },
+        {
             'name': 'past_date',
             'label': 'Propozycja z datą w przeszłości',
             'review_form': synthetic_review(past_proposal, member_value='s2'),
@@ -961,6 +979,12 @@ def states(request):
             'capture_form': CaptureForm(),
         },
         {
+            'name': 'saved_private',
+            'label': 'Zapisano wpis prywatny',
+            'saved_entries': [saved_private_entry],
+            'capture_form': CaptureForm(),
+        },
+        {
             'name': 'batch',
             'label': 'Kilka wpisów do sprawdzenia',
             'batch_form': synthetic_batch(*(batch_meeting(date) for date in meeting_dates)),
@@ -1033,10 +1057,12 @@ CALENDAR_WINDOW_DAYS = 14
 ENTRY_CREATED_MESSAGE = 'Dodano wpis.'
 ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
 ENTRY_DELETED_MESSAGE = 'Usunięto wpis.'
+ENTRY_PRIVATE_MESSAGE = 'Wpis jest teraz prywatny — widoczny tylko dla Ciebie.'
+ENTRY_PUBLIC_MESSAGE = 'Wpis nie jest już prywatny.'
 
 
-def _index_url(start, member=None):
-    return f"{reverse('entries:index')}?{_with_member(_calendar_query(start), member)}"
+def _index_url(start, member=None, privacy=None):
+    return f"{reverse('entries:index')}?{_list_query(start, member, privacy)}"
 
 
 def _calendar_window(value, today):
@@ -1074,14 +1100,22 @@ ALL_MEMBERS_LABEL = 'Wszyscy'
 ALL_MEMBERS_STATUS = 'Pokazano: wszystkie wpisy'
 
 
-def _member_query(member):
-    """``member=<pk>`` for a selected child, empty for "Wszyscy"."""
-    return f'member={member.pk}' if member else ''
+def _filter_query(member=None, privacy=None):
+    """``member=<pk>`` for a selected child and ``privacy=<value>`` for a privacy filter,
+    joined by ``&``; empty for "Wszyscy" / "Wszystkie"."""
+    parts = []
+    if member:
+        parts.append(f'member={member.pk}')
+    if privacy:
+        parts.append(f'privacy={privacy}')
+    return '&'.join(parts)
 
 
-def _with_member(query, member):
-    member_query = _member_query(member)
-    return f'{query}&{member_query}' if member_query else query
+def _list_query(start, member=None, privacy=None):
+    """The calendar state as a query string: ``start=<iso>`` plus the active filters."""
+    filter_query = _filter_query(member, privacy)
+    query = _calendar_query(start)
+    return f'{query}&{filter_query}' if filter_query else query
 
 
 def _member_key(member):
@@ -1099,15 +1133,17 @@ def _member_filter(membership, value):
     return children, selected
 
 
-def _member_filters(children, selected, start):
-    """Filter links of the parent calendar: "Wszyscy", then one per child (empty without children)."""
+def _member_filters(children, selected, start, privacy=None):
+    """Filter links of the parent calendar: "Wszyscy", then one per child (empty without children).
+
+    Every link keeps the window and the privacy filter."""
     if not children:
         return []
     filters = [{
         'key': ALL_MEMBERS_KEY,
         'label': ALL_MEMBERS_LABEL,
         'status': ALL_MEMBERS_STATUS,
-        'url': _index_url(start),
+        'url': _index_url(start, privacy=privacy),
         'current': selected is None,
     }]
     for child in children:
@@ -1115,10 +1151,54 @@ def _member_filters(children, selected, start):
             'key': _member_key(child),
             'label': child.display_name,
             'status': f'Pokazano: {child.display_name} i {FAMILY_GROUP_HEADING}',
-            'url': _index_url(start, child),
+            'url': _index_url(start, child, privacy),
             'current': selected is not None and selected.pk == child.pk,
         })
     return filters
+
+
+# --- Privacy filter (parent and child calendars) ---
+
+PRIVACY_PRIVATE = 'private'
+PRIVACY_PUBLIC = 'public'
+ALL_PRIVACY_KEY = 'all'
+# (query value, label); ``None`` is "Wszystkie", the default.
+PRIVACY_FILTERS = (
+    (None, 'Wszystkie'),
+    (PRIVACY_PRIVATE, 'Prywatne'),
+    (PRIVACY_PUBLIC, 'Nieprywatne'),
+)
+
+
+def _privacy_filter(value):
+    """The privacy filter ``value`` names: ``"private"``, ``"public"`` or ``None`` (all).
+
+    Any other value (missing, junk, another case) means "Wszystkie" and is never echoed."""
+    return value if value in (PRIVACY_PRIVATE, PRIVACY_PUBLIC) else None
+
+
+def _filter_privacy(entries, privacy):
+    """Narrow ``entries`` (already visibility-scoped) by the privacy filter, in the query."""
+    if privacy == PRIVACY_PRIVATE:
+        return entries.filter(is_private=True)
+    if privacy == PRIVACY_PUBLIC:
+        return entries.filter(is_private=False)
+    return entries
+
+
+def _privacy_filters(url_name, start, member, selected):
+    """Links "Wszystkie", "Prywatne" and "Nieprywatne" of a calendar; each keeps the window
+    and the selected child."""
+    base = reverse(url_name)
+    return [
+        {
+            'key': value or ALL_PRIVACY_KEY,
+            'label': label,
+            'url': f'{base}?{_list_query(start, member, value)}',
+            'current': value == selected,
+        }
+        for value, label in PRIVACY_FILTERS
+    ]
 
 
 def _calendar_navigation(url_name, start, today, query_extra=''):
@@ -1198,18 +1278,19 @@ def _index_days(entries, start, today, member_key=None):
 
 
 def _index_context(entries, today, start=None, url_name='entries:index', member=None,
-                   children=()):
+                   children=(), privacy=None):
     """Calendar context for the window starting at ``start`` (today by default);
     ``url_name`` is the calendar the navigation links point to. ``member`` (a validated child)
-    and ``children`` (the filter's choices) are the parent calendar's filter."""
+    and ``children`` (the filter's choices) are the parent calendar's filter; ``privacy`` (a
+    validated ``_privacy_filter`` value, already applied to ``entries``) is either calendar's
+    privacy filter. Both filters are carried by every navigation, filter and entry link."""
     start = start or today
-    member_query = _member_query(member)
     return {
         'days': _index_days(entries, start, today, _member_key(member)),
-        'detail_query': _with_member(_calendar_query(start), member),
-        'filters': _member_filters(children, member, start),
-        'member_query': member_query,
-        **_calendar_navigation(url_name, start, today, member_query),
+        'detail_query': _list_query(start, member, privacy),
+        'filters': _member_filters(children, member, start, privacy),
+        'privacy_filters': _privacy_filters(url_name, start, member, privacy),
+        **_calendar_navigation(url_name, start, today, _filter_query(member, privacy)),
     }
 
 
@@ -1240,14 +1321,55 @@ def _detail_list_start(request, entry, today):
     return list_start
 
 
-def _detail_context(entry, list_start, delete_open=False, member=None):
+def _detail_context(entry, list_start, delete_open=False, member=None, privacy=None,
+                    can_change_privacy=False):
+    """Parent detail context; ``can_change_privacy`` (the viewer created the entry) shows the
+    privacy control."""
     return {
         'entry': entry,
         'list_start': list_start,
-        'list_query': _with_member(_calendar_query(list_start), member),
+        'list_query': _list_query(list_start, member, privacy),
         'list_member': member,
+        'list_privacy': privacy,
         'delete_open': delete_open,
+        'can_change_privacy': can_change_privacy,
     }
+
+
+def _is_creator(membership, entry):
+    return entry.created_by_id is not None and entry.created_by_id == membership.pk
+
+
+def _posted_start(data, today):
+    """The posted ``start`` when it is a valid canonical window start, else ``None``."""
+    value = data.get('start')
+    if not value:
+        return None
+    start, _ = _calendar_window(value, today)
+    return start if start.isoformat() == value else None
+
+
+def _change_privacy(request, membership, pk):
+    """Apply the creator's posted privacy choice to entry ``pk``; non-creators get a 404.
+
+    Only ``is_private`` changes (``set_entry_privacy``). An invalid posted value changes
+    nothing."""
+    form = EntryPrivacyForm(request.POST)
+    if not form.is_valid():
+        return
+    is_private = form.cleaned_data['is_private']
+    try:
+        set_entry_privacy(membership, pk, is_private=is_private)
+    except Entry.DoesNotExist:
+        raise Http404 from None
+    messages.success(request, ENTRY_PRIVATE_MESSAGE if is_private else ENTRY_PUBLIC_MESSAGE)
+
+
+def _detail_redirect(url_name, pk, start, member=None, privacy=None):
+    """Back to the detail page, keeping the validated calendar state it was opened from."""
+    url = reverse(url_name, args=[pk])
+    query = _list_query(start, member, privacy) if start else _filter_query(member, privacy)
+    return redirect(f'{url}?{query}' if query else url)
 
 
 def _form_context(form, *, entry=None):
@@ -1262,16 +1384,17 @@ def index(request):
     today = timezone.localdate()
     start, end = _calendar_window(request.GET.get('start'), today)
     children, member = _member_filter(membership, request.GET.get('member'))
-    # Every row of the window is rendered; the filter only hides groups (instant switching).
-    rows = _calendar_rows(
-        parent_family_entries(membership).exclude(school_item=SchoolItemKind.LUCKY_NUMBER.value),
-        start,
-        end,
+    privacy = _privacy_filter(request.GET.get('privacy'))
+    # Every row of the window is rendered; the child filter only hides groups (instant
+    # switching). The privacy filter narrows the query itself, before date grouping.
+    entries = parent_family_entries(membership).exclude(
+        school_item=SchoolItemKind.LUCKY_NUMBER.value
     )
+    rows = _calendar_rows(_filter_privacy(entries, privacy), start, end)
     return render(
         request,
         'entries/manage_index.html',
-        _index_context(rows, today, start, member=member, children=children),
+        _index_context(rows, today, start, member=member, children=children, privacy=privacy),
     )
 
 
@@ -1282,8 +1405,27 @@ def detail(request, pk):
     entry = _managed_entry_or_404(membership, pk)
     list_start = _detail_list_start(request, entry, timezone.localdate())
     _, member = _member_filter(membership, request.GET.get('member'))
+    privacy = _privacy_filter(request.GET.get('privacy'))
     return render(
-        request, 'entries/manage_detail.html', _detail_context(entry, list_start, member=member)
+        request,
+        'entries/manage_detail.html',
+        _detail_context(
+            entry, list_start, member=member, privacy=privacy,
+            can_change_privacy=_is_creator(membership, entry),
+        ),
+    )
+
+
+@require_POST
+@login_required
+def privacy(request, pk):
+    """The creator's privacy change for an entry the parent created; only ``is_private``."""
+    membership = _require_parent(request)
+    _change_privacy(request, membership, pk)
+    _, member = _member_filter(membership, request.POST.get('member'))
+    return _detail_redirect(
+        'entries:detail', pk, _posted_start(request.POST, timezone.localdate()),
+        member, _privacy_filter(request.POST.get('privacy')),
     )
 
 
@@ -1371,7 +1513,7 @@ def delete(request, pk):
     messages.success(request, ENTRY_DELETED_MESSAGE)
     start, _ = _calendar_window(request.POST.get('start'), timezone.localdate())
     _, member = _member_filter(membership, request.POST.get('member'))
-    return redirect(_index_url(start, member))
+    return redirect(_index_url(start, member, _privacy_filter(request.POST.get('privacy'))))
 
 
 # Fictional management kitchen-sink data (DEBUG gallery): unsaved rows only.
@@ -1406,8 +1548,10 @@ def _states_member(display_name):
     raise ValueError(f'Unknown gallery member: {display_name}')
 
 
-def _synthetic_list(entries, start=STATES_DATE, member=None, children=()):
-    return _index_context(entries, STATES_DATE, start, member=member, children=children)
+def _synthetic_list(entries, start=STATES_DATE, member=None, children=(), privacy=None):
+    return _index_context(
+        entries, STATES_DATE, start, member=member, children=children, privacy=privacy
+    )
 
 
 def _manage_state_sections(membership):
@@ -1455,6 +1599,18 @@ def _manage_state_sections(membership):
         content='Zebranie z wychowawczynią',
         date=STATES_DATE,
         time=datetime.time(17, 30),
+    )
+    gift = _synthetic_entry(
+        9,
+        content='Kupić prezent urodzinowy dla Kasi',
+        date=STATES_DATE + datetime.timedelta(days=1),
+        is_private=True,
+    )
+    own_public = _synthetic_entry(
+        10,
+        entry_type=EntryType.NOTE.value,
+        content='Zapisać Tymka na basen',
+        member='Tymek',
     )
     earlier_start = STATES_DATE - datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
     past_entry = _synthetic_entry(
@@ -1515,6 +1671,21 @@ def _manage_state_sections(membership):
             ),
         },
         {
+            'name': 'list_private',
+            'label': 'Lista: filtr „Prywatne”',
+            'list': _synthetic_list([gift], privacy=PRIVACY_PRIVATE),
+        },
+        {
+            'name': 'list_not_private',
+            'label': 'Lista: filtr „Nieprywatne” i „Kasia”',
+            'list': _synthetic_list(
+                [test_entry, parent_note, family_meeting, long_note, trip, library_task],
+                member=_states_member('Kasia'),
+                children=[_states_member('Kasia'), _states_member('Tymek')],
+                privacy=PRIVACY_PUBLIC,
+            ),
+        },
+        {
             'name': 'list_earlier',
             'label': 'Lista: wcześniejsze dwa tygodnie',
             'list': _synthetic_list([past_entry], earlier_start),
@@ -1534,6 +1705,18 @@ def _manage_state_sections(membership):
             'label': 'Szczegóły: wpis z EduVulcan',
             'detail': _detail_context(eduvulcan_entry, STATES_DATE),
         },
+        {
+            'name': 'detail_private',
+            'label': 'Szczegóły: własny wpis prywatny',
+            'detail': _detail_context(
+                gift, STATES_DATE, privacy=PRIVACY_PRIVATE, can_change_privacy=True
+            ),
+        },
+        {
+            'name': 'detail_own_public',
+            'label': 'Szczegóły: własny wpis nieprywatny',
+            'detail': _detail_context(own_public, STATES_DATE, can_change_privacy=True),
+        },
         {'name': 'create', 'label': 'Nowy wpis', 'form': _form_context(create_form)},
         {'name': 'invalid', 'label': 'Błędy w formularzu', 'form': _form_context(invalid_form)},
         {
@@ -1552,12 +1735,20 @@ def _manage_state_sections(membership):
 # --- Child assigned entry view (S-03) ---
 
 
-def _child_calendar_context(entries, today, start):
-    return _index_context(entries, today, start, url_name='entries:child_list')
+def _child_calendar_context(entries, today, start, privacy=None):
+    return _index_context(entries, today, start, url_name='entries:child_list', privacy=privacy)
 
 
-def _child_detail_context(entry, list_start):
-    return {'entry': entry, 'list_query': _calendar_query(list_start)}
+def _child_detail_context(entry, list_start, privacy=None, can_change_privacy=False):
+    """Child detail context; ``can_change_privacy`` (the child created the entry) shows the
+    privacy control, the child's only post-creation action."""
+    return {
+        'entry': entry,
+        'list_start': list_start,
+        'list_query': _list_query(list_start, privacy=privacy),
+        'list_privacy': privacy,
+        'can_change_privacy': can_change_privacy,
+    }
 
 
 @require_GET
@@ -1567,10 +1758,12 @@ def child_list(request):
     entries = child_entries(resolve_family_context(request))
     today = timezone.localdate()
     start, end = _calendar_window(request.GET.get('start'), today)
+    privacy = _privacy_filter(request.GET.get('privacy'))
+    rows = _calendar_rows(_filter_privacy(entries, privacy), start, end)
     return render(
         request,
         'entries/child_list.html',
-        _child_calendar_context(_calendar_rows(entries, start, end), today, start),
+        _child_calendar_context(rows, today, start, privacy),
     )
 
 
@@ -1579,14 +1772,35 @@ def child_list(request):
 def child_detail(request, pk):
     """One entry the signed-in child may read; any other ID (including someone else's
     private entry) is a plain 404."""
-    entries = child_entries(resolve_family_context(request))
+    membership = resolve_family_context(request)
+    entries = child_entries(membership)
     entry = get_object_or_404(with_effective_date(entries), pk=pk)
     list_start = _detail_list_start(request, entry, timezone.localdate())
-    return render(request, 'entries/child_detail.html', _child_detail_context(entry, list_start))
+    return render(
+        request,
+        'entries/child_detail.html',
+        _child_detail_context(
+            entry, list_start, _privacy_filter(request.GET.get('privacy')),
+            can_change_privacy=_is_creator(membership, entry),
+        ),
+    )
+
+
+@require_POST
+@login_required
+def child_privacy(request, pk):
+    """The child's privacy change for an entry the child created; no other field changes."""
+    membership = require_child_membership(resolve_family_context(request))
+    _change_privacy(request, membership, pk)
+    return _detail_redirect(
+        'entries:child_detail', pk, _posted_start(request.POST, timezone.localdate()),
+        privacy=_privacy_filter(request.POST.get('privacy')),
+    )
 
 
 def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school_item='',
-                        school_subject='', source=Entry.Source.MANUAL, effective_date=None):
+                        school_subject='', source=Entry.Source.MANUAL, effective_date=None,
+                        is_private=False):
     """Unsaved fictional entry for the child gallery; never written."""
     date = date or STATES_DATE
     entry = Entry(
@@ -1598,6 +1812,7 @@ def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school
         school_item=school_item,
         school_subject=school_subject,
         source=source,
+        is_private=is_private,
         assigned_member=FamilyMember(display_name=STATES_MEMBER_CHOICES[1][1]),
         updated_at=timezone.make_aware(datetime.datetime.combine(STATES_DATE, datetime.time(7, 0))),
     )
@@ -1660,12 +1875,16 @@ def child_states(request):
         9011, 'Szczęśliwy numerek: 7', EntryType.NOTE, date=STATES_DATE + day,
         school_item=SchoolItemKind.LUCKY_NUMBER.value, source=Entry.Source.EDUVULCAN,
     )
+    diary = _child_states_entry(
+        9012, 'Pomysł na prezent dla mamy', EntryType.NOTE, date=STATES_DATE + 2 * day,
+        is_private=True,
+    )
 
-    def list_state(name, label, entries, start=STATES_DATE):
+    def list_state(name, label, entries, start=STATES_DATE, privacy=None):
         return {
             'name': name,
             'label': label,
-            'list': _child_calendar_context(entries, STATES_DATE, start),
+            'list': _child_calendar_context(entries, STATES_DATE, start, privacy),
         }
 
     sections = [
@@ -1676,10 +1895,18 @@ def child_states(request):
             year_start, returned, quiz, homework,
         ], earlier_start),
         list_state('list_empty', 'Dwa tygodnie bez wpisów', []),
+        list_state('list_private', 'Filtr „Prywatne”', [diary], privacy=PRIVACY_PRIVATE),
+        list_state('list_not_private', 'Filtr „Nieprywatne”', [
+            test, long_note, grade, todo, lucky, reading, match,
+        ], privacy=PRIVACY_PUBLIC),
         {'name': 'detail_manual', 'label': 'Szczegóły wpisu ręcznego',
          **_child_detail_context(long_note, STATES_DATE)},
         {'name': 'detail_eduvulcan', 'label': 'Szczegóły wpisu z EduVulcan',
          **_child_detail_context(quiz, earlier_start)},
+        {'name': 'detail_private', 'label': 'Szczegóły własnego wpisu prywatnego',
+         **_child_detail_context(diary, STATES_DATE, PRIVACY_PRIVATE, can_change_privacy=True)},
+        {'name': 'detail_own_public', 'label': 'Szczegóły własnego wpisu nieprywatnego',
+         **_child_detail_context(todo, STATES_DATE, can_change_privacy=True)},
         {'name': 'error_forbidden', 'label': 'Błąd: brak dostępu',
          'error': {'heading': 'Brak dostępu',
                    'message': 'Ta strona nie jest dostępna dla Twojego konta.'}},

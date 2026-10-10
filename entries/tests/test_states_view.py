@@ -23,6 +23,7 @@ STATES_URL = reverse('entries:states')
 STATE_NAMES = (
     'empty',
     'proposal',
+    'proposal_private',
     'past_date',
     'follow_up',
     'follow_up_subject',
@@ -37,6 +38,7 @@ STATE_NAMES = (
     'correction_failed',
     'invalid',
     'saved',
+    'saved_private',
     'batch',
     'batch_duplicate',
     'batch_missing',

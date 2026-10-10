@@ -1,8 +1,9 @@
 {% comment %}
 Child calendar body (S-03), shared by child_list.html and the child_states gallery.
-Parameters: days, previous_url, today_url, next_url, is_today, detail_query and optional
-id_prefix (see _calendar_days.html and _calendar_nav.html). Days hold only the child's own
+Parameters: days, previous_url, today_url, next_url, is_today, detail_query, privacy_filters
+(see _privacy_filter.html) and optional id_prefix (see _calendar_days.html and _calendar_nav.html). Days hold only the child's own
 entries, so there are no assignee subheadings.
 {% endcomment %}
+{% include "entries/_privacy_filter.html" with privacy_filters=privacy_filters only %}
 {% include "entries/_calendar_nav.html" with previous_url=previous_url today_url=today_url next_url=next_url is_today=is_today only %}
 {% include "entries/_calendar_days.html" with days=days detail_url_name="entries:child_detail" detail_query=detail_query show_groups=False id_prefix=id_prefix only %}
