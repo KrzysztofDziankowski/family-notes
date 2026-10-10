@@ -173,6 +173,27 @@ The phone automation forwards each EduVulcan notification to the intake
 endpoint with the same token. The endpoint only stores the notification and
 answers `202` straight away; it never classifies in the request:
 
+The `automate/` directory contains PNG diagrams of the flows used by the
+[Automate](https://llamalab.com/automate/) Android application. These flows
+capture EduVulcan notifications on the phone and send them to FamilyNotes.
+The editable `.flo` files are excluded by `.gitignore` because they contain the
+automation token; never commit or share them. The tracked PNG files are for
+documentation only and must not contain a real token.
+
+This integration has the following trade-offs:
+
+- **Advantage:** it uses notifications instead of EduVulcan's REST API, whose
+  licence forbids this kind of API use. This keeps the integration within the
+  licence constraints, although the project author considers that restriction
+  very unfair.
+- **Limitation:** notifications contain only basic information, such as who has
+  a test (`Sprawdzian`) and when, but not what the test covers.
+- **Limitation:** when a test is rescheduled, EduVulcan sends another
+  notification. FamilyNotes cannot tell whether it describes a moved test or a
+  different one.
+- **Limitation:** EduVulcan may send duplicate notifications labelled
+  `Kartkówka` and `Sprawdzian` for the same event.
+
 ```bash
 curl -i -X POST \
   -H "Authorization: Bearer fnat_..." \
