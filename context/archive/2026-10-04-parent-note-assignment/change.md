@@ -1,10 +1,10 @@
 ---
 change_id: parent-note-assignment
 title: Parent can reliably assign a new note to themselves or another parent in the family
-status: impl_reviewed
+status: archived
 created: 2026-10-04
 updated: 2026-10-10
-archived_at: null
+archived_at: 2026-10-10T08:46:16Z
 ---
 
 ## Notes
