@@ -22,6 +22,7 @@ TEXT_PAIRS = [
     ('muted', 'notice-bg'),  # .fn-muted inside a notice panel
     ('muted', 'danger-bg'),  # .fn-muted inside a danger panel
     ('danger', 'danger-bg'),  # .fn-field-error and delete summary on the open disclosure
+    ('text-strong', 'weekend-bg'),  # Saturday and Sunday .fn-day-heading
     ('accent-inverse', 'accent'),  # primary buttons, active tab
     ('accent-inverse', 'danger'),  # "Usuń na stałe"
 ]

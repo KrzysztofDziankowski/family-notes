@@ -137,3 +137,14 @@ class TokensRuleTests(SimpleTestCase):
                 self.assertTrue(declarations)
                 for name, value in declarations.items():
                     self.assertIsNone(literal.search(value), f'{name}: {value}')
+
+    def test_weekend_day_headings_share_the_weekend_token(self):
+        # weekend-day-header-colours: the parent day box and the child heading both carry
+        # data-weekend; one rule paints either heading with the contrast-tested token.
+        for selector in ('.fn-calendar-day[data-weekend] .fn-day-heading',
+                         '.fn-day-heading[data-weekend]'):
+            with self.subTest(selector):
+                self.assertEqual(
+                    self.outside_media(selector).get('background'),
+                    'var(--fn-color-weekend-bg)',
+                )

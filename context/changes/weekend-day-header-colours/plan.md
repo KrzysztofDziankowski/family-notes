@@ -217,9 +217,9 @@ None.
 
 #### Automated
 
-- [x] 1.1 New and existing entries tests pass: `uv run python manage.py test entries`
-- [x] 1.2 Django checks pass: `uv run python manage.py check`
-- [x] 1.3 No migrations needed: `uv run python manage.py makemigrations --check --dry-run`
+- [x] 1.1 New and existing entries tests pass: `uv run python manage.py test entries` — 1eef642
+- [x] 1.2 Django checks pass: `uv run python manage.py check` — 1eef642
+- [x] 1.3 No migrations needed: `uv run python manage.py makemigrations --check --dry-run` — 1eef642
 
 #### Manual
 
@@ -229,8 +229,8 @@ None.
 
 #### Automated
 
-- [ ] 2.1 Contrast suite passes, including the new pair: `uv run python manage.py test family_notes.test_tokens_contrast`
-- [ ] 2.2 Full test suite passes: `uv run python manage.py test`
+- [x] 2.1 Contrast suite passes, including the new pair: `uv run python manage.py test family_notes.test_tokens_contrast`
+- [x] 2.2 Full test suite passes: `uv run python manage.py test`
 
 #### Manual
 
