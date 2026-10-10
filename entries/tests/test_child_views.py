@@ -152,7 +152,9 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         # The child's own calendar hides the redundant assignee and the type.
         self.assertNotContains(response, 'Michał</span>')
         self.assertNotContains(response, 'fn-entry-type')
-        self.assertNotContains(response, 'fn-tabs')
+        # The only tabs are the privacy filter (no Nadchodzące/Minione tabs).
+        self.assertContains(response, 'class="fn-tabs"', count=1)
+        self.assertContains(response, 'class="fn-tabs" aria-label="Filtr prywatności"', count=1)
 
     def test_lucky_number_appears_on_its_day(self):
         lucky = self._entry(

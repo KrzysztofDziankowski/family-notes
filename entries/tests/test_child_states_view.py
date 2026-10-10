@@ -22,6 +22,10 @@ STATE_NAMES = (
     'list_empty',
     'detail_manual',
     'detail_eduvulcan',
+    'list_private',
+    'list_not_private',
+    'detail_private',
+    'detail_own_public',
     'error_forbidden',
 )
 # STATES_DATE is Monday 2026-10-05; the earlier window starts 14 days before it.
@@ -98,8 +102,14 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
                 self.assertContains(response, 'Brak wpisów')
                 self.assertContains(response, 'Szczęśliwy numerek')
                 self.assertNotContains(response, 'Bez daty')
-                for removed in ('Nadchodz', 'Minion', 'fn-tabs', 'view='):
+                for removed in ('Nadchodz', 'Minion', 'view='):
                     self.assertNotContains(response, removed)
+                # The only tabs are the privacy filter (no Nadchodzące/Minione tabs).
+                html = response.content.decode()
+                self.assertEqual(
+                    html.count('class="fn-tabs"'),
+                    html.count('class="fn-tabs" aria-label="Filtr prywatności"'),
+                )
                 self.assertContains(response, 'EduVulcan')
                 self.assertContains(response, 'Ręcznie')
                 self.assertContains(response, 'kartkówka')
@@ -139,7 +149,10 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
                     set(re.findall(r'aria-labelledby="([^"]+)"', state)) <= set(ids)
                 )
                 self.assertIn(f'?start={start.isoformat()}', state)
-        all_ids = re.findall(r'\bid="([^"]+)"', html)
+        # Calendar and detail ids are page-unique; the capture states repeat
+        # their form field ids by design, like the parent gallery.
+        calendar_html = html[:html.index('<section data-kitchen-state="capture_')]
+        all_ids = re.findall(r'\bid="([^"]+)"', calendar_html)
         self.assertEqual(len(all_ids), len(set(all_ids)))
 
         today = _state_html(html, 'list_today')
@@ -150,7 +163,7 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         earlier = _state_html(html, 'list_earlier')
         self.assertEqual(HEADING_PATTERN.findall(earlier)[-1], 'Wczoraj, niedziela 4 października')
         self.assertIn('Kartkówka z przyrody', earlier)
-        self.assertNotIn('aria-current', earlier)
+        self.assertNotIn('aria-current', earlier.split('data-state-part="calendar-nav"', 1)[1])
         empty = _state_html(html, 'list_empty')
         self.assertEqual(empty.count('>Brak wpisów</p>'), 14)
         self.assertNotIn('data-entry-row', empty)
@@ -173,4 +186,71 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         manual = _state_html(html, 'detail_manual')
         self.assertNotIn('Przedmiot', manual)
         self.assertIn(f'href="/entries/mine/?start={STATES_DATE.isoformat()}" data-back-link', manual)
+        for name in ('detail_manual', 'detail_eduvulcan'):
+            with self.subTest(state=name):
+                self.assertNotIn('data-state-part="privacy"', _state_html(html, name))
+        private = _state_html(html, 'detail_private')
+        self.assertIn('action="/entries/mine/9012/privacy/"', private)
+        self.assertIn('Oznacz jako nieprywatny', private)
+        self.assertIn('name="privacy" value="private"', private)
+        self.assertIn(
+            f'href="/entries/mine/?start={STATES_DATE.isoformat()}&amp;privacy=private" data-back-link',
+            private,
+        )
+        self.assertIn('Oznacz jako prywatny', _state_html(html, 'detail_own_public'))
 
+    @override_settings(DEBUG=True)
+    def test_privacy_filter_states(self):
+        self.client.force_login(self.child.user)
+
+        html = self.client.get(CHILD_STATES_URL).content.decode()
+
+        private = _state_html(html, 'list_private')
+        self.assertIn('data-privacy-key="private" aria-current="page">Prywatne', private)
+        self.assertIn('data-entry-private>Prywatny</span>', private)
+        self.assertIn(f'/entries/mine/9012/?start={STATES_DATE.isoformat()}&amp;privacy=private"', private)
+        self.assertIn('data-privacy-key="public" aria-current="page">Nieprywatne',
+                      _state_html(html, 'list_not_private'))
+        self.assertIn('data-privacy-key="all" aria-current="page">Wszystkie',
+                      _state_html(html, 'list_today'))
+
+
+
+CAPTURE_STATE_NAMES = (
+    'capture_empty',
+    'capture_proposal',
+    'capture_question',
+    'capture_follow_up',
+    'capture_unavailable',
+    'capture_correction_failed',
+    'capture_invalid',
+    'capture_batch',
+    'capture_saved',
+    'capture_saved_private',
+)
+
+
+class ChildCaptureStatesTests(FamilyFixtureMixin, TestCase):
+    @override_settings(DEBUG=True)
+    def test_capture_states_show_child_controls_and_post_to_child_routes(self):
+        child_routes = {
+            reverse(f'entries:child_{name}')
+            for name in ('capture', 'answer', 'correct', 'confirm', 'confirm_batch')
+        }
+        for member in (self.child, self.parent):
+            with self.subTest(role=member.role):
+                self.client.force_login(member.user)
+                html = self.client.get(CHILD_STATES_URL).content.decode()
+                for name in CAPTURE_STATE_NAMES:
+                    with self.subTest(state=name):
+                        state = _state_html(html, name)
+                        self.assertTrue(state, name)
+                        self.assertNotIn('name="assigned_member"', state)
+                        actions = set(re.findall(r'(?:action|formaction)="([^"]*)"', state))
+                        self.assertTrue(actions <= child_routes, actions - child_routes)
+                for name in ('capture_proposal', 'capture_batch', 'capture_invalid'):
+                    self.assertIn('is_private', _state_html(html, name))
+                self.assertIn('data-saved-private', _state_html(html, 'capture_saved_private'))
+                self.assertNotIn('data-saved-private', _state_html(html, 'capture_saved'))
+                self.assertIn('fn-field-error', _state_html(html, 'capture_invalid'))
+        self.assertFalse(Entry.objects.exists())

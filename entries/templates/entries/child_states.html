@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Stany ekranu „Moje wpisy”{% endblock %}
 
@@ -10,12 +11,21 @@
     <hr>
     <p class="fn-muted"><small>Stan: {{ section.label }} ({{ section.name }})</small></p>
     {% if section.list %}
-        {% include "entries/_child_calendar.html" with days=section.list.days previous_url=section.list.previous_url today_url=section.list.today_url next_url=section.list.next_url is_today=section.list.is_today detail_query=section.list.detail_query id_prefix=section.name|add:"-" only %}
+        {% include "entries/_child_calendar.html" with days=section.list.days previous_url=section.list.previous_url today_url=section.list.today_url next_url=section.list.next_url is_today=section.list.is_today detail_query=section.list.detail_query privacy_filters=section.list.privacy_filters id_prefix=section.name|add:"-" only %}
     {% elif section.error %}
         {% include "_error.html" with heading=section.error.heading message=section.error.message only %}
+    {% elif section.entry %}
+        {% include "entries/_child_entry_detail.html" with entry=section.entry list_query=section.list_query list_start=section.list_start list_privacy=section.list_privacy can_change_privacy=section.can_change_privacy only %}
     {% else %}
-        {% include "entries/_child_entry_detail.html" with entry=section.entry list_query=section.list_query only %}
+        {# Child capture states: the shared capture body posting to the child routes. #}
+        {% include "entries/_capture_body.html" with state=section.saved_entries|yesno:"saved," saved_entries=section.saved_entries notice=section.notice follow_up_form=section.follow_up_form batch_form=section.batch_form review_form=section.review_form capture_form=section.capture_form %}
     {% endif %}
 </section>
 {% endfor %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'js/entry-date-labels.js' %}" defer></script>
+<script src="{% static 'js/enter-submit.js' %}" defer></script>
+<script src="{% static 'js/classification-progress.js' %}" defer></script>
 {% endblock %}

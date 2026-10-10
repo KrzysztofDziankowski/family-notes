@@ -1,11 +1,13 @@
 {% comment %}
 Parent family entry calendar body. Parameters: days, previous_url, today_url, next_url,
-is_today, detail_query (see _calendar_days.html and _calendar_nav.html) and filters (see
-_member_filter.html; empty for a family without active children).
+is_today, detail_query (see _calendar_days.html and _calendar_nav.html), filters (see
+_member_filter.html; empty for a family without active children) and privacy_filters (see
+_privacy_filter.html).
 previous_url / next_url move the window by two weeks; today_url opens the window starting today.
-The calendar and entry links are data-member-link: js/member-filter.js keeps their member parameter
+The privacy filter, calendar and entry links are data-member-link: js/member-filter.js keeps their member parameter
 in step with the selected filter.
 {% endcomment %}
 {% include "entries/_member_filter.html" with filters=filters only %}
+{% include "entries/_privacy_filter.html" with privacy_filters=privacy_filters member_links=True only %}
 {% include "entries/_calendar_nav.html" with previous_url=previous_url today_url=today_url next_url=next_url is_today=is_today member_links=True only %}
 {% include "entries/_calendar_days.html" with days=days detail_url_name="entries:detail" detail_query=detail_query show_groups=True member_links=True only %}

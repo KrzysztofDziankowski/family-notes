@@ -16,6 +16,11 @@
  * list-refresh.js and the entry pages keep the filter. Ctrl/Cmd/Shift/Alt
  * and middle clicks are left to the browser. Nothing is stored in the
  * browser.
+ *
+ * The privacy filter ([data-privacy-filter], _privacy_filter.html) is
+ * server-side only: its links reload the page. They are data-member-link,
+ * so a child switch keeps them in step, and only the member parameter is
+ * ever rewritten, so a selected privacy filter survives every switch.
  */
 (function () {
     'use strict';

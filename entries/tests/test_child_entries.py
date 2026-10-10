@@ -44,6 +44,15 @@ class ChildEntriesTests(FamilyFixtureMixin, TestCase):
         with self.assertNumQueries(0):
             self.assertEqual(entries[0].assigned_member.display_name, 'Michał')
 
+    def test_private_entries_are_returned_only_to_their_creator(self):
+        parent_private = self._entry('parent private', self.family, self.child)
+        own_private = self._entry('own private', self.family, self.child)
+        Entry.objects.filter(pk=parent_private.pk).update(is_private=True, created_by=self.parent)
+        Entry.objects.filter(pk=own_private.pk).update(is_private=True, created_by=self.child)
+
+        self.assertCountEqual(child_entries(self.child), [self.own, own_private])
+        self.assertEqual(list(child_entries(self.other_child)), [self.sibling])
+
     def test_unauthorized_callers_are_denied(self):
         def inactive_family_child():
             self.family.is_active = False

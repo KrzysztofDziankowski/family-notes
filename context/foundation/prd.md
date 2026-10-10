@@ -3,7 +3,7 @@ project: FamilyNotes
 version: 2
 status: draft
 created: 2026-09-20
-updated: 2026-10-06
+updated: 2026-10-10
 context_type: greenfield
 product_type: web-app
 target_scale:
@@ -30,7 +30,7 @@ Both parents equally organize family information. They reach for the product whe
 
 ### Secondary persona
 
-Children read family information relevant to them but do not create, edit, or delete it.
+Children read family information relevant to them and can add their own tasks, events, and notes through the same natural-language capture, but do not edit or delete saved entries.
 
 ## Success Criteria
 
@@ -100,12 +100,14 @@ Children read family information relevant to them but do not create, edit, or de
 
 ### Entries and views
 
-- FR-006: A parent can create, read, update, and delete family entries and use a shared family view. Priority: must-have
+- FR-006: A parent can create, read, update, and delete family entries and use a shared family view. This covers public entries and the parent's own private entries, never a private entry created by another member (FR-012). Priority: must-have
   > Socrates: Counter-argument considered: full CRUD can distract from the product's classification capability. Resolution: kept as required entry lifecycle behavior.
-- FR-007: A child can read only entries assigned to that child in a personal view. Priority: must-have
+- FR-007: A child can read only entries assigned to that child in a personal view, excluding private entries created by another member (FR-012). Priority: must-have
   > Socrates: Counter-arguments considered and rejected; the requirement stands as written.
+- FR-013: An active child can add tasks, calendar events, and notes from their personal view through the natural-language capture, follow-up, correction, and confirmation steps of FR-003–FR-005. Every such entry is assigned to that child and records the child as its creator; a name the child writes or the classifier proposes never assigns it to anyone else, and the child gets no assignee choice. Each confirmed entry is public unless the child marks it private (FR-012). A child cannot edit or delete saved entries. Priority: must-have
 - FR-008: A member of the single configured family can access only that family's data; people outside it cannot access the data. Priority: must-have
   > Socrates: Counter-argument considered: full multi-family support adds unnecessary scope. Resolution: revised; the MVP supports one configured family while preserving protection from outside access.
+- FR-012: Every entry is public by default; existing entries and automated entries without a human creator stay public. An entry marked private is visible only to the family member who created it, in every list, direct link, and token-based read, regardless of its assignee or the reader's role; a private entry another member created behaves like one that does not exist. Only the creator can change an entry's privacy, and a privacy change grants no right to edit or delete any other entry field. Priority: must-have
 
 ### Automated school intake
 
@@ -150,10 +152,11 @@ Existing missing dates are backfilled from local creation dates, and historical 
 
 Each member of the single preconfigured family signs in using their own external identity account. Parent and child roles are assigned before the MVP is used; the MVP has no interface for managing members or roles.
 
-- Parent: can create, read, update, and delete all entries belonging to the family.
-- Child: can read only entries assigned to that child and cannot create, update, or delete entries.
+- Parent: can create, read, update, and delete all entries belonging to the family, except private entries created by another member.
+- Child: can read only entries assigned to that child, except private entries created by another member; can create entries assigned only to themselves through natural-language capture (FR-013); cannot update or delete entries.
+- Entry privacy: entries are public by default. A private entry is visible only to its creator, whatever their role, and only the creator can change its privacy; no other member, parent or child, can read, change, or delete it.
 - Unauthenticated user: cannot access family data.
-- Automation (holding a parent's token): can only add school entries from EduVulcan notifications to that parent's family; it cannot read, update, or delete entries, and it cannot use the signed-in application. Tokens are issued and revoked only by the application administrator.
+- Automation (holding a parent's token): can only add school entries from EduVulcan notifications to that parent's family; it cannot read, update, or delete entries, and it cannot use the signed-in application. Any token-based read of family entries returns public entries only, never a private entry. Tokens are issued and revoked only by the application administrator.
 
 ## Non-Goals
 

@@ -22,8 +22,11 @@ from entries.classification.backends import (
 from entries.classification.service import (
     MAX_SUBMITTED_TEXT_LENGTH,
     ParentClassification,
+    classify_entries_for_child,
     classify_entries_for_parent,
+    classify_follow_up_answer_for_child,
     classify_for_parent,
+    correct_proposal_for_child,
     correct_proposal_for_parent,
 )
 from entries.classification.types import (
@@ -825,3 +828,111 @@ class SelfReferenceServiceTests(TwoParentFixtureMixin, TestCase):
         self.assertIsNone(outcome.member)
         self.assertIsInstance(outcome.result, ClassificationFollowUp)
         self.assertIn(MissingField.AMBIGUOUS_MEMBER, outcome.result.missing_fields)
+
+
+class ChildClassificationTests(FamilyFixtureMixin, TestCase):
+    """Child capture: the child is the only candidate and every result is theirs."""
+
+    def classify_child(self, membership, backend, text=SUBMITTED_TEXT):
+        return classify_entries_for_child(
+            membership, text, reference_date=REFERENCE_DATE, locale='pl-PL', backend=backend
+        )
+
+    def test_only_the_childs_name_is_sent_and_a_sibling_name_is_replaced(self):
+        for returned in ('Ania', 'Ewa', 'Kuba', 'Nieznany', None):
+            with self.subTest(returned=returned):
+                backend = RecordingBackend(school_test_output(member_name=returned))
+                outcome = self.classify_child(self.child, backend).single
+                request = backend.requests[0]
+                self.assertEqual(request.allowed_member_names, ('Michał',))
+                self.assertEqual(request.requester_name, 'Michał')
+                self.assertIsInstance(outcome.result, ClassificationProposal)
+                self.assertEqual(outcome.member, self.child)
+                self.assertEqual(outcome.result.member_name, 'Michał')
+
+    def test_a_mention_never_selects_or_asks_about_anyone_else(self):
+        backend = RecordingBackend(
+            school_test_output(member_name='Ania', member_mention='Ania')
+        )
+        outcome = self.classify_child(self.child, backend).single
+        self.assertEqual(outcome.member, self.child)
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+
+    def test_non_children_are_denied_without_backend_call(self):
+        for membership in (self.parent, self.inactive_child, None):
+            with self.subTest(membership=membership):
+                backend = RecordingBackend()
+                with self.assertRaises(PermissionDenied):
+                    self.classify_child(membership, backend)
+                for call in (
+                    lambda: correct_proposal_for_child(
+                        membership, ProposalValues(entry_type=EntryType.TODO, content='x'),
+                        'jutro', reference_date=REFERENCE_DATE, backend=backend,
+                    ),
+                    lambda: classify_follow_up_answer_for_child(
+                        membership, 'x', ClassificationFollowUp(
+                            missing_fields=(MissingField.DATE,), entry_type=EntryType.TODO,
+                            content='x',
+                        ), 'jutro', reference_date=REFERENCE_DATE, backend=backend,
+                    ),
+                ):
+                    with self.assertRaises(PermissionDenied):
+                        call()
+                self.assertEqual(backend.requests, [])
+
+    def test_children_cannot_use_the_parent_services(self):
+        backend = RecordingBackend()
+        with self.assertRaises(PermissionDenied):
+            classify_entries_for_parent(
+                self.child, SUBMITTED_TEXT, reference_date=REFERENCE_DATE, backend=backend
+            )
+        self.assertEqual(backend.requests, [])
+
+    def test_follow_up_answer_is_assigned_to_the_child(self):
+        draft = ClassificationFollowUp(
+            missing_fields=(MissingField.DATE,),
+            entry_type=EntryType.CALENDAR_EVENT,
+            content='Sprawdzian z biologii',
+            school_item=SchoolItemKind.TEST,
+            school_subject='biologia',
+            member_name='Michał',
+        )
+        backend = RecordingBackend(school_test_output(member_name='Ania', member_mention='Ania'))
+        outcome = classify_follow_up_answer_for_child(
+            self.child, SUBMITTED_TEXT, draft, 'w poniedziałek z Anią',
+            reference_date=REFERENCE_DATE, backend=backend,
+        )
+        self.assertEqual(backend.requests[0].allowed_member_names, ('Michał',))
+        self.assertIsInstance(outcome.result, ClassificationProposal)
+        self.assertEqual(outcome.result.date, MONDAY)
+        self.assertEqual(outcome.member, self.child)
+
+    def test_correction_keeps_the_child_and_a_person_only_change_is_not_applied(self):
+        current = ProposalValues(
+            entry_type=EntryType.TODO, content='Oddać książkę', date=MONDAY,
+            member_name='Ania',
+        )
+        reassign = RecordingBackend(BackendOutput(
+            entry_type=EntryType.TODO, content='Oddać książkę', grounded=True,
+            member_name='Ania', changed_fields=frozenset({'member_name'}),
+        ))
+        refused = correct_proposal_for_child(
+            self.child, current, 'dla Ani', reference_date=REFERENCE_DATE,
+            current_member=self.other_child, backend=reassign,
+        )
+        self.assertFalse(refused.applied)
+        self.assertEqual(reassign.requests[0].current_proposal.member_name, 'Michał')
+
+        redate = RecordingBackend(BackendOutput(
+            entry_type=EntryType.TODO, content='Oddać książkę', grounded=True,
+            date=datetime.date(2026, 9, 22), member_name='Ania',
+            changed_fields=frozenset({'date', 'member_name'}),
+        ))
+        applied = correct_proposal_for_child(
+            self.child, current, 'we wtorek dla Ani', reference_date=REFERENCE_DATE,
+            backend=redate,
+        )
+        self.assertTrue(applied.applied)
+        self.assertEqual(applied.changed, frozenset({'date'}))
+        self.assertEqual(applied.outcome.member, self.child)
+        self.assertEqual(applied.outcome.result.date, datetime.date(2026, 9, 22))

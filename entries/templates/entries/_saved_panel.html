@@ -21,6 +21,10 @@
             {% endif %}
             <dt>Dla kogo</dt>
             <dd>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Ogólne{% endif %}</dd>
+            {% if entry.is_private %}
+                <dt>Widoczność</dt>
+                <dd data-saved-private>Prywatny — widoczny tylko dla Ciebie</dd>
+            {% endif %}
         </dl>
     {% endfor %}
 </section>

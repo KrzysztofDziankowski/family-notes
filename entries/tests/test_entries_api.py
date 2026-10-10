@@ -468,6 +468,18 @@ class FamilyEntriesEndpointTests(EntriesApiDataMixin, TestCase):
         self.assertIsNone(undated['assigned_member'])
         self.assertIsNone(undated['school_item'])
 
+    def test_private_entries_are_never_returned_or_counted(self):
+        private = self.entry(
+            'SENTINEL-prywatny-wpis', datetime.date(2026, 9, 28),
+            created_by=self.parent, is_private=True,
+        )
+
+        response = self.get()
+
+        self.assertEqual(response.json()['count'], 3)
+        self.assertNotIn(private.pk, self.ids(response))
+        self.assertNotIn('SENTINEL-prywatny-wpis', response.content.decode())
+
     def test_foreign_family_sees_only_its_own_entries(self):
         response = self.get(secret=self.foreign_secret)
 

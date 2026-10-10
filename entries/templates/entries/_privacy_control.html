@@ -1,0 +1,22 @@
+{% load family_context %}
+{% comment %}
+Creator-only privacy control of a saved entry, shared by the parent and child detail pages.
+Render it only for the entry's creator (the view's can_change_privacy). Parameters: entry,
+action_url_name ("entries:privacy" or "entries:child_privacy"), list_start (the calendar
+fortnight the detail returns to), optional list_member (the parent calendar's selected child) and
+list_privacy (the calendar's privacy filter); the POST carries them back to the detail page. The
+form changes only the entry's privacy.
+{% endcomment %}
+<section class="fn-privacy-control" data-state-part="privacy">
+    <h2 class="fn-manage-section-title">Widoczność</h2>
+    <p data-privacy-status>{% if entry.is_private %}Wpis jest prywatny — widoczny tylko dla Ciebie.{% else %}Wpis nie jest prywatny.{% endif %}</p>
+    <form method="post" action="{% url action_url_name entry.pk %}">
+        {% csrf_token %}
+        {% family_context_field %}
+        <input type="hidden" name="is_private" value="{{ entry.is_private|yesno:'false,true' }}">
+        <input type="hidden" name="start" value="{{ list_start|date:'Y-m-d' }}">
+        {% if list_member %}<input type="hidden" name="member" value="{{ list_member.pk }}">{% endif %}
+        {% if list_privacy %}<input type="hidden" name="privacy" value="{{ list_privacy }}">{% endif %}
+        <button type="submit" class="secondary">{% if entry.is_private %}Oznacz jako nieprywatny{% else %}Oznacz jako prywatny{% endif %}</button>
+    </form>
+</section>

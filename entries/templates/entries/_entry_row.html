@@ -13,11 +13,13 @@ Parameters:
                       e.g. "start=2026-10-05" so the detail page can link back to the same window.
   member_link      -- optional; true marks the detail link data-member-link (the parent calendar's
                       child filter rewrites its member parameter, see js/member-filter.js).
+A private entry (seen only by its creator) adds a "Prywatny" marker to the link text.
 {% endcomment %}
 <li class="fn-entry-row" data-entry-row="{{ entry.pk }}">
     <a class="fn-entry-link" href="{% url detail_url_name entry.pk %}{% if detail_query %}?{{ detail_query }}{% endif %}"{% if member_link %} data-member-link{% endif %}>
         {% if not hide_type %}<span class="fn-entry-type">{{ entry.get_entry_type_display }}</span>{% endif %}
         <span class="fn-entry-content">{{ entry.content|truncatechars:120 }}</span>
+        {% if entry.is_private %}<span class="fn-entry-private" data-entry-private>Prywatny</span>{% endif %}
     </a>
     {% if not hide_date or entry.time or not hide_assignee or edit_url_name %}
     <p class="fn-entry-meta fn-muted">

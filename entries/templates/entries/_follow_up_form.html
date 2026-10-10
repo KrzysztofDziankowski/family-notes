@@ -1,5 +1,5 @@
 {% load family_context %}
-<form method="post" action="{% url 'entries:answer' %}" data-state-part="question" data-classification-default data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
+<form method="post" action="{% url capture_routes.answer|default:"entries:answer" %}" data-state-part="question" data-classification-default data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
     {% family_context_field %}
     <h2>Uzupełnij wpis</h2>
@@ -17,7 +17,7 @@
     <div class="fn-actions">
         <button type="submit" data-classification-submit>Dalej</button>
         <button type="submit" name="action" value="skip" class="secondary" formnovalidate>Pomiń</button>
-        <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+        <a href="{% url capture_routes.capture|default:"entries:capture" %}">Zacznij od nowa</a>
     </div>
     {% include "entries/_classification_progress.html" %}
 </form>

@@ -1,0 +1,20 @@
+{% comment %}
+The capture journey's body, shared by capture.html (parent) and child_capture.html (child):
+the saved panel, a notice and exactly one form. Its form partials post to ``capture_routes``
+(the role's URL names; the parent's by default).
+{% endcomment %}
+{% if state == "saved" %}
+    {% include "entries/_saved_panel.html" with saved_entries=saved_entries %}
+{% endif %}
+{% if notice %}
+    {% include "entries/_notice.html" with message=notice %}
+{% endif %}
+{% if follow_up_form %}
+    {% include "entries/_follow_up_form.html" with form=follow_up_form %}
+{% elif batch_form %}
+    {% include "entries/_batch_review_form.html" with form=batch_form %}
+{% elif review_form %}
+    {% include "entries/_review_form.html" with form=review_form %}
+{% else %}
+    {% include "entries/_capture_form.html" with form=capture_form %}
+{% endif %}

@@ -15,10 +15,12 @@ from django.utils import timezone
 
 from entries.classification.types import EntryType
 from entries.models import Entry
+from family_access.models import FamilyMember
 
 from .test_classification_service import FamilyFixtureMixin
 
 FOREIGN_SENTINEL = 'SENTINEL-OBCY-WPIS-91fa'
+PRIVATE_SENTINEL = 'SENTINEL-PRYWATNY-WPIS-0d4c'
 
 
 class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
@@ -70,7 +72,8 @@ class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
         return sorted(
             Entry.objects.values_list(
                 'pk', 'family_id', 'entry_type', 'content', 'date', 'time',
-                'assigned_member_id', 'school_item', 'source', 'created_by_id', 'updated_at',
+                'assigned_member_id', 'school_item', 'source', 'created_by_id', 'is_private',
+                'updated_at',
             )
         )
 
@@ -126,6 +129,39 @@ class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
                         self.assertEqual(response.content, foreign_responses[label])
 
         self.assertEqual(self.snapshot(), before)
+
+    def test_other_parents_private_entry_is_a_404_like_a_missing_id(self):
+        second_parent = self._member('second-parent', FamilyMember.Role.PARENT, 'Paweł')
+        private = Entry.objects.create(date=timezone.localdate(),
+            family=self.family,
+            entry_type=EntryType.NOTE.value,
+            content=PRIVATE_SENTINEL,
+            created_by=second_parent,
+            is_private=True,
+        )
+        missing = Entry(pk=private.pk + 500)
+        self.client.force_login(self.parent.user)
+        before = self.snapshot()
+        entry_paths = ('detail', 'edit form', 'edit', 'delete')
+
+        missing_responses = {
+            label: self.send(method, url).content
+            for label, method, url in self.requests_for(missing) if label in entry_paths
+        }
+        for label, method, url in self.requests_for(private):
+            if label not in entry_paths:
+                continue
+            with self.subTest(path=label):
+                response = self.send(method, url)
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.content, missing_responses[label])
+        self.assertNotContains(self.client.get(reverse('entries:index')), PRIVATE_SENTINEL)
+        self.assertEqual(self.snapshot(), before)
+
+        self.client.force_login(second_parent.user)
+        self.assertContains(
+            self.client.get(reverse('entries:detail', args=[private.pk])), PRIVATE_SENTINEL
+        )
 
     def test_foreign_entry_never_appears_in_any_window(self):
         self.client.force_login(self.parent.user)

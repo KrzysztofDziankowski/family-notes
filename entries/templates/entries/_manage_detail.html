@@ -1,10 +1,12 @@
 {% load family_context %}
 {% comment %}
 Entry details with provenance and the no-JavaScript delete disclosure.
-Parameters: entry, list_query ("start=<iso>", plus "&member=<pk>" with a child filter) and
-list_start (the calendar fortnight that "Wróć do listy" and the delete redirect return to),
-list_member (optional; the calendar's selected child, kept by the delete redirect) and delete_open
-(optional; renders the disclosure open).
+Parameters: entry, list_query ("start=<iso>", plus "&member=<pk>" with a child filter and
+"&privacy=<key>" with a privacy filter) and list_start (the calendar fortnight that "Wróć do listy"
+and the delete redirect return to), list_member and list_privacy (optional; the calendar's selected
+child and privacy filter, kept by the delete and privacy redirects), delete_open (optional; renders
+the disclosure open) and can_change_privacy (optional; the viewer created the entry, so the
+privacy control shows).
 {% endcomment %}
 <article class="fn-manage-detail" data-state-part="detail">
     <dl class="fn-details">
@@ -36,6 +38,9 @@ list_member (optional; the calendar's selected child, kept by the delete redirec
         <dt>Zmieniono</dt>
         <dd>{{ entry.updated_at|date:"j E Y, H:i" }}</dd>
     </dl>
+    {% if can_change_privacy %}
+        {% include "entries/_privacy_control.html" with entry=entry action_url_name="entries:privacy" list_start=list_start list_member=list_member list_privacy=list_privacy %}
+    {% endif %}
     <div class="fn-actions fn-manage-actions">
         <a role="button" href="{% url 'entries:edit' entry.pk %}">Edytuj</a>
         <a href="{% url 'entries:index' %}?{{ list_query }}">Wróć do listy</a>
@@ -48,6 +53,7 @@ list_member (optional; the calendar's selected child, kept by the delete redirec
             {% family_context_field %}
             <input type="hidden" name="start" value="{{ list_start|date:'Y-m-d' }}">
             {% if list_member %}<input type="hidden" name="member" value="{{ list_member.pk }}">{% endif %}
+            {% if list_privacy %}<input type="hidden" name="privacy" value="{{ list_privacy }}">{% endif %}
             <button type="submit" class="fn-manage-danger">Usuń na stałe</button>
         </form>
     </details>

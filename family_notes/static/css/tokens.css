@@ -263,6 +263,24 @@ main[tabindex="-1"]:focus {
   overflow-wrap: anywhere;
 }
 
+/* "Prywatny" marker of a private entry row (seen only by its creator). */
+.fn-entry-private {
+  display: inline-block;
+  margin-top: var(--fn-space-1);
+  padding: 0 var(--fn-space-2);
+  border: 1px solid var(--fn-color-control-border);
+  border-radius: var(--fn-radius);
+  background: var(--fn-color-surface);
+  color: var(--fn-color-text-strong);
+  font-size: 0.875em;
+  font-weight: 600;
+}
+
+/* Creator-only privacy control on the parent and child detail pages. */
+.fn-privacy-control {
+  margin: var(--fn-space-3) 0;
+}
+
 .fn-entry-meta {
   display: flex;
   flex-wrap: wrap;

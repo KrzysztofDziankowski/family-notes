@@ -2,11 +2,11 @@
 {% load static %}
 
 {# "Błąd: " makes an invalid re-render audible on page load, without JavaScript (S-17). #}
-{% block title %}{% if capture_form.errors or follow_up_form.errors or review_form.errors or batch_form.has_errors %}Błąd: {% endif %}Dodaj wpis{% endblock %}
+{% block title %}{% if capture_form.errors or follow_up_form.errors or review_form.errors or batch_form.has_errors %}Błąd: {% endif %}Dodaj mój wpis{% endblock %}
 
 {% block content %}
-<h1>Dodaj wpis</h1>
-<p class="fn-muted"><a href="{% url 'entries:index' %}">Wpisy rodziny</a> · <a href="{% url 'entries:create' %}">Nowy wpis bez rozpoznawania</a></p>
+<h1>Dodaj mój wpis</h1>
+<p class="fn-muted"><a href="{% url 'entries:child_list' %}">Moje wpisy</a> · Wpis zostanie dodany dla Ciebie.</p>
 {% include "entries/_capture_body.html" %}
 {% endblock %}
 

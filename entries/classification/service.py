@@ -34,12 +34,19 @@ taken from the answer's classification; everything else stays as drafted.
 ``classify_entries_for_parent`` is the capture entry point: one instruction
 may request several entries („dziś, jutro i w poniedziałek”). Every output
 goes through the same per-output pipeline as ``classify_for_parent``
-(``_finish_parent_output``), so single and batch results cannot diverge.
+(``_finish_output``), so single and batch results cannot diverge.
 
 ``correct_proposal_for_parent`` applies a parent's free-text correction to
 the proposal on screen under the same rules. Only the fields the backend
 lists as changed are taken from its output; everything else, including the
 parent's manual edits, is kept.
+
+``classify_entries_for_child``, ``classify_follow_up_answer_for_child`` and
+``correct_proposal_for_child`` run the same journey for an active child.
+The only candidate is the child, and every output is assigned to the child
+before validation: a name the model returns or the child writes never
+selects anyone else, so no member follow-up or unknown-member result arises
+from it. A correction that only changes the person is not applied.
 
 ``classify_for_family`` is the automated counterpart used for EduVulcan
 notifications. It impersonates no user: the caller passes a snapshot of the
@@ -61,7 +68,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables
 
-from family_access.access import is_parent, scope_queryset_to_family
+from family_access.access import can_read_assigned_child, is_parent, scope_queryset_to_family
 from family_access.models import FamilyMember
 
 from ..eduvulcan.children import match_child
@@ -125,6 +132,43 @@ class ParentClassification:
     member: Optional[FamilyMember] = field(default=None, repr=False)
 
 
+@dataclass(frozen=True)
+class _CaptureScope:
+    """Who may be assigned in one authorized classification.
+
+    ``candidates`` are the only names sent and resolved. ``self_assignee`` is
+    set for a child: every output is assigned to them, whatever it names.
+    """
+
+    membership: FamilyMember
+    candidates: Tuple[FamilyMember, ...]
+    self_assignee: Optional[FamilyMember] = None
+
+
+def _parent_scope(membership) -> _CaptureScope:
+    """Raise ``PermissionDenied`` unless ``membership`` is an active parent."""
+    if not is_parent(membership):
+        raise PermissionDenied('An active parent membership is required.')
+    return _CaptureScope(membership, _active_family_members(membership))
+
+
+def _child_scope(membership) -> _CaptureScope:
+    """Raise ``PermissionDenied`` unless ``membership`` is an active child.
+
+    The child is the only candidate and the forced assignee.
+    """
+    if not can_read_assigned_child(membership, membership):
+        raise PermissionDenied('An active child membership is required.')
+    return _CaptureScope(membership, (membership,), self_assignee=membership)
+
+
+def _assigned_to(output: BackendOutput, member: FamilyMember) -> BackendOutput:
+    """``output`` assigned to ``member``; any name or mention it carried is dropped."""
+    return replace(
+        output, member_name=member.display_name, member_mention=None, member_ambiguous=False
+    )
+
+
 @sensitive_variables('submitted_text')
 def classify_for_parent(
     membership,
@@ -143,29 +187,31 @@ def classify_for_parent(
     configuration yields an unavailable result. ``reference_date`` may be a
     ``datetime``; only its date part is used.
     """
-    if not is_parent(membership):
-        raise PermissionDenied('An active parent membership is required.')
+    scope = _parent_scope(membership)
     if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
         return ParentClassification(
             result=ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG)
         )
 
-    candidates = _active_family_members(membership)
     reference_date = _local_reference_date(reference_date)
-    request = BackendRequest(
-        submitted_text=submitted_text,
-        allowed_member_names=tuple(member.display_name for member in candidates),
-        reference_date=reference_date,
-        locale=locale,
-        requester_name=membership.display_name,
-    )
+    request = _capture_request(scope, submitted_text, reference_date, locale)
 
     try:
         output = _invoke_backend(request, backend)
     except ClassificationError as error:
         return ParentClassification(result=error.to_result())
 
-    return _finish_parent_output(request, output, candidates)
+    return _finish_output(request, output, scope)
+
+
+def _capture_request(scope, submitted_text, reference_date, locale) -> BackendRequest:
+    return BackendRequest(
+        submitted_text=submitted_text,
+        allowed_member_names=tuple(member.display_name for member in scope.candidates),
+        reference_date=reference_date,
+        locale=locale,
+        requester_name=scope.membership.display_name,
+    )
 
 
 @dataclass(frozen=True)
@@ -217,20 +263,37 @@ def classify_entries_for_parent(
     holding the full text, so no proposal built from rejected output reaches
     the parent. No rows are written.
     """
-    if not is_parent(membership):
-        raise PermissionDenied('An active parent membership is required.')
+    return _classify_entries(
+        _parent_scope(membership), submitted_text, reference_date, locale, backend
+    )
+
+
+@sensitive_variables('submitted_text')
+def classify_entries_for_child(
+    membership,
+    submitted_text: str,
+    *,
+    reference_date: datetime.date,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ParentBatchClassification:
+    """``classify_entries_for_parent`` for an active child, every item assigned to them.
+
+    Raises ``PermissionDenied`` (before any backend is built or called) unless
+    ``membership`` is an active child in an active family. Only the child's
+    display name is sent; every resolved item's member is the child.
+    """
+    return _classify_entries(
+        _child_scope(membership), submitted_text, reference_date, locale, backend
+    )
+
+
+def _classify_entries(scope, submitted_text, reference_date, locale, backend):
     if len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH:
         return _single(ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG))
 
-    candidates = _active_family_members(membership)
     reference_date = _local_reference_date(reference_date)
-    request = BackendRequest(
-        submitted_text=submitted_text,
-        allowed_member_names=tuple(member.display_name for member in candidates),
-        reference_date=reference_date,
-        locale=locale,
-        requester_name=membership.display_name,
-    )
+    request = _capture_request(scope, submitted_text, reference_date, locale)
 
     try:
         outputs = _invoke_backend_many(request, backend)
@@ -242,33 +305,35 @@ def classify_entries_for_parent(
     if len(outputs) > MAX_PROPOSALS_PER_INSTRUCTION:
         return _single(ClassificationUnavailable(reason=UnavailableReason.TOO_MANY_ENTRIES))
     if len(outputs) == 1:
-        return ParentBatchClassification(
-            items=(_finish_parent_output(request, outputs[0], candidates),)
-        )
+        return ParentBatchClassification(items=(_finish_output(request, outputs[0], scope),))
 
     general_note = ParentBatchClassification(
-        items=(_finish_parent_output(request, _NO_ENTRY_TYPE, candidates),)
+        items=(_finish_output(request, _NO_ENTRY_TYPE, scope),)
     )
     if any(output.entry_type is None for output in outputs):
         return general_note
-    items = tuple(_finish_parent_output(request, output, candidates) for output in outputs)
+    items = tuple(_finish_output(request, output, scope) for output in outputs)
     if any(isinstance(item.result, ClassificationUnavailable) for item in items):
         return general_note
     return ParentBatchClassification(items=items)
 
 
-def _finish_parent_output(
-    request: BackendRequest, output: BackendOutput, candidates: Sequence[FamilyMember]
+def _finish_output(
+    request: BackendRequest, output: BackendOutput, scope: _CaptureScope
 ) -> ParentClassification:
-    """The shared per-output parent pipeline.
+    """The shared per-output pipeline of parent and child capture.
 
-    The parent's mention is matched first, then the output is validated (a
-    school event needs its subject), then the member is resolved locally.
-    Every parent path (single, batch, correction) ends here.
+    The mention is matched first (a child's output is assigned to the child
+    instead), then the output is validated (a school event needs its
+    subject), then the member is resolved locally. Every capture path
+    (single, batch, correction) ends here.
     """
-    output = _apply_member_mention(output, candidates)
+    if scope.self_assignee is not None:
+        output = _assigned_to(output, scope.self_assignee)
+    else:
+        output = _apply_member_mention(output, scope.candidates)
     result = classify_output(request, output, require_school_subject=True)
-    return _resolve_member(result, candidates)
+    return _resolve_member(result, scope.candidates)
 
 
 class CorrectionRejection(str, Enum):
@@ -327,17 +392,48 @@ def correct_proposal_for_parent(
     proposal unchanged (``applied=False``). ``current_member`` is trusted only
     when it is an active member of the parent's family. No rows are written.
     """
-    if not is_parent(membership):
-        raise PermissionDenied('An active parent membership is required.')
+    return _correct_proposal(
+        _parent_scope(membership), current, correction, reference_date, current_member,
+        locale, backend,
+    )
+
+
+@sensitive_variables('correction', 'current')
+def correct_proposal_for_child(
+    membership,
+    current: ProposalValues,
+    correction: str,
+    *,
+    reference_date: datetime.date,
+    current_member: Optional[FamilyMember] = None,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ProposalCorrection:
+    """``correct_proposal_for_parent`` for an active child.
+
+    The corrected proposal stays assigned to the child: a changed person is
+    ignored, and a correction that changes nothing else is not applied.
+    ``current_member`` is ignored. Raises ``PermissionDenied`` unless
+    ``membership`` is an active child in an active family.
+    """
+    return _correct_proposal(
+        _child_scope(membership), current, correction, reference_date, None, locale, backend
+    )
+
+
+def _correct_proposal(scope, current, correction, reference_date, current_member, locale, backend):
     if (
         len(correction) > MAX_CORRECTION_LENGTH
         or len(current.content) > MAX_SUBMITTED_TEXT_LENGTH
     ):
         return _not_applied(CorrectionRejection.TOO_LONG)
 
-    candidates = _active_family_members(membership)
+    candidates = scope.candidates
     reference_date = _local_reference_date(reference_date)
-    member_name = _trusted_member_name(current.member_name, current_member, candidates)
+    if scope.self_assignee is not None:
+        member_name = scope.self_assignee.display_name
+    else:
+        member_name = _trusted_member_name(current.member_name, current_member, candidates)
     current = replace(current, member_name=member_name)
     request = BackendRequest(
         submitted_text=correction,
@@ -346,7 +442,7 @@ def correct_proposal_for_parent(
         locale=locale,
         current_proposal=current,
         correction_text=correction,
-        requester_name=membership.display_name,
+        requester_name=scope.membership.display_name,
     )
 
     try:
@@ -355,6 +451,9 @@ def correct_proposal_for_parent(
         return _not_applied(CorrectionRejection.NOT_APPLIED)
 
     changed = frozenset(output.changed_fields or ()) & frozenset(CORRECTABLE_FIELDS)
+    if scope.self_assignee is not None:
+        # A child cannot reassign: the person is never a correctable field.
+        changed -= {'member_name'}
     if not output.grounded or not changed:
         return _not_applied(CorrectionRejection.NOT_APPLIED)
     if 'entry_type' in changed and output.entry_type is None:
@@ -372,7 +471,7 @@ def correct_proposal_for_parent(
             # The parent named someone who is not in the family.
             return _not_applied(CorrectionRejection.NOT_APPLIED)
 
-    outcome = _finish_parent_output(request, merged, candidates)
+    outcome = _finish_output(request, merged, scope)
     if isinstance(outcome.result, ClassificationUnavailable):
         return _not_applied(CorrectionRejection.NOT_APPLIED)
     return ProposalCorrection(outcome=outcome, changed=changed, applied=True)
@@ -437,8 +536,37 @@ def classify_follow_up_answer(
     resolved member; it is dropped unless it is an active member of the
     parent's family. Raises ``ValueError`` if ``draft`` has no missing fields.
     """
-    if not is_parent(membership):
-        raise PermissionDenied('An active parent membership is required.')
+    return _classify_follow_up_answer(
+        _parent_scope(membership), submitted_text, draft, answer, reference_date,
+        draft_member, locale, backend,
+    )
+
+
+@sensitive_variables('submitted_text', 'answer')
+def classify_follow_up_answer_for_child(
+    membership,
+    submitted_text: str,
+    draft: ClassificationFollowUp,
+    answer: str,
+    *,
+    reference_date: datetime.date,
+    locale: str = DEFAULT_LOCALE,
+    backend: Optional[ClassificationBackend] = None,
+) -> ParentClassification:
+    """``classify_follow_up_answer`` for an active child; the result is assigned to them.
+
+    A person named in the answer is ignored. Raises ``PermissionDenied``
+    unless ``membership`` is an active child in an active family.
+    """
+    return _classify_follow_up_answer(
+        _child_scope(membership), submitted_text, draft, answer, reference_date,
+        None, locale, backend,
+    )
+
+
+def _classify_follow_up_answer(
+    scope, submitted_text, draft, answer, reference_date, draft_member, locale, backend
+):
     if (
         len(submitted_text) > MAX_SUBMITTED_TEXT_LENGTH
         or len(answer) > MAX_FOLLOW_UP_ANSWER_LENGTH
@@ -447,7 +575,7 @@ def classify_follow_up_answer(
             result=ClassificationUnavailable(reason=UnavailableReason.INPUT_TOO_LONG)
         )
 
-    candidates = _active_family_members(membership)
+    candidates = scope.candidates
     reference_date = _local_reference_date(reference_date)
     request = BackendRequest(
         submitted_text=submitted_text,
@@ -464,7 +592,9 @@ def classify_follow_up_answer(
         return ParentClassification(result=error.to_result())
 
     merged = _merge_answer(draft, _known_member_name(draft, draft_member, candidates), output)
-    if set(draft.missing_fields) & _MEMBER_FIELDS:
+    if scope.self_assignee is not None:
+        merged = _assigned_to(merged, scope.self_assignee)
+    elif set(draft.missing_fields) & _MEMBER_FIELDS:
         merged = _resolve_answer_member(merged, answer, candidates)
     result = classify_output(request, merged, require_school_subject=True)
     return _resolve_member(result, candidates)

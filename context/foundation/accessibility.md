@@ -27,6 +27,13 @@ out of scope.
 - Parent family calendar (today window, earlier window, empty), detail, structured create and edit (valid and
   invalid), and the „Usuń wpis” disclosure.
 - Child assigned-entry calendar (today window, earlier window, empty) and detail.
+- Privacy (private-family-entries): the parent review privacy choice, the „Filtr prywatności”
+  of both calendars (Wszystkie, Prywatne, Nieprywatne; with and without a child filter) and the
+  creator-only „Widoczność” control on the parent and child detail pages, before and after a change.
+- Child natural-language capture („Dodaj mój wpis”): empty, invalid, proposal with the privacy
+  choice, unavailable, follow-up question (answer, invalid answer, skip), follow-up highlights,
+  correction failed and correction-invalid, confirm-invalid, batch review and batch-invalid, and the
+  saved state (public and private).
 - Account status (parent, child, unconfigured account).
 - Family member management (S-14): member list (with guard error and notice), display-name
   edit (valid and invalid), and the account page link (`family_access/tests/test_membership_accessibility.py`).
@@ -100,6 +107,11 @@ IDs by design.
   server's rule, moves `aria-current`, reveals the matching state block (announced once), rewrites
   `member` in every `[data-member-link]` href and calls `history.replaceState`. Modifier and middle
   clicks follow the link. Focus stays on the clicked link.
+- **Privacy filter (`_privacy_filter.html`).** Both calendars render a `nav.fn-tabs`
+  (`aria-label="Filtr prywatności"`) of real links („Wszystkie”, „Prywatne”, „Nieprywatne”,
+  `?privacy=private|public`) with `aria-current="page"` on the active one. It is server-side
+  only (no live region): the query is filtered and every link reloads the page. On the parent
+  calendar the links are `data-member-link`, so a child switch keeps them in step.
 
 ## Enforcement
 

@@ -1,5 +1,5 @@
 {% load family_context %}
-<form method="post" action="{% url 'entries:confirm' %}" data-state-part="review" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
+<form method="post" action="{% url capture_routes.confirm|default:"entries:confirm" %}" data-state-part="review" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
     {% family_context_field %}
     <h2>Sprawdź wpis</h2>
@@ -9,6 +9,7 @@
         </div>
     {% endif %}
     {% for row in form.rows %}
+        {% if row.field.name == "is_private" and form.self_assignee %}<p data-self-assignee>Dla kogo: <strong>{{ form.self_assignee.display_name }}</strong></p>{% endif %}
         {% include "entries/_field.html" with field=row.field hint=row.hint %}
         {% if row.field.name == "date" %}
             {% with shown_date=form.display_date %}
@@ -21,8 +22,8 @@
     {{ form.submission_key }}
     <div class="fn-actions">
         <button type="submit">Zapisz wpis</button>
-        <button type="submit" name="action" value="correct" id="{{ form.correct_submit_id }}" class="secondary" formaction="{% url 'entries:correct' %}" formnovalidate data-classification-submit>Popraw</button>
-        <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+        <button type="submit" name="action" value="correct" id="{{ form.correct_submit_id }}" class="secondary" formaction="{% url capture_routes.correct|default:"entries:correct" %}" formnovalidate data-classification-submit>Popraw</button>
+        <a href="{% url capture_routes.capture|default:"entries:capture" %}">Zacznij od nowa</a>
     </div>
     {% include "entries/_classification_progress.html" %}
 </form>

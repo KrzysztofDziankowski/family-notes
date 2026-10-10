@@ -1,0 +1,17 @@
+{% comment %}
+Privacy filter shared by the parent and child calendars. Parameters: privacy_filters, a list of
+{key, label, url, current}: "Wszystkie" (key "all", the default), "Prywatne" (key "private") and
+"Nieprywatne" (key "public"), and optional member_links (marks the links data-member-link so
+js/member-filter.js keeps their member parameter in step with the parent's child filter).
+Every link is a real link (url keeps the window's start and the selected child, and adds
+privacy=<key> except for "Wszystkie"): the server filters the entries the reader may already see,
+so it works without JavaScript. The current state is the link with aria-current="page", styled
+and announced as the current page.
+{% endcomment %}
+<nav class="fn-tabs" aria-label="Filtr prywatności" data-privacy-filter data-state-part="privacy-filter">
+    <ul>
+        {% for filter in privacy_filters %}
+        <li><a href="{{ filter.url }}" data-privacy-key="{{ filter.key }}"{% if member_links %} data-member-link{% endif %}{% if filter.current %} aria-current="page"{% endif %}>{{ filter.label }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>

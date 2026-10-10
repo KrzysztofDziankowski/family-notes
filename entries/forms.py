@@ -6,7 +6,7 @@ from django.forms.utils import ErrorDict
 from django.db.models import Q
 from django.utils import timezone
 
-from family_access.access import scope_queryset_to_family
+from family_access.access import is_parent, scope_queryset_to_family
 from family_access.models import FamilyMember
 
 from .classification.follow_up import follow_up_question
@@ -112,12 +112,23 @@ SCHOOL_ITEM_TYPE_MISMATCH_ERROR = 'Ten element szkolny wymaga rodzaju „{label}
 SCHOOL_SUBJECT_REQUIRED_ERROR = 'Podaj przedmiot.'
 
 
+def self_assignee_of(membership):
+    """The member a form must assign every entry to: ``None`` for a parent, else ``membership``.
+
+    Fail-closed: anyone who is not an active parent (a child) gets no
+    assignee choice at all.
+    """
+    return None if is_parent(membership) else membership
+
+
 class EntryFieldsForm(forms.Form):
     """Editable entry fields shared by capture review, structured create and edit.
 
-    Assignee choices are limited to active members of the parent's family. The
-    school item is a visible choice: a mismatch with the entry type is an
-    error, never discarded silently.
+    Assignee choices are limited to active members of the parent's family. For
+    a child (``self_assignee``) the assignee field is removed and every
+    cleaned entry is assigned to the child, whatever was posted. The school
+    item is a visible choice: a mismatch with the entry type is an error,
+    never discarded silently.
     """
 
     entry_type = forms.ChoiceField(label='Rodzaj', choices=Entry.ENTRY_TYPE_CHOICES)
@@ -165,9 +176,13 @@ class EntryFieldsForm(forms.Form):
         self.fields['date'].widget.attrs['data-entry-date'] = ''
         if not self.is_bound and selected_type == EntryType.NOTE.value and 'date' not in self.initial:
             self.initial['date'] = today or timezone.localdate()
-        self.fields['assigned_member'].queryset = scope_queryset_to_family(
-            FamilyMember.objects.filter(is_active=True), membership
-        ).order_by('pk')
+        self.self_assignee = self_assignee_of(membership)
+        if self.self_assignee is not None:
+            del self.fields['assigned_member']
+        else:
+            self.fields['assigned_member'].queryset = scope_queryset_to_family(
+                FamilyMember.objects.filter(is_active=True), membership
+            ).order_by('pk')
 
     def _cleaned_school_item(self, cleaned):
         value = cleaned.get('school_item')
@@ -175,6 +190,8 @@ class EntryFieldsForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        if self.self_assignee is not None:
+            cleaned['assigned_member'] = self.self_assignee
         entry_type = cleaned.get('entry_type')
         school_item = self._cleaned_school_item(cleaned)
 
@@ -248,14 +265,20 @@ def _correction_field(required):
     )
 
 
+PRIVATE_LABEL = 'Prywatny — widoczny tylko dla mnie'
+
+
 class EntryReviewForm(EntryFieldsForm):
     """The classified proposal as an editable form; every posted value is untrusted.
 
     ``correction`` is the „Popraw opis” box. Saving refuses a non-blank
     correction, so a typed but unapplied correction is never dropped silently.
+    Every form (parent or child, single or batch) offers ``is_private``,
+    unchecked (public) by default; the person confirming becomes the creator.
     """
 
     submission_key = forms.UUIDField(widget=forms.HiddenInput)
+    is_private = forms.BooleanField(label=PRIVATE_LABEL, required=False, initial=False)
     correction = _correction_field(required=False)
 
     # Saving („Zapisz wpis”) refuses a typed but unapplied correction.
@@ -288,13 +311,18 @@ class EntryReviewForm(EntryFieldsForm):
         return cleaned
 
     def rows(self):
-        """Visible fields paired with the hint shown for a missing value."""
+        """Visible fields paired with the hint shown for a missing value.
+
+        A child's form has no assignee row (``self_assignee`` is shown as
+        text instead). Every form ends with the privacy choice.
+        """
         return [
             {'field': self[name], 'hint': self.missing.get(name, '')}
             for name in (
                 'entry_type', 'content', 'school_item', 'school_subject',
-                'date', 'time', 'assigned_member',
+                'date', 'time', 'assigned_member', 'is_private',
             )
+            if name in self.fields
         ]
 
     def display_date(self):
@@ -342,6 +370,23 @@ def proposal_values_from_form(form):
         member_name=member.display_name if member else None,
     )
     return values, member
+
+
+PRIVACY_VALUES = (('true', 'Prywatny'), ('false', 'Nieprywatny'))
+
+
+class EntryPrivacyForm(forms.Form):
+    """The creator's privacy switch for a saved entry: only ``is_private`` is posted.
+
+    The value must be posted explicitly (``true`` or ``false``); a missing or
+    unknown value is invalid, so a stray POST never makes an entry public.
+    """
+
+    is_private = forms.TypedChoiceField(
+        choices=PRIVACY_VALUES,
+        coerce=lambda value: value == 'true',
+        widget=forms.HiddenInput,
+    )
 
 
 class ManagedEntryForm(EntryFieldsForm):
@@ -651,7 +696,7 @@ def _comparable(value):
 
 
 def _save_item(cleaned):
-    return {
+    item = {
         'entry_type': cleaned['entry_type'],
         'content': cleaned['content'],
         'date': cleaned['date'],
@@ -661,6 +706,9 @@ def _save_item(cleaned):
         'school_subject': cleaned['school_subject'],
         'submission_key': cleaned['submission_key'],
     }
+    if 'is_private' in cleaned:
+        item['is_private'] = cleaned['is_private']
+    return item
 
 
 def batch_review_form_from_classification(membership, batch, *, today=None):
@@ -694,8 +742,10 @@ class FollowUpAnswerForm(forms.Form):
     """The follow-up question; the text and draft travel as untrusted hidden fields.
 
     Every hidden value is re-validated on each post: the assignee must be an
-    active member of the parent's family, and ``draft_from_form`` recomputes
-    which missing fields the rules allow. ``skip`` makes the answer optional.
+    active member of the parent's family (a child's form has no assignee
+    field and always drafts for the child), and ``draft_from_form``
+    recomputes which missing fields the rules allow. ``skip`` makes the
+    answer optional.
     """
 
     text = forms.CharField(max_length=MAX_SUBMITTED_TEXT_LENGTH, widget=forms.HiddenInput)
@@ -736,9 +786,13 @@ class FollowUpAnswerForm(forms.Form):
     def __init__(self, membership, *args, skip=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.skip = skip
-        self.fields['assigned_member'].queryset = scope_queryset_to_family(
-            FamilyMember.objects.filter(is_active=True), membership
-        ).order_by('pk')
+        self.self_assignee = self_assignee_of(membership)
+        if self.self_assignee is not None:
+            del self.fields['assigned_member']
+        else:
+            self.fields['assigned_member'].queryset = scope_queryset_to_family(
+                FamilyMember.objects.filter(is_active=True), membership
+            ).order_by('pk')
         if skip:
             # A skipped question ignores whatever was typed into the answer.
             answer = self.fields['answer']
@@ -752,6 +806,8 @@ class FollowUpAnswerForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
+        if self.self_assignee is not None:
+            cleaned['assigned_member'] = self.self_assignee
         if all(name in cleaned for name in _DRAFT_FIELDS):
             draft, _ = _draft_from_cleaned(cleaned)
             if draft.missing_fields:

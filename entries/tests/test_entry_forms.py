@@ -132,7 +132,7 @@ class EntryReviewFormTests(FamilyFixtureMixin, TestCase):
             [row['field'].name for row in form.rows()],
             [
                 'entry_type', 'content', 'school_item', 'school_subject',
-                'date', 'time', 'assigned_member',
+                'date', 'time', 'assigned_member', 'is_private',
             ],
         )
         self.assertEqual(form['school_item'].label, 'Element szkolny')
@@ -434,7 +434,7 @@ class ReviewFormStrictSchoolItemTests(FamilyFixtureMixin, TestCase):
             {f.name for f in form.visible_fields()},
             {
                 'entry_type', 'content', 'date', 'time', 'assigned_member',
-                'school_item', 'school_subject', 'correction',
+                'school_item', 'school_subject', 'is_private', 'correction',
             },
         )
 
