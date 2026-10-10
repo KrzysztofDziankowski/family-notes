@@ -11,6 +11,7 @@ operator-only in Django admin, which bypasses this lock by design.
 
 import logging
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -106,7 +107,8 @@ def _relock_members(family, actor_id, member_id):
     except FamilyMember.DoesNotExist:
         raise PermissionDenied('An active parent membership is required.') from None
     fresh_actor.family = family
-    if not is_parent(fresh_actor):
+    actor_user = get_user_model().objects.select_for_update().get(pk=fresh_actor.user_id)
+    if not actor_user.is_active or not is_parent(fresh_actor):
         raise PermissionDenied('An active parent membership is required.')
     target = members.get(pk=member_id)
     target.family = family

@@ -198,16 +198,15 @@ class DeactivationGuardTests(MembershipFixtureMixin, TestCase):
         self.assertFalse(can_deactivate(self.parent, self.other_parent))
 
     def test_last_usable_parent_refused_through_the_service(self):
-        # Sam's account is disabled: Alex is the family's last usable parent,
-        # so Sam's still-active membership cannot remove Alex.
+        # A disabled account cannot exercise its still-active membership.
         get_user_model().objects.filter(pk=self.other_parent.user_id).update(is_active=False)
 
-        self.assert_refused(self.other_parent, self.parent.pk, LAST_PARENT_ERROR)
+        with self.assertRaises(PermissionDenied):
+            deactivate_member(self.other_parent, self.parent.pk)
 
     def test_parent_with_disabled_user_does_not_count_as_remaining(self):
         get_user_model().objects.filter(pk=self.parent.user_id).update(is_active=False)
 
-        self.assert_refused(self.parent, self.other_parent.pk, LAST_PARENT_ERROR)
         with self.assertRaises(ValidationError):
             _ensure_parent_remains(self.family, excluding_member_id=self.other_parent.pk)
 
@@ -361,6 +360,21 @@ class StaleAuthorityTests(MembershipFixtureMixin, TestCase):
             deactivate_member(actor, self.child.pk)
         self.child.refresh_from_db()
         self.assertTrue(self.child.is_active)
+
+    def test_actor_user_disabled_after_resolution_is_denied(self):
+        actor = self.parent
+        FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
+        get_user_model().objects.filter(pk=actor.user_id).update(is_active=False)
+        before = self.snapshot()
+
+        for call in (
+            lambda: rename_member(actor, self.other_parent.pk, 'Nowe'),
+            lambda: deactivate_member(actor, self.other_parent.pk),
+            lambda: reactivate_member(actor, self.child.pk),
+        ):
+            with self.assertRaises(PermissionDenied):
+                call()
+        self.assertEqual(self.snapshot(), before)
 
     def test_target_already_reactivated_gives_state_error(self):
         target = self.child

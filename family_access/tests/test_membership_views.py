@@ -269,8 +269,13 @@ class MutationViewTests(MembershipFixtureMixin, TestCase):
     def test_mutations_enforce_csrf(self):
         client = self.client_class(enforce_csrf_checks=True)
         client.force_login(self.parent.user)
+        FamilyMember.objects.filter(pk=self.child.pk).update(is_active=False)
         before = self.snapshot()
-        for url in (deactivate_url(self.child.pk), edit_url(self.child.pk)):
+        for url in (
+            deactivate_url(self.child.pk),
+            reactivate_url(self.child.pk),
+            edit_url(self.child.pk),
+        ):
             self.assertEqual(client.post(url, {'display_name': 'X'}).status_code, 403)
         self.assertEqual(self.snapshot(), before)
 
@@ -300,8 +305,23 @@ class StateGalleryTests(MembershipFixtureMixin, TestCase):
     def test_gallery_is_parent_only(self):
         response = self.client.get(STATES_URL)
         self.assertEqual(response.status_code, 302)
-        self.client.force_login(self.child.user)
-        self.assertEqual(self.client.get(STATES_URL).status_code, 403)
+        visitors = {
+            'child': self.child.user,
+            'inactive parent': self.member(
+                'inactive-gallery-parent', FamilyMember.Role.PARENT, 'Nieaktywny',
+                is_active=False,
+            ).user,
+            'no membership': get_user_model().objects.create_user(
+                username='gallery-nobody', email='gallery-nobody@example.test'
+            ),
+        }
+        for label, user in visitors.items():
+            with self.subTest(visitor=label):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(STATES_URL).status_code, 403)
+
+        self.client.force_login(self.foreign_parent.user)
+        self.assertEqual(self.client.get(STATES_URL).status_code, 200)
 
     @override_settings(DEBUG=True)
     def test_gallery_renders_every_state_without_writes(self):
