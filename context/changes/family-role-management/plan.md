@@ -79,7 +79,9 @@ Add one authorized, race-safe service function for role changes.
 - On the fresh rows it raises `PermissionDenied` unless `is_parent(fresh_actor)`, refuses an inactive target with a Polish `ValidationError`, does nothing when the role is unchanged, requires `confirm_self=True` when the target is the actor, and when demoting calls `_ensure_parent_remains(family, excluding_member_id=target.pk)`.
 - It saves the role on the fresh target, and on demotion sets `revoked_at` on every unrevoked `AutomationToken` of the target.
 - It returns the updated member and emits one content-free log line with old and new role.
-- It never reads or writes `User` fields.
+- Fresh actor authorization reads and locks `User.is_active` through S-14's
+  `_relock_members`; the role change never writes `User` fields and never reads or
+  writes `User.is_staff` or `User.is_superuser`.
 
 ### Success Criteria:
 
