@@ -245,9 +245,9 @@ Add `is_private` as a non-null boolean with model and database defaults set to f
 
 #### Automated
 
-- [ ] 1.1 `uv run python manage.py test entries.tests.test_private_entries entries.tests.test_manage_access entries.tests.test_child_entries entries.tests.test_entries_api` passes with creator, non-creator, role, family, anonymous, and API cases.
-- [ ] 1.2 `uv run python manage.py check` passes.
-- [ ] 1.3 `uv run python manage.py makemigrations --check --dry-run` reports no model/migration drift.
+- [x] 1.1 `uv run python manage.py test entries.tests.test_private_entries entries.tests.test_manage_access entries.tests.test_child_entries entries.tests.test_entries_api` passes with creator, non-creator, role, family, anonymous, and API cases.
+- [x] 1.2 `uv run python manage.py check` passes.
+- [x] 1.3 `uv run python manage.py makemigrations --check --dry-run` reports no model/migration drift.
 
 #### Manual
 

@@ -17,7 +17,6 @@ from django.utils import timezone
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from family_access.access import scope_queryset_to_family
 from family_access.context import require_family_context, resolve_family_context
 from family_access.models import FamilyMember
 from family_notes.log_safety import exception_summary
@@ -79,6 +78,7 @@ from .services import (
     save_confirmed_entries,
     save_confirmed_entry,
     update_family_entry,
+    visible_family_entries,
 )
 
 UNAVAILABLE_NOTICE = (
@@ -486,8 +486,8 @@ def _saved_entries(membership, saved):
     """Up to ``MAX_PROPOSALS_PER_INSTRUCTION`` family entries named in ``saved``.
 
     ``saved`` is a comma-separated list of IDs, kept in the posted order.
-    Anything else (non-digit parts, too many IDs, other families' entries)
-    is ignored.
+    Anything else (non-digit parts, too many IDs, other families' entries,
+    other members' private entries) is ignored.
     """
     parts = saved.split(',') if saved else []
     if len(parts) > MAX_PROPOSALS_PER_INSTRUCTION:
@@ -498,9 +498,7 @@ def _saved_entries(membership, saved):
     ))
     if not ids:
         return []
-    found = scope_queryset_to_family(
-        Entry.objects.select_related('assigned_member'), membership
-    ).in_bulk(ids)
+    found = visible_family_entries(membership).in_bulk(ids)
     return [found[pk] for pk in ids if pk in found]
 
 
@@ -987,7 +985,8 @@ def _calendar_navigation(url_name, start, today, query_extra=''):
 
 
 def _managed_entry_or_404(membership, pk):
-    """Resolve an entry in the parent's family; missing and foreign IDs are both 404."""
+    """Resolve an entry the parent may manage; missing, foreign and other members'
+    private IDs are all 404."""
     try:
         return with_effective_date(parent_family_entries(membership)).get(pk=pk)
     except Entry.DoesNotExist:
@@ -1424,7 +1423,8 @@ def child_list(request):
 @require_GET
 @login_required
 def child_detail(request, pk):
-    """One entry assigned to the signed-in child; any other ID is a plain 404."""
+    """One entry the signed-in child may read; any other ID (including someone else's
+    private entry) is a plain 404."""
     entries = child_entries(resolve_family_context(request))
     entry = get_object_or_404(with_effective_date(entries), pk=pk)
     list_start = _detail_list_start(request, entry, timezone.localdate())

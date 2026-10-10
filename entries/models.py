@@ -69,6 +69,10 @@ class Entry(models.Model):
         verbose_name='dodane przez',
     )
     submission_key = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    # A private entry is visible only to its ``created_by`` member. Creatorless
+    # (automated or imported) rows stay public. The database default keeps
+    # inserts from a rolled-back release (which does not know this column) public.
+    is_private = models.BooleanField('prywatny', default=False, db_default=False)
     created_at = models.DateTimeField('utworzono', auto_now_add=True)
     updated_at = models.DateTimeField('zmieniono', auto_now=True)
 

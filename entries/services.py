@@ -100,10 +100,16 @@ def save_confirmed_entries(membership, items):
 
 
 def _existing_for_key(membership, submission_key):
+    """The entry already saved under ``submission_key``, or ``None``.
+
+    A key held by another family's entry, or by a private entry ``membership``
+    did not create, is rejected like any other unusable key: a replay never
+    returns an entry the caller may not read.
+    """
     entry = Entry.objects.filter(submission_key=submission_key).first()
     if entry is None:
         return None
-    if entry.family_id != membership.family_id:
+    if entry.family_id != membership.family_id or not _is_visible_to(entry, membership):
         raise ValidationError('Nie można zapisać tego wpisu. Spróbuj ponownie.')
     return entry
 
@@ -170,28 +176,61 @@ def require_parent_membership(membership):
     return membership
 
 
+# --- Creator-only privacy -----------------------------------------------------
+
+
+def visible_to(membership):
+    """Privacy condition for ``membership``: public entries plus its own private ones.
+
+    A private entry is readable only by its recorded creator, whatever its
+    assignee or the reader's role. Combine it with the family scope; on its own
+    it says nothing about families.
+    """
+    return Q(is_private=False) | Q(created_by=membership)
+
+
+def _is_visible_to(entry, membership):
+    return not entry.is_private or entry.created_by_id == membership.pk
+
+
 def _family_entries(membership):
+    """Every entry of the context's family, private ones included (no privacy rule)."""
     return scope_queryset_to_family(
         Entry.objects.select_related('assigned_member'), membership
     )
 
 
-def _locked_family_entry(membership, entry_id):
-    """Lock one family entry row for update.
+def visible_family_entries(membership):
+    """Family entries ``membership`` may see under the privacy rule, for any role.
 
-    The lock query has no ``select_related``: PostgreSQL rejects ``FOR UPDATE``
-    on the nullable side of the outer join a nullable foreign key produces.
+    Role rules (parent management, child assignment) are the caller's job.
+    """
+    return _family_entries(membership).filter(visible_to(membership))
+
+
+def _locked_family_entry(membership, entry_id):
+    """Lock one family entry row visible to ``membership`` for update.
+
+    Another member's private entry raises ``Entry.DoesNotExist`` like a
+    missing ID. The lock query has no ``select_related``: PostgreSQL rejects
+    ``FOR UPDATE`` on the nullable side of the outer join a nullable foreign
+    key produces.
     """
     return (
         scope_queryset_to_family(Entry.objects.all(), membership)
+        .filter(visible_to(membership))
         .select_for_update()
         .get(pk=entry_id)
     )
 
 
 def parent_family_entries(membership):
-    """Entries of the active parent's family only; non-parents are denied."""
-    return _family_entries(require_parent_membership(membership))
+    """Entries the active parent may manage; non-parents are denied.
+
+    The parent's family only: public entries plus the parent's own private
+    ones. Another member's private entry is never included.
+    """
+    return visible_family_entries(require_parent_membership(membership))
 
 
 def active_family_children(membership):
@@ -203,10 +242,10 @@ def active_family_children(membership):
 
 
 def get_parent_family_entry(membership, entry_id):
-    """Resolve one entry within the parent's family.
+    """Resolve one entry the parent may manage within their family.
 
-    Missing and foreign-family IDs both raise ``Entry.DoesNotExist`` so the
-    caller cannot tell them apart.
+    Missing, foreign-family and other members' private IDs all raise
+    ``Entry.DoesNotExist`` so the caller cannot tell them apart.
     """
     return parent_family_entries(membership).get(pk=entry_id)
 
@@ -302,9 +341,10 @@ def update_family_entry(
 ):
     """Change only the editable fields of an entry in the parent's family.
 
-    Family, source, creator, submission key and creation time are preserved.
-    The school subject is required only per ``subject_required_on_edit``.
-    Raises ``Entry.DoesNotExist`` for missing or foreign-family IDs.
+    Family, source, creator, privacy, submission key and creation time are
+    preserved. The school subject is required only per
+    ``subject_required_on_edit``. Raises ``Entry.DoesNotExist`` for missing,
+    foreign-family or other members' private IDs.
     """
     membership = require_parent_membership(membership)
     entry_type = EntryType(entry_type)
@@ -335,7 +375,8 @@ def update_family_entry(
 def delete_family_entry(membership, entry_id):
     """Permanently delete one entry in the parent's family.
 
-    Raises ``Entry.DoesNotExist`` for missing or foreign-family IDs.
+    Raises ``Entry.DoesNotExist`` for missing, foreign-family or other
+    members' private IDs.
     """
     membership = require_parent_membership(membership)
     with transaction.atomic():
@@ -348,24 +389,48 @@ def child_entries(membership):
 
     ``membership`` is the request's family context. Authorization is checked
     here, independently of the view. Unassigned ("Ogólne") entries,
-    other children's entries and other families' entries are never included.
+    other children's entries, other families' entries and private entries
+    someone else created (even when assigned to the child) are never included.
     """
     if not can_read_assigned_child(membership, membership):
         raise PermissionDenied('An active child membership is required.')
     return Entry.objects.filter(
+        visible_to(membership),
         family=membership.family,
         assigned_member=membership,
     ).select_related('assigned_member')
+
+
+def set_entry_privacy(membership, entry_id, *, is_private):
+    """Make one entry private or public; only its creator may.
+
+    ``membership`` is the request's family context, of any role. Only
+    ``is_private`` (and the ``updated_at`` timestamp) is written: no content,
+    assignment or other field changes, so this grants no general edit right.
+    Missing, foreign-family and other members' entries all raise
+    ``Entry.DoesNotExist`` alike.
+    """
+    with transaction.atomic():
+        entry = (
+            scope_queryset_to_family(Entry.objects.all(), membership)
+            .filter(created_by=membership)
+            .select_for_update()
+            .get(pk=entry_id)
+        )
+        entry.is_private = bool(is_private)
+        entry.save(update_fields=('is_private', 'updated_at'))
+    return entry
 
 
 # --- Automation read API (S-06) ---------------------------------------------
 
 
 def automation_family_entries(membership, *, date_from=None, date_to=None, include_undated=True):
-    """All entries of the token owner's family for the automation read API.
+    """All public entries of the token owner's family for the automation read API.
 
-    Deliberately independent of the HTML listing rules: no sections, no
-    skipped entry types. Both date bounds are inclusive and optional; undated
+    Private entries are never returned, whoever created them: the token acts
+    for no family member. Deliberately independent of the HTML listing rules:
+    no sections, no skipped entry types. Both date bounds are inclusive and optional; undated
     entries are added only when ``include_undated`` is true. The order
     ``created_at, id`` is stable, so newly created entries land at the end and
     do not shift earlier ``limit + offset`` pages.
@@ -376,7 +441,11 @@ def automation_family_entries(membership, *, date_from=None, date_to=None, inclu
     if date_to is not None:
         dated &= Q(date__lte=date_to)
     condition = (dated | Q(date__isnull=True)) if include_undated else dated
-    return _family_entries(membership).filter(condition).order_by('created_at', 'id')
+    return (
+        _family_entries(membership)
+        .filter(condition, is_private=False)
+        .order_by('created_at', 'id')
+    )
 
 
 # --- Automated EduVulcan entries (S-05) ---------------------------------------

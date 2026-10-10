@@ -1,7 +1,7 @@
 ---
 change_id: private-family-entries
 title: Private entries and child entry creation
-status: planned
+status: implementing
 created: 2026-10-10
 updated: 2026-10-10
 archived_at: null
