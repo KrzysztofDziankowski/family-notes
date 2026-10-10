@@ -5,6 +5,7 @@
 
 {% block content %}
 <h1>Moje wpisy</h1>
+<p><a href="{% url 'entries:child_capture' %}" data-child-capture-link>Dodaj mój wpis</a></p>
 {% include "entries/_child_calendar.html" %}
 {% endblock %}
 

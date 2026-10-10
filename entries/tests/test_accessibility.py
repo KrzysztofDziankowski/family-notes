@@ -428,3 +428,118 @@ class ChildAuditTests(FamilyFixtureMixin, TestCase):
             self,
             self.client.get(reverse('entries:child_detail', args=[entries[3].pk]), self.window(-14)),
         )
+
+
+CHILD_CAPTURE_URL = reverse('entries:child_capture')
+CHILD_ANSWER_URL = reverse('entries:child_answer')
+CHILD_CORRECT_URL = reverse('entries:child_correct')
+CHILD_CONFIRM_URL = reverse('entries:child_confirm')
+CHILD_BATCH_URL = reverse('entries:child_confirm_batch')
+
+
+class ChildCaptureAuditTests(FamilyFixtureMixin, TestCase):
+    """Child capture, review, follow-up, correction, invalid and saved states."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.child.user)
+        patcher = mock.patch('entries.views.timezone.localdate', return_value=TODAY)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def capture(self, *results):
+        batch = ParentBatchClassification(
+            items=tuple(ParentClassification(result=r, member=self.child) for r in results)
+        )
+        with mock.patch('entries.views.classify_entries_for_child', return_value=batch):
+            return self.client.post(CHILD_CAPTURE_URL, {'text': 'Mam sprawdzian z biologii'})
+
+    def assert_state(self, response, state):
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['state'], state)
+        self.assertTemplateUsed(response, 'entries/child_capture.html')
+        assert_accessible(self, response)
+
+    def review_data(self, **overrides):
+        data = as_post_data(self.capture(proposal()).context['review_form'])
+        data.update(overrides)
+        return data
+
+    def question_data(self):
+        return as_post_data(self.capture(missing_date()).context['follow_up_form'])
+
+    def test_empty_and_invalid_capture(self):
+        self.assert_state(self.client.get(CHILD_CAPTURE_URL), 'empty')
+        self.assert_state(self.client.post(CHILD_CAPTURE_URL, {'text': ''}), 'empty')
+
+    def test_proposal_with_privacy_choice(self):
+        response = self.capture(proposal())
+        self.assert_state(response, 'proposal')
+        self.assertContains(response, 'for="id_is_private"')
+
+    def test_unavailable(self):
+        response = self.capture(ClassificationUnavailable(reason=UnavailableReason.TIMEOUT))
+        self.assert_state(response, 'unavailable')
+
+    def test_follow_up_question_invalid_answer_and_skip(self):
+        self.assert_state(self.capture(missing_date()), 'question')
+        data = self.question_data()
+        self.assert_state(self.client.post(CHILD_ANSWER_URL, {**data, 'answer': ''}), 'question')
+        self.assert_state(
+            self.client.post(CHILD_ANSWER_URL, {**data, 'action': 'skip'}), 'skipped'
+        )
+
+    def test_follow_up_answer_highlights_review(self):
+        with mock.patch(
+            'entries.views.classify_follow_up_answer_for_child',
+            return_value=ParentClassification(result=missing_date(), member=self.child),
+        ):
+            response = self.client.post(
+                CHILD_ANSWER_URL, {**self.question_data(), 'answer': 'nie wiem'}
+            )
+        self.assert_state(response, 'follow_up')
+
+    def test_correction_states(self):
+        failed = ProposalCorrection(outcome=None, rejection=CorrectionRejection.NOT_APPLIED)
+        with mock.patch('entries.views.correct_proposal_for_child', return_value=failed):
+            response = self.client.post(CHILD_CORRECT_URL, self.review_data(correction='dla Ani'))
+        self.assert_state(response, 'correction_failed')
+        self.assert_state(
+            self.client.post(CHILD_CORRECT_URL, self.review_data(correction='')), 'invalid'
+        )
+
+    def test_confirm_invalid(self):
+        response = self.client.post(CHILD_CONFIRM_URL, self.review_data(content='', date=''))
+        self.assert_state(response, 'invalid')
+
+    def test_batch_review_and_invalid(self):
+        response = self.capture(proposal(), proposal(date=NEXT_MONDAY + datetime.timedelta(days=1)))
+        self.assert_state(response, 'batch')
+        data = {'count': '2', 'action': 'save'}
+        for entry_form in response.context['batch_form'].forms:
+            values = as_post_data(entry_form)
+            values.pop('include', None)
+            values.pop('is_private', None)
+            data.update({f'{entry_form.prefix}-{name}': value for name, value in values.items()})
+        invalid = self.client.post(CHILD_BATCH_URL, data)
+        self.assert_state(invalid, 'batch')
+        self.assertContains(invalid, 'role="alert"')
+
+    def test_saved_public_and_private(self):
+        for is_private in (False, True):
+            with self.subTest(is_private=is_private):
+                entry = Entry.objects.create(
+                    date=TODAY, family=self.family, entry_type=EntryType.TODO.value,
+                    content='Oddać książkę', assigned_member=self.child,
+                    created_by=self.child, is_private=is_private,
+                )
+                response = self.client.get(CHILD_CAPTURE_URL, {'saved': entry.pk})
+                self.assert_state(response, 'saved')
+                self.assertEqual(
+                    'data-saved-private' in response.content.decode(), is_private
+                )
+
+    def test_child_list_with_capture_link(self):
+        response = self.client.get(reverse('entries:child_list'))
+        self.assertContains(response, f'href="{CHILD_CAPTURE_URL}"')
+        assert_accessible(self, response)

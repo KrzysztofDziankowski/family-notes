@@ -1,5 +1,5 @@
 {% load family_context %}
-<form method="post" action="{% url 'entries:capture' %}" data-state-part="capture" data-classification-default data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
+<form method="post" action="{% url capture_routes.capture|default:"entries:capture" %}" data-state-part="capture" data-classification-default data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
     {% family_context_field %}
     {% include "entries/_field.html" with field=form.text hint="" %}

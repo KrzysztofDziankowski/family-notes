@@ -1,5 +1,5 @@
 {% load family_context %}
-<form method="post" action="{% url 'entries:confirm_batch' %}" data-state-part="batch" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
+<form method="post" action="{% url capture_routes.confirm_batch|default:"entries:confirm_batch" %}" data-state-part="batch" data-classification-progress-form data-progress-slow-after="{{ progress_slow_after }}" data-progress-stalled-after="{{ progress_stalled_after }}">
     {% csrf_token %}
     {% family_context_field %}
     <h2>Sprawdź wpisy ({{ form.count|default:0 }})</h2>
@@ -10,7 +10,7 @@
     {% endif %}
     {% if form.stale %}
         <div class="fn-actions">
-            <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+            <a href="{% url capture_routes.capture|default:"entries:capture" %}">Zacznij od nowa</a>
         </div>
     {% else %}
         <input type="hidden" name="count" value="{{ form.count }}">
@@ -35,6 +35,7 @@
                 </label>
                 {% if entry.hint %}<p class="fn-muted" data-duplicate-hint>{{ entry.hint }}</p>{% endif %}
                 {% for row in entry.form.rows %}
+                    {% if row.field.name == "is_private" and entry.form.self_assignee %}<p data-self-assignee>Dla kogo: <strong>{{ entry.form.self_assignee.display_name }}</strong></p>{% endif %}
                     {% include "entries/_field.html" with field=row.field hint=row.hint %}
                     {% if row.field.name == "date" %}
                         {% with shown_date=entry.form.display_date %}
@@ -53,7 +54,7 @@
         {% endfor %}
         <div class="fn-actions">
             <button type="submit" name="action" value="save">Zapisz wpisy</button>
-            <a href="{% url 'entries:capture' %}">Zacznij od nowa</a>
+            <a href="{% url capture_routes.capture|default:"entries:capture" %}">Zacznij od nowa</a>
         </div>
         {% include "entries/_classification_progress.html" %}
     {% endif %}

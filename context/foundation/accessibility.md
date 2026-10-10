@@ -27,6 +27,10 @@ out of scope.
 - Parent family calendar (today window, earlier window, empty), detail, structured create and edit (valid and
   invalid), and the „Usuń wpis” disclosure.
 - Child assigned-entry calendar (today window, earlier window, empty) and detail.
+- Child natural-language capture („Dodaj mój wpis”): empty, invalid, proposal with the privacy
+  choice, unavailable, follow-up question (answer, invalid answer, skip), follow-up highlights,
+  correction failed and correction-invalid, confirm-invalid, batch review and batch-invalid, and the
+  saved state (public and private).
 - Account status (parent, child, unconfigured account).
 - Family member management (S-14): member list (with guard error and notice), display-name
   edit (valid and invalid), and the account page link (`family_access/tests/test_membership_accessibility.py`).

@@ -14,6 +14,12 @@ urlpatterns = [
     # S-03 child view
     path('mine/', views.child_list, name='child_list'),
     path('mine/_states/', views.child_states, name='child_states'),
+    # Child natural-language capture: entries for the child only
+    path('mine/new/', views.child_capture, name='child_capture'),
+    path('mine/answer/', views.child_answer, name='child_answer'),
+    path('mine/correct/', views.child_correct, name='child_correct'),
+    path('mine/confirm/', views.child_confirm, name='child_confirm'),
+    path('mine/confirm-batch/', views.child_confirm_batch, name='child_confirm_batch'),
     path('mine/<int:pk>/', views.child_detail, name='child_detail'),
     # S-02 parent management
     path('', views.index, name='index'),

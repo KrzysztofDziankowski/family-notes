@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Stany ekranu „Moje wpisy”{% endblock %}
 
@@ -13,9 +14,18 @@
         {% include "entries/_child_calendar.html" with days=section.list.days previous_url=section.list.previous_url today_url=section.list.today_url next_url=section.list.next_url is_today=section.list.is_today detail_query=section.list.detail_query id_prefix=section.name|add:"-" only %}
     {% elif section.error %}
         {% include "_error.html" with heading=section.error.heading message=section.error.message only %}
-    {% else %}
+    {% elif section.entry %}
         {% include "entries/_child_entry_detail.html" with entry=section.entry list_query=section.list_query only %}
+    {% else %}
+        {# Child capture states: the shared capture body posting to the child routes. #}
+        {% include "entries/_capture_body.html" with state=section.saved_entries|yesno:"saved," saved_entries=section.saved_entries notice=section.notice follow_up_form=section.follow_up_form batch_form=section.batch_form review_form=section.review_form capture_form=section.capture_form %}
     {% endif %}
 </section>
 {% endfor %}
+{% endblock %}
+
+{% block extra_body %}
+<script src="{% static 'js/entry-date-labels.js' %}" defer></script>
+<script src="{% static 'js/enter-submit.js' %}" defer></script>
+<script src="{% static 'js/classification-progress.js' %}" defer></script>
 {% endblock %}

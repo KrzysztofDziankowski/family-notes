@@ -139,7 +139,10 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
                     set(re.findall(r'aria-labelledby="([^"]+)"', state)) <= set(ids)
                 )
                 self.assertIn(f'?start={start.isoformat()}', state)
-        all_ids = re.findall(r'\bid="([^"]+)"', html)
+        # Calendar and detail ids are page-unique; the capture states repeat
+        # their form field ids by design, like the parent gallery.
+        calendar_html = html[:html.index('<section data-kitchen-state="capture_')]
+        all_ids = re.findall(r'\bid="([^"]+)"', calendar_html)
         self.assertEqual(len(all_ids), len(set(all_ids)))
 
         today = _state_html(html, 'list_today')
@@ -174,3 +177,43 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('Przedmiot', manual)
         self.assertIn(f'href="/entries/mine/?start={STATES_DATE.isoformat()}" data-back-link', manual)
 
+
+
+CAPTURE_STATE_NAMES = (
+    'capture_empty',
+    'capture_proposal',
+    'capture_question',
+    'capture_follow_up',
+    'capture_unavailable',
+    'capture_correction_failed',
+    'capture_invalid',
+    'capture_batch',
+    'capture_saved',
+    'capture_saved_private',
+)
+
+
+class ChildCaptureStatesTests(FamilyFixtureMixin, TestCase):
+    @override_settings(DEBUG=True)
+    def test_capture_states_show_child_controls_and_post_to_child_routes(self):
+        child_routes = {
+            reverse(f'entries:child_{name}')
+            for name in ('capture', 'answer', 'correct', 'confirm', 'confirm_batch')
+        }
+        for member in (self.child, self.parent):
+            with self.subTest(role=member.role):
+                self.client.force_login(member.user)
+                html = self.client.get(CHILD_STATES_URL).content.decode()
+                for name in CAPTURE_STATE_NAMES:
+                    with self.subTest(state=name):
+                        state = _state_html(html, name)
+                        self.assertTrue(state, name)
+                        self.assertNotIn('name="assigned_member"', state)
+                        actions = set(re.findall(r'(?:action|formaction)="([^"]*)"', state))
+                        self.assertTrue(actions <= child_routes, actions - child_routes)
+                for name in ('capture_proposal', 'capture_batch', 'capture_invalid'):
+                    self.assertIn('is_private', _state_html(html, name))
+                self.assertIn('data-saved-private', _state_html(html, 'capture_saved_private'))
+                self.assertNotIn('data-saved-private', _state_html(html, 'capture_saved'))
+                self.assertIn('fn-field-error', _state_html(html, 'capture_invalid'))
+        self.assertFalse(Entry.objects.exists())

@@ -26,8 +26,11 @@ from .classification.service import (
     CorrectionRejection,
     ParentBatchClassification,
     ParentClassification,
+    classify_entries_for_child,
     classify_entries_for_parent,
     classify_follow_up_answer,
+    classify_follow_up_answer_for_child,
+    correct_proposal_for_child,
     correct_proposal_for_parent,
 )
 from .classification.types import (
@@ -74,7 +77,10 @@ from .services import (
     create_family_entry,
     delete_family_entry,
     parent_family_entries,
+    require_child_membership,
     require_parent_membership,
+    save_child_entries,
+    save_child_entry,
     save_confirmed_entries,
     save_confirmed_entry,
     update_family_entry,
@@ -155,10 +161,80 @@ def _describe_capture_forms(context):
             describe_fields(entry_form)
 
 
-def _render(request, state, **context):
+class _CaptureFlow:
+    """One role's natural-language capture journey: who may use it, its services and routes.
+
+    The parent flow is the original capture; the child flow reuses every step
+    for an active child, whose services assign every entry to the child.
+    Services are looked up when called (not bound at import time), and every
+    step re-authorizes the request's family context.
+    """
+
+    def __init__(self, *, child):
+        self.child = child
+        prefix = 'entries:child_' if child else 'entries:'
+        self.routes = {
+            name: f'{prefix}{name}'
+            for name in ('capture', 'answer', 'correct', 'confirm', 'confirm_batch')
+        }
+        self.template = 'entries/child_capture.html' if child else 'entries/capture.html'
+
+    def authorize(self, request):
+        membership = resolve_family_context(request)
+        if self.child:
+            return require_child_membership(membership)
+        return require_parent_membership(membership)
+
+    def classify_entries(self, membership, text, *, reference_date):
+        classify = classify_entries_for_child if self.child else classify_entries_for_parent
+        return classify(membership, text, reference_date=reference_date)
+
+    def classify_answer(self, membership, text, draft, answer, *, reference_date, draft_member):
+        if self.child:
+            return classify_follow_up_answer_for_child(
+                membership, text, draft, answer, reference_date=reference_date
+            )
+        return classify_follow_up_answer(
+            membership, text, draft, answer,
+            reference_date=reference_date, draft_member=draft_member,
+        )
+
+    def correct(self, membership, current, correction, *, reference_date, current_member):
+        if self.child:
+            return correct_proposal_for_child(
+                membership, current, correction, reference_date=reference_date
+            )
+        return correct_proposal_for_parent(
+            membership, current, correction,
+            reference_date=reference_date, current_member=current_member,
+        )
+
+    def save_entry(self, membership, **values):
+        save = save_child_entry if self.child else save_confirmed_entry
+        return save(membership, **values)
+
+    def save_entries(self, membership, items):
+        save = save_child_entries if self.child else save_confirmed_entries
+        return save(membership, items)
+
+    def saved_entries(self, membership):
+        """Entries the saved panel may name: the child's own, or the parent's visible ones."""
+        return child_entries(membership) if self.child else visible_family_entries(membership)
+
+    def capture_url(self):
+        return reverse(self.routes['capture'])
+
+
+PARENT_CAPTURE = _CaptureFlow(child=False)
+CHILD_CAPTURE = _CaptureFlow(child=True)
+
+
+def _render(request, flow, state, **context):
     _describe_capture_forms(context)
     return render(
-        request, 'entries/capture.html', {'state': state, **_progress_thresholds(), **context}
+        request,
+        flow.template,
+        {'state': state, 'capture_routes': flow.routes, **_progress_thresholds(), **context},
     )
 
 
@@ -166,12 +242,25 @@ def _render(request, state, **context):
 @require_http_methods(['GET', 'POST'])
 @login_required
 def capture(request):
-    membership = _require_parent(request)
+    return _capture(request, PARENT_CAPTURE)
+
+
+@sensitive_post_parameters('text', 'content')
+@require_http_methods(['GET', 'POST'])
+@login_required
+def child_capture(request):
+    """The child's natural-language capture; every entry is the child's own."""
+    return _capture(request, CHILD_CAPTURE)
+
+
+def _capture(request, flow):
+    membership = flow.authorize(request)
 
     if request.method == 'GET':
-        saved_entries = _saved_entries(membership, request.GET.get('saved', ''))
+        saved_entries = _saved_entries(flow.saved_entries(membership), request.GET.get('saved', ''))
         return _render(
             request,
+            flow,
             'saved' if saved_entries else 'empty',
             capture_form=CaptureForm(),
             saved_entries=saved_entries,
@@ -179,14 +268,15 @@ def capture(request):
 
     capture_form = CaptureForm(request.POST)
     if not capture_form.is_valid():
-        return _render(request, 'empty', capture_form=capture_form)
+        return _render(request, flow, 'empty', capture_form=capture_form)
 
     text = capture_form.cleaned_data['text']
     today = timezone.localdate()
-    batch = classify_entries_for_parent(membership, text, reference_date=today)
+    batch = flow.classify_entries(membership, text, reference_date=today)
     if not batch.is_single:
         return _render(
             request,
+            flow,
             'batch',
             batch_form=batch_review_form_from_classification(membership, batch, today=today),
         )
@@ -198,11 +288,12 @@ def capture(request):
         result.reason == UnavailableReason.INPUT_TOO_LONG
     ):
         capture_form.add_error('text', INPUT_TOO_LONG_ERROR)
-        return _render(request, 'empty', capture_form=capture_form)
+        return _render(request, flow, 'empty', capture_form=capture_form)
 
     if isinstance(result, ClassificationFollowUp):
         return _render(
             request,
+            flow,
             'question',
             follow_up_form=follow_up_form_from_classification(membership, outcome, text),
         )
@@ -213,7 +304,7 @@ def capture(request):
     if state == 'unavailable':
         too_many = result.reason == UnavailableReason.TOO_MANY_ENTRIES
         notice = TOO_MANY_ENTRIES_NOTICE if too_many else UNAVAILABLE_NOTICE
-    return _render(request, state, review_form=review_form, notice=notice)
+    return _render(request, flow, state, review_form=review_form, notice=notice)
 
 
 @sensitive_post_parameters('text', 'content', 'answer')
@@ -225,11 +316,23 @@ def answer(request):
     Nothing is saved here: every path ends on a review form posted to
     ``confirm``. The draft comes back from hidden fields and is re-validated.
     """
-    membership = _require_parent(request)
+    return _answer(request, PARENT_CAPTURE)
+
+
+@sensitive_post_parameters('text', 'content', 'answer')
+@require_POST
+@login_required
+def child_answer(request):
+    """The child's answer to a follow-up question; the draft stays the child's own."""
+    return _answer(request, CHILD_CAPTURE)
+
+
+def _answer(request, flow):
+    membership = flow.authorize(request)
     skip = request.POST.get('action') == 'skip'
     form = FollowUpAnswerForm(membership, request.POST, skip=skip)
     if not form.is_valid():
-        return _render(request, 'question', follow_up_form=form)
+        return _render(request, flow, 'question', follow_up_form=form)
 
     text = form.cleaned_data['text']
     today = timezone.localdate()
@@ -242,17 +345,18 @@ def answer(request):
             text,
             today=today,
         )
-        return _render(request, 'proposal', review_form=review_form)
+        return _render(request, flow, 'proposal', review_form=review_form)
 
     if skip:
         return _render(
             request,
+            flow,
             'skipped',
             review_form=skip_review_form(membership, draft, member, today=today),
             notice=SKIPPED_NOTICE,
         )
 
-    outcome = classify_follow_up_answer(
+    outcome = flow.classify_answer(
         membership,
         text,
         draft,
@@ -271,7 +375,7 @@ def answer(request):
         outcome = ParentClassification(result=draft, member=member)
         notice = ANSWER_UNAVAILABLE_NOTICE
     review_form, _ = review_form_from_classification(membership, outcome, text, today=today)
-    return _render(request, state, review_form=review_form, notice=notice)
+    return _render(request, flow, state, review_form=review_form, notice=notice)
 
 
 def _correction_notice(form, changed):
@@ -301,14 +405,32 @@ def correct(request):
     Nothing is saved here: the revised proposal (or the unchanged one, with a
     notice) comes back on a review form posted to ``confirm``.
     """
-    membership = _require_parent(request)
+    return _correct(request, PARENT_CAPTURE)
+
+
+@sensitive_post_parameters('text', 'content', 'correction')
+@require_POST
+@login_required
+def child_correct(request):
+    """The child's free-text correction; the person never changes."""
+    return _correct(request, CHILD_CAPTURE)
+
+
+def _carry_privacy(initial, form):
+    """Keep the privacy choice of a posted review form on the form that replaces it."""
+    if 'is_private' in form.fields:
+        initial['is_private'] = form.cleaned_data.get('is_private', False)
+
+
+def _correct(request, flow):
+    membership = flow.authorize(request)
     form = ProposalCorrectionForm(membership, request.POST)
     if not form.is_valid():
-        return _render(request, 'invalid', review_form=form)
+        return _render(request, flow, 'invalid', review_form=form)
 
     today = timezone.localdate()
     current, member = proposal_values_from_form(form)
-    correction = correct_proposal_for_parent(
+    correction = flow.correct(
         membership,
         current,
         form.cleaned_data['correction'],
@@ -319,6 +441,7 @@ def correct(request):
         review_form, _ = review_form_from_classification(
             membership, correction.outcome, current.content, today=today
         )
+        _carry_privacy(review_form.initial, form)
         state = (
             'proposal'
             if isinstance(correction.outcome.result, ClassificationProposal)
@@ -326,6 +449,7 @@ def correct(request):
         )
         return _render(
             request,
+            flow,
             state,
             review_form=review_form,
             notice=_correction_notice(review_form, correction.changed),
@@ -339,35 +463,49 @@ def correct(request):
     elif correction.rejection == CorrectionRejection.SCHOOL_ITEM_MISMATCH:
         label = dict(Entry.ENTRY_TYPE_CHOICES)[correction.school_item.entry_type.value]
         notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
-    return _render(request, 'correction_failed', review_form=retry_form, notice=notice)
+    return _render(request, flow, 'correction_failed', review_form=retry_form, notice=notice)
 
 
 @sensitive_post_parameters('text', 'content', 'correction')
 @require_POST
 @login_required
 def confirm(request):
-    membership = _require_parent(request)
+    return _confirm(request, PARENT_CAPTURE)
+
+
+@sensitive_post_parameters('text', 'content', 'correction')
+@require_POST
+@login_required
+def child_confirm(request):
+    """Save the child's reviewed proposal for the child, public unless marked private."""
+    return _confirm(request, CHILD_CAPTURE)
+
+
+def _confirm(request, flow):
+    membership = flow.authorize(request)
     review_form = EntryReviewForm(membership, request.POST)
     if not review_form.is_valid():
         if review_form.has_error('correction'):
             # An unapplied correction: nothing is saved, and the next save
             # gets a new key.
             review_form = _with_fresh_key(EntryReviewForm, membership, request.POST)
-        return _render(request, 'invalid', review_form=review_form)
+        return _render(request, flow, 'invalid', review_form=review_form)
 
     data = review_form.cleaned_data
+    values = dict(
+        entry_type=data['entry_type'],
+        content=data['content'],
+        date=data['date'],
+        time=data['time'],
+        assigned_member=data['assigned_member'],
+        school_item=data['school_item'],
+        school_subject=data['school_subject'],
+        submission_key=data['submission_key'],
+    )
+    if 'is_private' in data:
+        values['is_private'] = data['is_private']
     try:
-        entry, _ = save_confirmed_entry(
-            membership,
-            entry_type=data['entry_type'],
-            content=data['content'],
-            date=data['date'],
-            time=data['time'],
-            assigned_member=data['assigned_member'],
-            school_item=data['school_item'],
-            school_subject=data['school_subject'],
-            submission_key=data['submission_key'],
-        )
+        entry, _ = flow.save_entry(membership, **values)
     except ValidationError as error:
         _log_rejected_save(error)
         retry_data = request.POST.copy()
@@ -375,9 +513,9 @@ def confirm(request):
         retry_form = EntryReviewForm(membership, retry_data)
         retry_form.is_valid()
         retry_form.add_error(None, SAVE_FAILED_ERROR)
-        return _render(request, 'invalid', review_form=retry_form)
+        return _render(request, flow, 'invalid', review_form=retry_form)
 
-    return redirect(f"{reverse('entries:capture')}?saved={entry.pk}")
+    return redirect(f"{flow.capture_url()}?saved={entry.pk}")
 
 
 def _with_fresh_batch_keys(data, count):
@@ -388,8 +526,8 @@ def _with_fresh_batch_keys(data, count):
     return retry_data
 
 
-def _render_batch(request, form):
-    return _render(request, 'batch', batch_form=form)
+def _render_batch(request, flow, form):
+    return _render(request, flow, 'batch', batch_form=form)
 
 
 # Every posted value may be family text (several prefixed ``content`` and
@@ -403,44 +541,57 @@ def confirm_batch(request):
     ``action=save`` (the default) saves; ``action=correct-<i>`` applies the
     free-text correction of proposal ``i`` and re-renders the batch.
     """
-    membership = _require_parent(request)
+    return _confirm_batch(request, PARENT_CAPTURE)
+
+
+# All parameters hidden, as in ``confirm_batch``.
+@sensitive_post_parameters()
+@require_POST
+@login_required
+def child_confirm_batch(request):
+    """The child's batch save or correction; every proposal stays the child's own."""
+    return _confirm_batch(request, CHILD_CAPTURE)
+
+
+def _confirm_batch(request, flow):
+    membership = flow.authorize(request)
     form = BatchReviewForm(membership, request.POST)
     if form.correcting or form.stale:
-        return _correct_batch_entry(request, membership, form)
+        return _correct_batch_entry(request, flow, membership, form)
     if not form.is_valid():
-        return _render_batch(request, form)
+        return _render_batch(request, flow, form)
 
     try:
-        entries = save_confirmed_entries(membership, form.save_items())
+        entries = flow.save_entries(membership, form.save_items())
     except ValidationError as error:
         _log_rejected_save(error)
         retry_form = BatchReviewForm(membership, _with_fresh_batch_keys(request.POST, form.count))
         retry_form.is_valid()
         retry_form.add_error(SAVE_FAILED_ERROR)
-        return _render_batch(request, retry_form)
+        return _render_batch(request, flow, retry_form)
 
     saved = ','.join(str(entry.pk) for entry in entries)
-    return redirect(f"{reverse('entries:capture')}?saved={saved}")
+    return redirect(f"{flow.capture_url()}?saved={saved}")
 
 
 # Keeps a posted ID inside the database integer range.
 _MAX_ID_DIGITS = 18
 
 
-def _correct_batch_entry(request, membership, form):
+def _correct_batch_entry(request, flow, membership, form):
     """Correct only the targeted proposal; every other one is carried through.
 
     Nothing is saved. Every proposal gets a new submission key, so the next
     save is a fresh one.
     """
     if form.stale or not form.is_target_valid():
-        return _render_batch(request, form)
+        return _render_batch(request, flow, form)
 
     index = form.target
     target = form.target_form
     today = timezone.localdate()
     current, member = proposal_values_from_form(target)
-    correction = correct_proposal_for_parent(
+    correction = flow.correct(
         membership,
         current,
         target.cleaned_data['correction'],
@@ -456,6 +607,7 @@ def _correct_batch_entry(request, membership, form):
     if correction.applied:
         initial, missing = review_initial_from_classification(correction.outcome, current.content)
         initial['include'] = target.cleaned_data['include']
+        _carry_privacy(initial, target)
         corrected = BatchEntryForm(
             membership,
             prefix=BatchReviewForm.prefix(index),
@@ -468,7 +620,7 @@ def _correct_batch_entry(request, membership, form):
         retry_form.notices[index] = BATCH_CORRECTION_NOTICE.format(
             number=number, notice=notice[:1].lower() + notice[1:]
         )
-        return _render_batch(request, retry_form)
+        return _render_batch(request, flow, retry_form)
 
     notice = CORRECTION_FAILED_NOTICE
     if correction.rejection == CorrectionRejection.TOO_LONG:
@@ -479,15 +631,17 @@ def _correct_batch_entry(request, membership, form):
         notice = CORRECTION_SCHOOL_ITEM_NOTICE.format(label=label)
     if notice:
         retry_form.notices[index] = BATCH_CORRECTION_NOTICE.format(number=number, notice=notice)
-    return _render_batch(request, retry_form)
+    return _render_batch(request, flow, retry_form)
 
 
-def _saved_entries(membership, saved):
-    """Up to ``MAX_PROPOSALS_PER_INSTRUCTION`` family entries named in ``saved``.
+def _saved_entries(entries, saved):
+    """Up to ``MAX_PROPOSALS_PER_INSTRUCTION`` of ``entries`` named in ``saved``.
 
+    ``entries`` is what the reader may see (``_CaptureFlow.saved_entries``).
     ``saved`` is a comma-separated list of IDs, kept in the posted order.
     Anything else (non-digit parts, too many IDs, other families' entries,
-    other members' private entries) is ignored.
+    other members' private entries, for a child anything not their own) is
+    ignored.
     """
     parts = saved.split(',') if saved else []
     if len(parts) > MAX_PROPOSALS_PER_INSTRUCTION:
@@ -498,7 +652,7 @@ def _saved_entries(membership, saved):
     ))
     if not ids:
         return []
-    found = visible_family_entries(membership).in_bulk(ids)
+    found = entries.in_bulk(ids)
     return [found[pk] for pk in ids if pk in found]
 
 
@@ -1457,7 +1611,7 @@ def child_states(request):
         raise Http404
     if not request.user.is_authenticated:
         return redirect_to_login(request.get_full_path())
-    require_family_context(request)
+    membership = require_family_context(request)
 
     day = datetime.timedelta(days=1)
     earlier_start = STATES_DATE - CALENDAR_WINDOW_DAYS * day
@@ -1529,5 +1683,122 @@ def child_states(request):
         {'name': 'error_forbidden', 'label': 'Błąd: brak dostępu',
          'error': {'heading': 'Brak dostępu',
                    'message': 'Ta strona nie jest dostępna dla Twojego konta.'}},
+        *_child_capture_state_sections(membership),
     ]
-    return render(request, 'entries/child_states.html', {'sections': sections})
+    return render(
+        request,
+        'entries/child_states.html',
+        {'sections': sections, 'capture_routes': CHILD_CAPTURE.routes, **_progress_thresholds()},
+    )
+
+
+# Synthetic pk of the gallery's fictional child; only feeds unsaved objects.
+STATES_CHILD_PK = 900101
+
+
+def _child_capture_state_sections(membership):
+    """Child capture states for the DEBUG gallery: unsaved synthetic data, no family rows.
+
+    The forms are built for a fictional, unsaved child of the context family, so
+    they show exactly the child's controls (no assignee choice, the privacy
+    choice) whatever the viewer's role.
+    """
+    child = FamilyMember(
+        pk=STATES_CHILD_PK,
+        family=membership.family,
+        role=FamilyMember.Role.CHILD,
+        display_name=STATES_MEMBER_CHOICES[1][1],
+        is_active=True,
+    )
+
+    def review(result, text=''):
+        outcome = ParentClassification(result=result, member=child)
+        form, _ = review_form_from_classification(child, outcome, text, today=STATES_DATE)
+        return form
+
+    homework = ClassificationProposal(
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Zadanie domowe z matematyki',
+        date=STATES_DATE + datetime.timedelta(days=2),
+        school_item=SchoolItemKind.HOMEWORK,
+        school_subject='matematyka',
+        member_name=child.display_name,
+    )
+    missing_date = ClassificationFollowUp(
+        missing_fields=(MissingField.DATE,),
+        entry_type=EntryType.CALENDAR_EVENT,
+        content='Trening piłki nożnej',
+        member_name=child.display_name,
+    )
+    question = follow_up_form_from_classification(
+        child, ParentClassification(result=missing_date, member=child), 'Mam trening piłki nożnej'
+    )
+    invalid_form = EntryReviewForm(
+        child,
+        {
+            'entry_type': EntryType.TODO.value,
+            'content': '',
+            'date': '',
+            'time': '',
+            'school_item': '',
+            'school_subject': '',
+            'submission_key': str(uuid.uuid4()),
+        },
+    )
+    invalid_form.is_valid()
+    failed_correction = review(homework)
+    failed_correction.initial['correction'] = 'bla bla'
+    batch = batch_review_form_from_classification(
+        child,
+        ParentBatchClassification(items=tuple(
+            ParentClassification(
+                result=ClassificationProposal(
+                    entry_type=EntryType.TODO,
+                    content='Spakować strój na basen',
+                    date=STATES_DATE + datetime.timedelta(days=offset),
+                    member_name=child.display_name,
+                ),
+                member=child,
+            )
+            for offset in (1, 3)
+        )),
+        today=STATES_DATE,
+    )
+
+    def saved(is_private):
+        return Entry(
+            entry_type=EntryType.NOTE.value,
+            content='Pożyczyłam książkę od Oli',
+            date=STATES_DATE,
+            assigned_member=child,
+            is_private=is_private,
+        )
+
+    sections = [
+        {'name': 'capture_empty', 'label': 'Dodawanie: pusty formularz',
+         'capture_form': CaptureForm()},
+        {'name': 'capture_proposal', 'label': 'Dodawanie: propozycja do sprawdzenia',
+         'review_form': review(homework)},
+        {'name': 'capture_question', 'label': 'Dodawanie: pytanie o brakującą datę',
+         'follow_up_form': question},
+        {'name': 'capture_follow_up', 'label': 'Dodawanie: brakująca data w propozycji',
+         'review_form': review(missing_date)},
+        {'name': 'capture_unavailable', 'label': 'Dodawanie: rozpoznanie niedostępne',
+         'notice': UNAVAILABLE_NOTICE,
+         'review_form': review(
+             ClassificationUnavailable(reason=UnavailableReason.TIMEOUT),
+             text='Kupić zeszyt w kratkę',
+         )},
+        {'name': 'capture_correction_failed', 'label': 'Dodawanie: poprawka niezastosowana',
+         'notice': CORRECTION_FAILED_NOTICE, 'review_form': failed_correction},
+        {'name': 'capture_invalid', 'label': 'Dodawanie: błędy w formularzu',
+         'review_form': invalid_form},
+        {'name': 'capture_batch', 'label': 'Dodawanie: kilka wpisów', 'batch_form': batch},
+        {'name': 'capture_saved', 'label': 'Dodawanie: zapisano wpis',
+         'saved_entries': [saved(False)], 'capture_form': CaptureForm()},
+        {'name': 'capture_saved_private', 'label': 'Dodawanie: zapisano wpis prywatny',
+         'saved_entries': [saved(True)], 'capture_form': CaptureForm()},
+    ]
+    for section in sections:
+        _describe_capture_forms(section)
+    return sections

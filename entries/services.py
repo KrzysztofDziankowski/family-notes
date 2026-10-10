@@ -35,16 +35,72 @@ def save_confirmed_entry(
     school_item,
     submission_key,
     school_subject,
+    is_private=False,
 ):
     """Save one entry confirmed by an active parent; return ``(entry, created)``.
 
     ``membership`` is the request's family context. Authorization and family
-    scope are re-checked here, independently of the view. ``submission_key``
-    makes the call idempotent: the first save wins and a repeat returns that
-    entry unchanged.
+    scope are re-checked here, independently of the view. The parent is the
+    creator; the entry is public unless ``is_private``. ``submission_key``
+    makes the call idempotent: the first save wins and a repeat by the same
+    creator returns that entry unchanged.
     """
-    membership = require_parent_membership(membership)
+    return _save_confirmed(
+        require_parent_membership(membership),
+        entry_type=entry_type, content=content, date=date, time=time,
+        assigned_member=assigned_member, school_item=school_item,
+        submission_key=submission_key, school_subject=school_subject, is_private=is_private,
+    )
 
+
+@sensitive_variables('content')
+def save_child_entry(
+    membership,
+    *,
+    entry_type,
+    content,
+    date,
+    time,
+    assigned_member,
+    school_item,
+    submission_key,
+    school_subject,
+    is_private=False,
+):
+    """Save one entry an active child confirmed for themselves; return ``(entry, created)``.
+
+    Like ``save_confirmed_entry``, but ``membership`` must be an active child
+    in an active family and is the only permitted assignee: no assignee
+    becomes the child and any other member is rejected with
+    ``ValidationError``. The child is the creator. A replay returns only the
+    child's own entry.
+    """
+    membership = require_child_membership(membership)
+    return _save_confirmed(
+        membership,
+        entry_type=entry_type, content=content, date=date, time=time,
+        assigned_member=assigned_member, school_item=school_item,
+        submission_key=submission_key, school_subject=school_subject, is_private=is_private,
+        self_assigned=True,
+    )
+
+
+@sensitive_variables('content')
+def _save_confirmed(
+    membership,
+    *,
+    entry_type,
+    content,
+    date,
+    time,
+    assigned_member,
+    school_item,
+    submission_key,
+    school_subject,
+    is_private,
+    self_assigned=False,
+):
+    """The shared confirmed save for an already authorized ``membership``."""
     entry_type = EntryType(entry_type)
     school_item = SchoolItemKind(school_item) if school_item else None
     school_subject = _clean_subject(school_subject)
@@ -54,6 +110,8 @@ def save_confirmed_entry(
     if existing is not None:
         return existing, False
 
+    if self_assigned:
+        assigned_member = _child_self_assignee(membership, assigned_member)
     _validate(
         membership, entry_type, date, assigned_member, school_item,
         school_subject=school_subject, require_subject=True,
@@ -73,6 +131,7 @@ def save_confirmed_entry(
                 source=Entry.Source.MANUAL,
                 created_by=membership,
                 submission_key=submission_key,
+                is_private=bool(is_private),
             )
     except IntegrityError:
         existing = _existing_for_key(membership, submission_key)
@@ -92,26 +151,48 @@ def save_confirmed_entries(membership, items):
     a replay returns the saved entries and creates none. Raises
     ``ValueError`` for no items or more than ``MAX_PROPOSALS_PER_INSTRUCTION``.
     """
+    return _save_all(save_confirmed_entry, membership, items)
+
+
+@sensitive_variables('items')
+def save_child_entries(membership, items):
+    """``save_confirmed_entries`` for an active child: every item via ``save_child_entry``."""
+    return _save_all(save_child_entry, membership, items)
+
+
+@sensitive_variables('items')
+def _save_all(save, membership, items):
     items = list(items)
     if not items or len(items) > MAX_PROPOSALS_PER_INSTRUCTION:
         raise ValueError('A batch holds 1 to %d entries.' % MAX_PROPOSALS_PER_INSTRUCTION)
     with transaction.atomic():
-        return [save_confirmed_entry(membership, **item)[0] for item in items]
+        return [save(membership, **item)[0] for item in items]
 
 
 def _existing_for_key(membership, submission_key):
-    """The entry already saved under ``submission_key``, or ``None``.
+    """The entry ``membership`` already saved under ``submission_key``, or ``None``.
 
-    A key held by another family's entry, or by a private entry ``membership``
-    did not create, is rejected like any other unusable key: a replay never
-    returns an entry the caller may not read.
+    A key held by any entry ``membership`` did not create (another family's,
+    another family member's, public or private, or a creatorless one) is
+    rejected like any other unusable key: a replay returns only the caller's
+    own entry.
     """
     entry = Entry.objects.filter(submission_key=submission_key).first()
     if entry is None:
         return None
-    if entry.family_id != membership.family_id or not _is_visible_to(entry, membership):
+    if entry.family_id != membership.family_id or entry.created_by_id != membership.pk:
         raise ValidationError('Nie można zapisać tego wpisu. Spróbuj ponownie.')
     return entry
+
+
+def _child_self_assignee(membership, assigned_member):
+    """The child's only permitted assignee: themselves.
+
+    No assignee means the child; any other member is rejected, never saved.
+    """
+    if assigned_member is not None and assigned_member.pk != membership.pk:
+        raise ValidationError('Możesz dodać wpis tylko dla siebie.')
+    return membership
 
 
 def _clean_subject(school_subject):
@@ -176,6 +257,13 @@ def require_parent_membership(membership):
     return membership
 
 
+def require_child_membership(membership):
+    """The context ``membership`` when it is an active child in an active family."""
+    if not can_read_assigned_child(membership, membership):
+        raise PermissionDenied('An active child membership is required.')
+    return membership
+
+
 # --- Creator-only privacy -----------------------------------------------------
 
 
@@ -187,10 +275,6 @@ def visible_to(membership):
     it says nothing about families.
     """
     return Q(is_private=False) | Q(created_by=membership)
-
-
-def _is_visible_to(entry, membership):
-    return not entry.is_private or entry.created_by_id == membership.pk
 
 
 def _family_entries(membership):
@@ -392,8 +476,7 @@ def child_entries(membership):
     other children's entries, other families' entries and private entries
     someone else created (even when assigned to the child) are never included.
     """
-    if not can_read_assigned_child(membership, membership):
-        raise PermissionDenied('An active child membership is required.')
+    require_child_membership(membership)
     return Entry.objects.filter(
         visible_to(membership),
         family=membership.family,
