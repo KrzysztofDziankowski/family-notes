@@ -271,9 +271,9 @@ Add `is_private` as a non-null boolean with model and database defaults set to f
 
 #### Automated
 
-- [x] 3.1 `uv run python manage.py test entries.tests.test_private_entry_filters entries.tests.test_private_entries entries.tests.test_manage_views entries.tests.test_child_views` passes for default/all/private/not-private states and URL-state preservation.
-- [x] 3.2 `uv run python manage.py test entries.tests.test_accessibility` passes for privacy controls and parent/child calendar filters.
-- [x] 3.3 `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass.
+- [x] 3.1 `uv run python manage.py test entries.tests.test_private_entry_filters entries.tests.test_private_entries entries.tests.test_manage_views entries.tests.test_child_views` passes for default/all/private/not-private states and URL-state preservation. — 50d96cb
+- [x] 3.2 `uv run python manage.py test entries.tests.test_accessibility` passes for privacy controls and parent/child calendar filters. — 50d96cb
+- [x] 3.3 `uv run python manage.py check` and `uv run python manage.py makemigrations --check --dry-run` pass. — 50d96cb
 
 #### Manual
 
