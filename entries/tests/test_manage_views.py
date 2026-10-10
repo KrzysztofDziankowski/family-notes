@@ -86,6 +86,10 @@ class ManageViewMixin(FamilyFixtureMixin):
     def days(self, offset):
         return self.today + datetime.timedelta(days=offset)
 
+    def earlier(self):
+        """Query of the "Wcześniejsze" window from the default one: today-14..today-1."""
+        return {'start': self.days(-14).isoformat()}
+
     def rendered_rows(self, response):
         return [int(pk) for pk in ROW_PATTERN.findall(response.content.decode())]
 
@@ -171,7 +175,7 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
         )
         self.foreign = e(FOREIGN_SENTINEL, family=self.other_family, date=self.today)
 
-    def test_upcoming_orders_all_dated_entries_in_exact_order(self):
+    def test_default_window_orders_entries_in_exact_order(self):
         response = self.client.get(INDEX_URL)
 
         self.assertEqual(
@@ -190,10 +194,10 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
             DAY_PATTERN.findall(response.content.decode()),
             [self.days(offset).isoformat() for offset in range(14)],
         )
-        self.assertContains(response, 'aria-current="page">Nadchodzące<')
+        self.assertContains(response, 'aria-current="page">Dzisiaj<')
 
-    def test_past_mode_lists_only_past_dates_in_exact_order(self):
-        response = self.client.get(INDEX_URL, {'view': 'past'})
+    def test_earlier_window_lists_the_previous_fortnight_in_exact_order(self):
+        response = self.client.get(INDEX_URL, self.earlier())
 
         self.assertEqual(
             self.rendered_rows(response),
@@ -203,19 +207,25 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
             DAY_PATTERN.findall(response.content.decode()),
             [self.days(offset).isoformat() for offset in range(-14, 0)],
         )
-        self.assertContains(response, 'aria-current="page">Minione<')
+        self.assertNotContains(response, 'aria-current')
 
-    def test_unknown_mode_falls_back_to_upcoming(self):
-        response = self.client.get(INDEX_URL, {'view': 'everything'})
+    def test_view_parameter_is_ignored(self):
+        default = self.client.get(INDEX_URL)
+        for view in ('past', 'upcoming', 'everything'):
+            with self.subTest(view=view):
+                response = self.client.get(INDEX_URL, {'view': view})
 
-        self.assertEqual(response.context['mode'], 'upcoming')
-        self.assertIn(self.today_early.pk, self.rendered_rows(response))
+                self.assertEqual(self.rendered_rows(response), self.rendered_rows(default))
+                self.assertEqual(response.context['days'][0]['key'], self.today.isoformat())
+                self.assertNotIn('mode', response.context)
+                self.assertNotIn('modes', response.context)
+                self.assertNotContains(response, 'view=')
 
     def test_index_shows_only_own_family_entries(self):
         """2.3"""
-        for mode in ('upcoming', 'past'):
-            with self.subTest(mode=mode):
-                response = self.client.get(INDEX_URL, {'view': mode})
+        for params in ({}, self.earlier()):
+            with self.subTest(params=params):
+                response = self.client.get(INDEX_URL, params)
                 self.assertNotContains(response, FOREIGN_SENTINEL)
                 self.assertNotIn(self.foreign.pk, self.rendered_rows(response))
                 self.assertNotIn(self.lucky.pk, self.rendered_rows(response))
@@ -228,7 +238,7 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
 
         self.assertContains(
             response,
-            f'href="{detail_url(self.tomorrow.pk)}?view=upcoming&amp;start={self.today.isoformat()}"',
+            f'href="{detail_url(self.tomorrow.pk)}?start={self.today.isoformat()}"',
         )
         # Owner 2026-10-05: no type label and no "Edytuj" on list rows; editing
         # stays on the detail page.
@@ -259,9 +269,9 @@ class IndexOrderingTests(ManageViewMixin, TestCase):
 class EmptyIndexTests(ManageViewMixin, TestCase):
     def test_empty_fortnight_still_renders_fourteen_empty_day_boxes(self):
         self.entry(FOREIGN_SENTINEL, family=self.other_family, date=self.today)
-        for view, offsets in (('upcoming', range(14)), ('past', range(-14, 0))):
-            with self.subTest(view=view):
-                response = self.client.get(INDEX_URL, {'view': view})
+        for params, offsets in (({}, range(14)), (self.earlier(), range(-14, 0))):
+            with self.subTest(params=params):
+                response = self.client.get(INDEX_URL, params)
                 html = response.content.decode()
 
                 self.assertEqual(
@@ -273,7 +283,7 @@ class EmptyIndexTests(ManageViewMixin, TestCase):
                 self.assertNotContains(response, 'data-entry-row')
                 self.assertNotContains(response, FOREIGN_SENTINEL)
                 self.assertNotContains(response, 'fn-empty')
-                self.assertContains(response, f'data-state-part="calendar-{view}"')
+                self.assertContains(response, 'data-state-part="calendar"')
 
 
 class CalendarPresentationTests(ManageViewMixin, TestCase):
@@ -306,9 +316,9 @@ class CalendarPresentationTests(ManageViewMixin, TestCase):
         saturday = next(self.days(offset) for offset in range(14) if self.days(offset).weekday() == 5)
         self.entry('Sobota', date=saturday)
 
-        for view, offsets in (('upcoming', range(14)), ('past', range(-14, 0))):
-            with self.subTest(view=view):
-                html = self.client.get(INDEX_URL, {'view': view}).content.decode()
+        for params, offsets in (({}, range(14)), (self.earlier(), range(-14, 0))):
+            with self.subTest(params=params):
+                html = self.client.get(INDEX_URL, params).content.decode()
 
                 weekend = [
                     self.days(offset).isoformat()
@@ -332,38 +342,106 @@ class CalendarPresentationTests(ManageViewMixin, TestCase):
             day_html(html, self.days(1).isoformat()),
         )
 
-    def test_navigation_uses_polish_labels_and_omits_the_boundary_link(self):
-        upcoming = self.client.get(INDEX_URL)
-        later = self.client.get(INDEX_URL, {'start': self.days(14).isoformat()})
-        past = self.client.get(INDEX_URL, {'view': 'past'})
+    def nav_html(self, response):
+        html = response.content.decode()
+        start = html.index('<nav class="fn-calendar-nav"')
+        return html[start:html.index('</nav>', start)]
 
-        self.assertContains(upcoming, 'aria-label="Nawigacja kalendarza"')
-        self.assertContains(upcoming, '>Następne 2 tygodnie</a>')
-        self.assertNotContains(upcoming, 'Poprzednie 2 tygodnie')
+    def test_navigation_always_shows_three_polish_links(self):
+        today = self.client.get(INDEX_URL)
+        earlier = self.client.get(INDEX_URL, self.earlier())
+
         self.assertContains(
-            later,
-            f'<a href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}">'
-            'Poprzednie 2 tygodnie</a>',
+            today,
+            '<nav class="fn-calendar-nav" aria-label="Nawigacja kalendarza" '
+            'data-state-part="calendar-nav">',
         )
-        self.assertContains(past, '>Poprzednie 2 tygodnie</a>')
-        self.assertNotContains(past, 'Następne 2 tygodnie')
+        self.assertEqual(
+            re.findall(r'<a href="([^"]*)"[^>]*>([^<]*)</a>', self.nav_html(today)),
+            [
+                (f'{INDEX_URL}?start={self.days(-14).isoformat()}', 'Wcześniejsze'),
+                (f'{INDEX_URL}?start={self.today.isoformat()}', 'Dzisiaj'),
+                (f'{INDEX_URL}?start={self.days(14).isoformat()}', 'Następne'),
+            ],
+        )
+        self.assertEqual(
+            re.findall(r'<a href="([^"]*)"[^>]*>([^<]*)</a>', self.nav_html(earlier)),
+            [
+                (f'{INDEX_URL}?start={self.days(-28).isoformat()}', 'Wcześniejsze'),
+                (f'{INDEX_URL}?start={self.today.isoformat()}', 'Dzisiaj'),
+                (f'{INDEX_URL}?start={self.today.isoformat()}', 'Następne'),
+            ],
+        )
+        for response in (today, earlier):
+            for text in ('Poprzednie 2 tygodnie', 'Następne 2 tygodnie', 'Nadchodzące',
+                         'Minione', 'Rodzaj listy'):
+                with self.subTest(text=text):
+                    self.assertNotContains(response, text)
+
+    def test_dzisiaj_is_current_only_on_the_window_starting_today(self):
+        cases = (
+            ({}, True),
+            ({'start': self.today.isoformat()}, True),
+            ({'start': self.days(14).isoformat()}, False),
+            (self.earlier(), False),
+            ({'start': self.days(-7).isoformat()}, False),
+        )
+        for params, current in cases:
+            with self.subTest(params=params):
+                nav = self.nav_html(self.client.get(INDEX_URL, params))
+                self.assertEqual(nav.count('aria-current'), 1 if current else 0)
+                self.assertEqual(
+                    'aria-current="page">Dzisiaj</a>' in nav, current
+                )
 
 
 class CalendarWindowTests(ManageViewMixin, TestCase):
     def keys(self, response):
         return [day['key'] for day in response.context['days']]
 
-    def test_default_windows_have_exactly_fourteen_inclusive_days(self):
-        upcoming = self.client.get(INDEX_URL)
-        past = self.client.get(INDEX_URL, {'view': 'past'})
+    def test_default_window_is_today_through_today_plus_thirteen(self):
+        response = self.client.get(INDEX_URL)
 
         self.assertEqual(
-            self.keys(upcoming),
+            self.keys(response),
             [self.days(offset).isoformat() for offset in range(14)],
         )
+        self.assertTrue(response.context['is_today'])
+
+    def test_earlier_then_next_returns_to_the_today_window(self):
+        default = self.client.get(INDEX_URL)
+
+        earlier = self.client.get(default.context['previous_url'])
         self.assertEqual(
-            self.keys(past),
+            self.keys(earlier),
             [self.days(offset).isoformat() for offset in range(-14, 0)],
+        )
+        self.assertFalse(earlier.context['is_today'])
+
+        back = self.client.get(earlier.context['next_url'])
+        self.assertEqual(self.keys(back), self.keys(default))
+        self.assertTrue(back.context['is_today'])
+
+    def test_windows_move_forward_and_back_across_today(self):
+        before = self.entry('Przedwczoraj', date=self.days(-2))
+        after = self.entry('Pojutrze', date=self.days(2))
+
+        straddling = self.client.get(INDEX_URL, {'start': self.days(-7).isoformat()})
+        self.assertEqual(
+            self.keys(straddling),
+            [self.days(offset).isoformat() for offset in range(-7, 7)],
+        )
+        self.assertEqual(self.rendered_rows(straddling), [before.pk, after.pk])
+
+        forward = self.client.get(straddling.context['next_url'])
+        self.assertEqual(self.keys(forward)[0], self.days(7).isoformat())
+        back = self.client.get(forward.context['previous_url'])
+        self.assertEqual(self.keys(back)[0], self.days(-7).isoformat())
+        further_back = self.client.get(back.context['previous_url'])
+        self.assertEqual(self.keys(further_back)[0], self.days(-21).isoformat())
+        self.assertEqual(
+            self.client.get(further_back.context['today_url']).context['days'][0]['key'],
+            self.today.isoformat(),
         )
 
     def test_valid_start_selects_the_requested_window(self):
@@ -373,65 +451,72 @@ class CalendarWindowTests(ManageViewMixin, TestCase):
         self.assertEqual(self.keys(response)[0], start.isoformat())
         self.assertEqual(self.keys(response)[-1], self.days(41).isoformat())
 
-    def test_malformed_and_out_of_mode_start_use_the_mode_default(self):
+    def test_invalid_and_non_canonical_start_fall_back_to_today(self):
         cases = (
-            ({'start': 'not-a-date'}, self.today),
-            ({'start': self.days(-1).isoformat()}, self.today),
-            ({'view': 'past', 'start': self.today.isoformat()}, self.days(-14)),
+            'not-a-date',
+            '',
+            self.days(3).strftime('%Y%m%d'),
+            f'{self.days(3).isoformat()}T00:00',
+            f' {self.days(3).isoformat()}',
         )
-        for params, expected in cases:
-            with self.subTest(params=params):
-                response = self.client.get(INDEX_URL, params)
-                self.assertEqual(self.keys(response)[0], expected.isoformat())
+        for value in cases:
+            with self.subTest(start=value):
+                response = self.client.get(INDEX_URL, {'start': value})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(self.keys(response)[0], self.today.isoformat())
+                self.assertTrue(response.context['is_today'])
 
-    def test_rows_inside_a_day_run_earliest_first_in_both_modes(self):
+    def test_any_canonical_start_in_range_is_valid_on_either_side_of_today(self):
+        for offset in (-1, -100, 1, 3, 100):
+            with self.subTest(offset=offset):
+                start = self.days(offset)
+                response = self.client.get(INDEX_URL, {'start': start.isoformat()})
+                self.assertEqual(self.keys(response)[0], start.isoformat())
+
+    def test_rows_inside_a_day_run_earliest_first_in_an_earlier_window(self):
         evening = self.entry('Wieczór', date=self.days(-2), time=datetime.time(18, 0))
         morning = self.entry('Rano', date=self.days(-2), time=datetime.time(8, 0))
         untimed = self.entry('Bez godziny', date=self.days(-2))
 
-        past = self.client.get(INDEX_URL, {'view': 'past'})
+        earlier = self.client.get(INDEX_URL, self.earlier())
 
         self.assertEqual(
-            [pk for pk in self.rendered_rows(past) if pk in {evening.pk, morning.pk, untimed.pk}],
+            [pk for pk in self.rendered_rows(earlier) if pk in {evening.pk, morning.pk, untimed.pk}],
             [morning.pk, evening.pk, untimed.pk],
         )
 
-    def test_out_of_range_start_uses_the_mode_default_instead_of_failing(self):
-        cases = (
-            ({'start': '9999-12-31'}, self.today),
-            ({'start': '9999-12-10'}, self.today),
-            ({'view': 'past', 'start': '0001-01-01'}, self.days(-14)),
-        )
-        for params, expected in cases:
-            with self.subTest(params=params):
-                response = self.client.get(INDEX_URL, params)
+    def test_out_of_range_start_falls_back_to_today_instead_of_failing(self):
+        for value in ('9999-12-31', '9999-12-10', '0001-01-01', '0001-01-14'):
+            with self.subTest(start=value):
+                response = self.client.get(INDEX_URL, {'start': value})
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(self.keys(response)[0], expected.isoformat())
+                self.assertEqual(self.keys(response)[0], self.today.isoformat())
         entry = self.entry()
         self.assertContains(
-            self.client.get(detail_url(entry.pk), {'view': 'upcoming', 'start': '9999-12-31'}),
-            f'href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}"',
+            self.client.get(detail_url(entry.pk), {'start': '9999-12-31'}),
+            f'href="{INDEX_URL}?start={self.today.isoformat()}"',
         )
-        response = self.client.post(
-            delete_url(entry.pk), {'view': 'past', 'start': '0001-01-01'}
-        )
-        self.assertRedirects(
-            response, f'{INDEX_URL}?view=past&start={self.days(-14).isoformat()}'
-        )
+        response = self.client.post(delete_url(entry.pk), {'start': '0001-01-01'})
+        self.assertRedirects(response, f'{INDEX_URL}?start={self.today.isoformat()}')
 
-    def test_navigation_moves_fourteen_days_and_stops_at_mode_boundary(self):
-        upcoming = self.client.get(INDEX_URL)
-        self.assertIsNone(upcoming.context['previous_url'])
-        self.assertEqual(
-            upcoming.context['next_url'],
-            f'{INDEX_URL}?view=upcoming&start={self.days(14).isoformat()}',
-        )
-        past = self.client.get(INDEX_URL, {'view': 'past'})
-        self.assertIsNone(past.context['next_url'])
-        self.assertEqual(
-            past.context['previous_url'],
-            f'{INDEX_URL}?view=past&start={self.days(-28).isoformat()}',
-        )
+    def test_navigation_moves_fourteen_days_both_ways(self):
+        for offset in (0, 14, -14, -5):
+            with self.subTest(offset=offset):
+                start = self.days(offset)
+                response = self.client.get(INDEX_URL, {'start': start.isoformat()})
+                step = datetime.timedelta(days=14)
+                self.assertEqual(
+                    response.context['previous_url'],
+                    f'{INDEX_URL}?start={(start - step).isoformat()}',
+                )
+                self.assertEqual(
+                    response.context['next_url'],
+                    f'{INDEX_URL}?start={(start + step).isoformat()}',
+                )
+                self.assertEqual(
+                    response.context['today_url'],
+                    f'{INDEX_URL}?start={self.today.isoformat()}',
+                )
 
     def test_only_entries_inside_the_selected_window_are_queried(self):
         visible = self.entry('Widoczny', date=self.days(14))
@@ -504,49 +589,48 @@ class DetailTests(ManageViewMixin, TestCase):
         self.assertNotContains(response, 'Tomasz')
         self.assertNotContains(response, str(key))
 
-    def test_detail_links_back_to_the_list_the_entry_belongs_to(self):
-        past_entry = self.entry(date=self.days(-3))
-        later = self.entry()
+    def back_link(self, start):
+        return f'<a href="{INDEX_URL}?start={start.isoformat()}">Wróć do listy</a>'
 
-        self.assertContains(
-            self.client.get(detail_url(past_entry.pk)),
-            f'href="{INDEX_URL}?view=past&amp;start={self.days(-14).isoformat()}"',
-        )
-        self.assertContains(
-            self.client.get(detail_url(later.pk)),
-            f'href="{INDEX_URL}?view=upcoming&amp;start={self.today.isoformat()}"',
-        )
+    def test_detail_links_back_to_the_window_the_entry_belongs_to(self):
+        cases = {-3: -14, -14: -14, -15: -28, -1: -14, 0: 0, 10: 0, 13: 0, 14: 14}
+        for entry_offset, window_offset in cases.items():
+            with self.subTest(entry_offset=entry_offset):
+                entry = self.entry(date=self.days(entry_offset))
+                self.assertContains(
+                    self.client.get(detail_url(entry.pk)),
+                    self.back_link(self.days(window_offset)),
+                    html=True,
+                )
 
-    def test_detail_preserves_a_normalized_list_mode_and_window(self):
+    def test_detail_preserves_the_requested_window(self):
         entry = self.entry(date=self.days(20))
-        start = self.days(14)
+        for offset in (14, -28, 3):
+            with self.subTest(offset=offset):
+                start = self.days(offset)
+                response = self.client.get(detail_url(entry.pk), {'start': start.isoformat()})
+                self.assertContains(response, self.back_link(start), html=True)
+                self.assertContains(
+                    response,
+                    f'<input type="hidden" name="start" value="{start.isoformat()}">',
+                    html=True,
+                )
 
-        response = self.client.get(
-            detail_url(entry.pk), {'view': 'upcoming', 'start': start.isoformat()}
-        )
-
-        self.assertContains(
-            response,
-            f'href="{INDEX_URL}?view=upcoming&amp;start={start.isoformat()}"',
-        )
-
-    def test_detail_without_list_query_returns_to_the_fortnight_holding_the_entry(self):
+    def test_detail_without_start_returns_to_the_fortnight_holding_the_entry(self):
         later = self.entry(date=self.days(20))
         older = self.entry(date=self.days(-20))
 
         self.assertContains(
-            self.client.get(detail_url(later.pk)),
-            f'href="{INDEX_URL}?view=upcoming&amp;start={self.days(14).isoformat()}"',
+            self.client.get(detail_url(later.pk)), self.back_link(self.days(14)), html=True
         )
         self.assertContains(
-            self.client.get(detail_url(older.pk)),
-            f'href="{INDEX_URL}?view=past&amp;start={self.days(-28).isoformat()}"',
+            self.client.get(detail_url(older.pk)), self.back_link(self.days(-28)), html=True
         )
-        # An unknown view falls back to the entry's own list, not to upcoming.
-        self.assertContains(
-            self.client.get(detail_url(older.pk), {'view': 'xyz'}),
-            f'href="{INDEX_URL}?view=past&amp;start={self.days(-28).isoformat()}"',
-        )
+        # A legacy view parameter is ignored.
+        response = self.client.get(detail_url(older.pk), {'view': 'upcoming'})
+        self.assertContains(response, self.back_link(self.days(-28)), html=True)
+        self.assertNotContains(response, 'view=')
+        self.assertNotContains(response, 'name="view"')
 
     def test_foreign_and_missing_ids_are_indistinguishable(self):
         """2.4"""
@@ -803,25 +887,33 @@ class EditTests(ManageViewMixin, TestCase):
 
 
 class DeleteTests(ManageViewMixin, TestCase):
-    def test_delete_removes_entry_and_returns_to_allowlisted_list_mode(self):
+    def test_delete_removes_entry_and_returns_to_the_posted_window(self):
         """2.5"""
+        today = f'{INDEX_URL}?start={self.today.isoformat()}'
         cases = {
-            'past': f'{INDEX_URL}?view=past&start={self.days(-14).isoformat()}',
-            'upcoming': f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}',
-            '': f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}',
-            'https://evil.example/': (
-                f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}'
-            ),
-            '//evil.example': f'{INDEX_URL}?view=upcoming&start={self.today.isoformat()}',
+            self.days(-14).isoformat(): f'{INDEX_URL}?start={self.days(-14).isoformat()}',
+            self.days(28).isoformat(): f'{INDEX_URL}?start={self.days(28).isoformat()}',
+            self.days(-5).isoformat(): f'{INDEX_URL}?start={self.days(-5).isoformat()}',
+            '': today,
+            'https://evil.example/': today,
+            '//evil.example': today,
         }
         for posted, expected in cases.items():
-            with self.subTest(view=posted):
+            with self.subTest(start=posted):
                 entry = self.entry()
                 response = self.client.post(
-                    delete_url(entry.pk), {'view': posted, 'next': 'https://evil.example/'}
+                    delete_url(entry.pk),
+                    {'start': posted, 'view': 'past', 'next': 'https://evil.example/'},
                 )
                 self.assertRedirects(response, expected)
                 self.assertFalse(Entry.objects.filter(pk=entry.pk).exists())
+
+    def test_delete_without_start_returns_to_the_today_window(self):
+        entry = self.entry()
+
+        response = self.client.post(delete_url(entry.pk))
+
+        self.assertRedirects(response, f'{INDEX_URL}?start={self.today.isoformat()}')
 
     def test_delete_removes_only_the_target(self):
         target = self.entry('Do usunięcia')
@@ -983,7 +1075,7 @@ class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase)
 
 
 class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
-    """S-08: the parent index groups entries by day, then by assignee, in both modes."""
+    """S-08: the parent index groups entries by day, then by assignee, in every window."""
 
     def setUp(self):
         super().setUp()
@@ -1024,7 +1116,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             if (groups := GROUP_PATTERN.findall(day_html(html, key)))
         }
 
-    def test_upcoming_groups_by_day_then_children_parents_family(self):
+    def test_today_window_groups_by_day_then_children_parents_family(self):
         html = self.client.get(INDEX_URL).content.decode()
 
         self.assertEqual(
@@ -1083,9 +1175,9 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             [self.family_later.pk],
         )
 
-    def test_later_day_is_last_in_upcoming_and_absent_from_past(self):
+    def test_later_day_is_in_the_today_window_and_absent_from_the_earlier_one(self):
         upcoming = self.client.get(INDEX_URL).content.decode()
-        past = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
+        past = self.client.get(INDEX_URL, self.earlier()).content.decode()
 
         self.assertEqual(DAY_PATTERN.findall(upcoming)[-1], self.days(13).isoformat())
         self.assertIn(parent_day_heading(self.days(10), self.today), upcoming)
@@ -1096,8 +1188,8 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         self.assertNotIn(self.days(10).isoformat(), DAY_PATTERN.findall(past))
         self.assertNotIn(parent_day_heading(self.days(10), self.today), past)
 
-    def test_past_shows_chronological_days_then_children_parents_family(self):
-        html = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
+    def test_earlier_window_shows_chronological_days_then_children_parents_family(self):
+        html = self.client.get(INDEX_URL, self.earlier()).content.decode()
 
         self.assertEqual(
             self.day_groups(html),
@@ -1134,7 +1226,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
             assigned_member=self.child,
         )
         upcoming = self.client.get(INDEX_URL).content.decode()
-        past = self.client.get(INDEX_URL, {'view': 'past'}).content.decode()
+        past = self.client.get(INDEX_URL, self.earlier()).content.decode()
 
         self.assertEqual(
             [int(pk) for pk in ROW_PATTERN.findall(
@@ -1153,19 +1245,20 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
 
     def test_each_own_family_entry_renders_exactly_once(self):
         expected = {
-            'upcoming': {
+            'today': {
                 self.family_today, self.pawel_tomorrow, self.ewa_later, self.ania_tomorrow,
                 self.michal_next_week, self.michal_today, self.michal_later,
                 self.zosia_today, self.family_later,
             },
-            'past': {
+            'earlier': {
                 self.michal_yesterday, self.michal_last_week, self.jolanta_yesterday,
                 self.family_yesterday,
             },
         }
-        for mode, entries in expected.items():
-            with self.subTest(mode=mode):
-                response = self.client.get(INDEX_URL, {'view': mode})
+        windows = {'today': {}, 'earlier': self.earlier()}
+        for window, entries in expected.items():
+            with self.subTest(window=window):
+                response = self.client.get(INDEX_URL, windows[window])
                 rows = self.rendered_rows(response)
                 self.assertEqual(sorted(rows), sorted(entry.pk for entry in entries))
                 self.assertNotContains(response, FOREIGN_SENTINEL)

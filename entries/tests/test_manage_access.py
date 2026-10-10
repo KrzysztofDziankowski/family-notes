@@ -49,7 +49,6 @@ class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
             'assigned_member': '',
             'school_item': '',
             'submission_key': str(uuid.uuid4()),
-            'view': 'past',
         }
 
     def requests_for(self, entry):
@@ -128,11 +127,13 @@ class ManageAccessMatrixTests(FamilyFixtureMixin, TestCase):
 
         self.assertEqual(self.snapshot(), before)
 
-    def test_foreign_entry_never_appears_in_either_list(self):
+    def test_foreign_entry_never_appears_in_any_window(self):
         self.client.force_login(self.parent.user)
-        for mode in ('upcoming', 'past'):
-            with self.subTest(mode=mode):
-                response = self.client.get(reverse('entries:index'), {'view': mode})
+        today = timezone.localdate()
+        for offset in (0, -14, -7, 14):
+            start = today + datetime.timedelta(days=offset)
+            with self.subTest(start=start):
+                response = self.client.get(reverse('entries:index'), {'start': start.isoformat()})
                 self.assertNotContains(response, FOREIGN_SENTINEL)
 
     def test_denied_users_get_403_on_every_path_without_mutation(self):
@@ -206,7 +207,13 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
         self.assertRedirects(response, detail, fetch_redirect_response=False)
         page = self.client.get(detail)
         self.assertContains(page, 'Podpisać zgodę na wycieczkę')
-        self.assertContains(page, 'name="view" value="past"')
+        # Without ?start the detail returns to the fortnight holding the entry, on the
+        # 14-day grid anchored at today.
+        today = timezone.localdate()
+        weeks = (datetime.date(2020, 1, 10) - today).days // 14
+        window = (today + datetime.timedelta(days=14 * weeks)).isoformat()
+        self.assertContains(page, f'<input type="hidden" name="start" value="{window}">', html=True)
+        self.assertNotContains(page, 'name="view"')
 
         response = self.client.post(
             reverse('entries:edit', args=[entry.pk]),
@@ -222,12 +229,8 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
         self.assertRedirects(response, detail, fetch_redirect_response=False)
         self.assertContains(self.client.get(detail), 'Podpisać zgodę — poprawione')
 
-        response = self.client.post(reverse('entries:delete', args=[entry.pk]), {'view': 'past'})
-        past_start = timezone.localdate() - datetime.timedelta(days=14)
-        self.assertRedirects(
-            response,
-            f"{reverse('entries:index')}?view=past&start={past_start.isoformat()}",
-        )
+        response = self.client.post(reverse('entries:delete', args=[entry.pk]), {'start': window})
+        self.assertRedirects(response, f"{reverse('entries:index')}?start={window}")
         self.assertFalse(Entry.objects.exists())
 
     def test_eduvulcan_entry_correction_preserves_source_then_deletes(self):
@@ -276,6 +279,6 @@ class ManageLifecycleTests(FamilyFixtureMixin, TestCase):
         self.assertContains(
             index,
             f'href="{reverse("entries:detail", args=[entry.pk])}'
-            f'?view=upcoming&amp;start={today}"',
+            f'?start={today}"',
         )
         self.assertContains(index, 'Wpis z rozpoznawania')

@@ -66,7 +66,7 @@ LITERAL_TEMPLATES = (
     'family_notes/templates/account/login.html',
     *(f'entries/templates/entries/{name}.html' for name in (
         'child_list', 'child_detail', 'child_states', '_child_list_body',
-        '_child_entry_detail', '_entry_row', '_list_modes',
+        '_child_entry_detail', '_entry_row', '_list_modes', '_calendar_nav',
     )),
 )
 LITERAL_PATTERN = re.compile(

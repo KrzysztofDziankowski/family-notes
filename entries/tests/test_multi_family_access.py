@@ -5,6 +5,7 @@ With context A she must see and change only A's data; with context B she is
 a child who reads only B entries assigned to her B membership.
 """
 
+import datetime
 import uuid
 from unittest import mock
 
@@ -106,9 +107,11 @@ class ParentContextEntriesTests(MixedRoleFixtureMixin, TestCase):
         self.use(self.family_a)
 
     def test_list_shows_only_the_current_family(self):
-        for view in ('upcoming', 'past'):
-            with self.subTest(view):
-                response = self.client.get(reverse('entries:index'), {'view': view})
+        today = timezone.localdate()
+        for offset in (0, -14, 14):
+            start = (today + datetime.timedelta(days=offset)).isoformat()
+            with self.subTest(start=start):
+                response = self.client.get(reverse('entries:index'), {'start': start})
                 self.assertEqual(response.status_code, 200)
                 for foreign in (B_MINE, B_SIBLING, B_FAMILY, 'Kuba', 'Tomek'):
                     self.assertNotContains(response, foreign)

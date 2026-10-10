@@ -1,22 +1,17 @@
 {% comment %}
-Parent family entry calendar body. Parameters: mode, modes, days, previous_url, next_url,
-detail_query.
+Parent family entry calendar body. Parameters: days, previous_url, today_url, next_url,
+is_today, detail_query.
 days: exactly fourteen chronological {key, heading, is_weekend, groups}, one per calendar date
 (key is the ISO date), including dates without entries; is_weekend adds data-weekend to Saturday and
 Sunday boxes (the weekend heading colour); each day's groups are
 {key, heading, entries}, one per assignee (children, parents, then "Ogólne"), never
 empty. An empty day shows "Brak wpisów". Rows hide the date and assignee: the day and assignee headings carry them, and
 each list's aria-label ("Jutro, czwartek 8 października, Kasia") repeats both for assistive technology.
-previous_url / next_url move the window by two weeks; the one crossing today is None.
+previous_url / next_url move the window by two weeks; today_url opens the window starting today
+(see _calendar_nav.html).
 {% endcomment %}
-{% include "entries/_list_modes.html" with modes=modes mode=mode url_name="entries:index" only %}
-<nav class="fn-calendar-nav" aria-label="Nawigacja kalendarza" data-state-part="calendar-nav">
-    <ul>
-        {% if previous_url %}<li><a href="{{ previous_url }}">Poprzednie 2 tygodnie</a></li>{% endif %}
-        {% if next_url %}<li><a href="{{ next_url }}">Następne 2 tygodnie</a></li>{% endif %}
-    </ul>
-</nav>
-<div class="fn-calendar" data-state-part="calendar-{{ mode }}">
+{% include "entries/_calendar_nav.html" with previous_url=previous_url today_url=today_url next_url=next_url is_today=is_today only %}
+<div class="fn-calendar" data-state-part="calendar">
     {% for day in days %}
     <section class="fn-calendar-day{% if not day.groups %} fn-calendar-day--empty{% endif %}" data-day-group="{{ day.key }}"{% if day.is_weekend %} data-weekend{% endif %}>
         <h2 class="fn-day-heading">{{ day.heading }}</h2>

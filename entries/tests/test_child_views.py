@@ -293,7 +293,7 @@ class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
         day = datetime.timedelta(days=1)
 
         response = self.client.get(PARENT_LIST_URL)
-        past = self.client.get(PARENT_LIST_URL, {'view': 'past'})
+        past = self.client.get(PARENT_LIST_URL, {'start': (FIXED_TODAY - 14 * day).isoformat()})
 
         self.assertEqual(
             self.headings(response),

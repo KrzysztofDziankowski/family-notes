@@ -1,7 +1,7 @@
 {% load family_context %}
 {% comment %}
 Entry details with provenance and the no-JavaScript delete disclosure.
-Parameters: entry, list_mode, list_query and list_start (the list fortnight that "Wróć do
+Parameters: entry, list_query ("start=<iso>") and list_start (the calendar fortnight that "Wróć do
 listy" and the delete redirect return to), delete_open (optional; renders the disclosure open).
 {% endcomment %}
 <article class="fn-manage-detail" data-state-part="detail">
@@ -44,7 +44,6 @@ listy" and the delete redirect return to), delete_open (optional; renders the di
         <form method="post" action="{% url 'entries:delete' entry.pk %}">
             {% csrf_token %}
             {% family_context_field %}
-            <input type="hidden" name="view" value="{{ list_mode }}">
             <input type="hidden" name="start" value="{{ list_start|date:'Y-m-d' }}">
             <button type="submit" class="fn-manage-danger">Usuń na stałe</button>
         </form>

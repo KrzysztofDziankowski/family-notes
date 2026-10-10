@@ -894,72 +894,53 @@ ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
 ENTRY_DELETED_MESSAGE = 'Usunięto wpis.'
 
 
-def _index_url(mode, start=None):
-    query = f'view={normalize_list_mode(mode)}'
-    if start:
-        query += f'&start={start.isoformat()}'
-    return f"{reverse('entries:index')}?{query}"
+def _index_url(start):
+    return f"{reverse('entries:index')}?{_calendar_query(start)}"
 
 
-def _default_window_start(mode, today):
-    if mode == PAST:
-        return today - datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
-    return today
+def _calendar_window(value, today):
+    """Return a valid inclusive 14-day calendar window; ``today``'s window by default.
 
-
-def _calendar_window(mode, value, today):
-    """Return a valid inclusive parent-calendar window for ``mode``."""
-    default_start = _default_window_start(mode, today)
+    ``value`` must be a canonical ISO date whose window and both neighbouring windows
+    stay inside the date range; anything else falls back to the window starting today."""
     step = datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
     try:
-        start = datetime.date.fromisoformat(value) if value else default_start
+        start = datetime.date.fromisoformat(value) if value else today
     except (TypeError, ValueError):
-        start = default_start
+        start = today
     if value and start.isoformat() != value:
-        start = default_start
+        start = today
     # The window and both neighbouring windows must stay inside the date range.
     if not datetime.date.min + step <= start <= datetime.date.max - 2 * step:
-        start = default_start
-    end = start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
-    if (mode == UPCOMING and start < today) or (mode == PAST and end >= today):
-        start = default_start
-        end = start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
-    return start, end
+        start = today
+    return start, start + datetime.timedelta(days=CALENDAR_WINDOW_DAYS - 1)
 
 
-def _window_containing(mode, day, today):
-    """Start of the ``mode`` fortnight (on the default 14-day grid) that contains ``day``."""
-    default_start = _default_window_start(mode, today)
-    offset = (day - default_start).days // CALENDAR_WINDOW_DAYS * CALENDAR_WINDOW_DAYS
-    return default_start + datetime.timedelta(days=offset)
+def _window_containing(day, today):
+    """Start of the fortnight containing ``day`` on the 14-day grid anchored at ``today``."""
+    offset = (day - today).days // CALENDAR_WINDOW_DAYS * CALENDAR_WINDOW_DAYS
+    return today + datetime.timedelta(days=offset)
 
 
-def _calendar_query(mode, start):
-    return f'view={mode}&start={start.isoformat()}'
+def _calendar_query(start):
+    return f'start={start.isoformat()}'
 
 
-def _calendar_navigation(mode, start, today):
+def _calendar_navigation(url_name, start, today, query_extra=''):
+    """Links of the shared calendar nav; ``query_extra`` (``"a=b"``) is appended to each."""
     step = datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
-    previous_start = start - step
-    next_start = start + step
+    suffix = f'&{query_extra}' if query_extra else ''
+    base = reverse(url_name)
+
+    def url(window_start):
+        return f'{base}?{_calendar_query(window_start)}{suffix}'
+
     return {
-        'previous_url': (
-            _index_url(mode, previous_start)
-            if mode == PAST or previous_start >= today
-            else None
-        ),
-        'next_url': (
-            _index_url(mode, next_start)
-            if mode == UPCOMING or next_start + step - datetime.timedelta(days=1) < today
-            else None
-        ),
+        'previous_url': url(start - step),
+        'today_url': url(today),
+        'next_url': url(start + step),
+        'is_today': start == today,
     }
-
-
-def _list_mode_for(entry, today):
-    """The list an entry appears in: past for an effective date before today."""
-    effective_date = getattr(entry, 'effective_date', entry.date)
-    return PAST if effective_date is not None and effective_date < today else UPCOMING
 
 
 def _managed_entry_or_404(membership, pk):
@@ -1008,26 +989,20 @@ def _index_days(entries, start, today):
     return days
 
 
-def _index_context(mode, entries, today, start=None):
-    start = start or _default_window_start(mode, today)
-    days = _index_days(entries, start, today)
-    detail_query = _calendar_query(mode, start)
+def _index_context(entries, today, start=None):
+    start = start or today
     return {
-        'mode': mode,
-        'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
-        'days': days,
-        'detail_query': detail_query,
-        **_calendar_navigation(mode, start, today),
+        'days': _index_days(entries, start, today),
+        'detail_query': _calendar_query(start),
+        **_calendar_navigation('entries:index', start, today),
     }
 
 
-def _detail_context(entry, list_mode, list_start=None, delete_open=False, today=None):
-    list_start = list_start or _default_window_start(list_mode, today or timezone.localdate())
+def _detail_context(entry, list_start, delete_open=False):
     return {
         'entry': entry,
-        'list_mode': list_mode,
         'list_start': list_start,
-        'list_query': _calendar_query(list_mode, list_start),
+        'list_query': _calendar_query(list_start),
         'delete_open': delete_open,
     }
 
@@ -1040,16 +1015,15 @@ def _form_context(form, *, entry=None):
 @require_http_methods(['GET'])
 @login_required
 def index(request):
-    mode = normalize_list_mode(request.GET.get('view', ''))
     membership = _require_parent(request)
     today = timezone.localdate()
-    start, end = _calendar_window(mode, request.GET.get('start'), today)
+    start, end = _calendar_window(request.GET.get('start'), today)
     rows = with_effective_date(parent_family_entries(membership)).exclude(
         school_item=SchoolItemKind.LUCKY_NUMBER.value
     ).filter(effective_date__range=(start, end)).order_by(
         'effective_date', F('time').asc(nulls_last=True), 'pk'
     )
-    return render(request, 'entries/manage_index.html', _index_context(mode, list(rows), today, start))
+    return render(request, 'entries/manage_index.html', _index_context(list(rows), today, start))
 
 
 @require_http_methods(['GET'])
@@ -1057,18 +1031,11 @@ def index(request):
 def detail(request, pk):
     entry = _managed_entry_or_404(_require_parent(request), pk)
     today = timezone.localdate()
-    entry_mode = _list_mode_for(entry, today)
-    requested_mode = request.GET.get('view')
-    list_mode = requested_mode if requested_mode in LIST_MODES else entry_mode
     requested_start = request.GET.get('start')
-    if not requested_start and list_mode == entry_mode and entry.effective_date:
-        requested_start = _window_containing(list_mode, entry.effective_date, today).isoformat()
-    list_start, _ = _calendar_window(list_mode, requested_start, today)
-    return render(
-        request,
-        'entries/manage_detail.html',
-        _detail_context(entry, list_mode, list_start),
-    )
+    if not requested_start and entry.effective_date:
+        requested_start = _window_containing(entry.effective_date, today).isoformat()
+    list_start, _ = _calendar_window(requested_start, today)
+    return render(request, 'entries/manage_detail.html', _detail_context(entry, list_start))
 
 
 @sensitive_post_parameters('content')
@@ -1152,9 +1119,8 @@ def delete(request, pk):
     except Entry.DoesNotExist:
         raise Http404 from None
     messages.success(request, ENTRY_DELETED_MESSAGE)
-    mode = normalize_list_mode(request.POST.get('view', ''))
-    start, _ = _calendar_window(mode, request.POST.get('start'), timezone.localdate())
-    return redirect(_index_url(mode, start))
+    start, _ = _calendar_window(request.POST.get('start'), timezone.localdate())
+    return redirect(_index_url(start))
 
 
 # Fictional management kitchen-sink data (DEBUG gallery): unsaved rows only.
@@ -1189,8 +1155,8 @@ def _states_member(display_name):
     raise ValueError(f'Unknown gallery member: {display_name}')
 
 
-def _synthetic_list(mode, entries):
-    return _index_context(mode, entries, STATES_DATE)
+def _synthetic_list(entries, start=STATES_DATE):
+    return _index_context(entries, STATES_DATE, start)
 
 
 def _manage_state_sections(membership):
@@ -1239,10 +1205,11 @@ def _manage_state_sections(membership):
         date=STATES_DATE,
         time=datetime.time(17, 30),
     )
+    earlier_start = STATES_DATE - datetime.timedelta(days=CALENDAR_WINDOW_DAYS)
     past_entry = _synthetic_entry(
         5,
         content='Zapłacić za obiady',
-        date=STATES_DATE - datetime.timedelta(days=14),
+        date=earlier_start,
         time=datetime.time(7, 45),
     )
     eduvulcan_entry = _synthetic_entry(
@@ -1281,32 +1248,31 @@ def _manage_state_sections(membership):
 
     return [
         {
-            'name': 'list_upcoming',
-            'label': 'Lista: nadchodzące',
+            'name': 'list_today',
+            'label': 'Lista: bieżące dwa tygodnie',
             'list': _synthetic_list(
-                UPCOMING,
                 [test_entry, parent_note, family_meeting, long_note, trip, library_task],
             ),
         },
         {
-            'name': 'list_past',
-            'label': 'Lista: minione',
-            'list': _synthetic_list(PAST, [past_entry]),
+            'name': 'list_earlier',
+            'label': 'Lista: wcześniejsze dwa tygodnie',
+            'list': _synthetic_list([past_entry], earlier_start),
         },
         {
             'name': 'list_empty',
             'label': 'Lista: pusta',
-            'list': _synthetic_list(UPCOMING, []),
+            'list': _synthetic_list([]),
         },
         {
             'name': 'detail_manual',
             'label': 'Szczegóły: wpis ręczny',
-            'detail': _detail_context(test_entry, UPCOMING, today=STATES_DATE),
+            'detail': _detail_context(test_entry, STATES_DATE),
         },
         {
             'name': 'detail_eduvulcan',
             'label': 'Szczegóły: wpis z EduVulcan',
-            'detail': _detail_context(eduvulcan_entry, UPCOMING, today=STATES_DATE),
+            'detail': _detail_context(eduvulcan_entry, STATES_DATE),
         },
         {'name': 'create', 'label': 'Nowy wpis', 'form': _form_context(create_form)},
         {'name': 'invalid', 'label': 'Błędy w formularzu', 'form': _form_context(invalid_form)},
@@ -1318,7 +1284,7 @@ def _manage_state_sections(membership):
         {
             'name': 'delete_open',
             'label': 'Otwarte potwierdzenie usunięcia',
-            'detail': _detail_context(past_entry, PAST, delete_open=True, today=STATES_DATE),
+            'detail': _detail_context(past_entry, earlier_start, delete_open=True),
         },
     ]
 

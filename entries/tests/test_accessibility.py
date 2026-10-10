@@ -269,11 +269,14 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
         data.update(overrides)
         return data
 
-    def test_list_upcoming_past_and_empty(self):
-        cases = {'empty upcoming': 'upcoming', 'empty past': 'past'}
-        for name, view in cases.items():
+    def window(self, offset):
+        return {'start': (self.today + datetime.timedelta(days=offset)).isoformat()}
+
+    def test_list_today_earlier_and_empty_windows(self):
+        cases = {'empty today': {}, 'empty earlier': self.window(-14)}
+        for name, params in cases.items():
             with self.subTest(name):
-                assert_accessible(self, self.client.get(reverse('entries:index'), {'view': view}))
+                assert_accessible(self, self.client.get(reverse('entries:index'), params))
         self.entry('Zebranie', days=2, assigned_member=self.child)
         self.entry('Odebrać paczkę', days=2, assigned_member=self.parent)
         self.entry('Wynieść śmieci', days=2)
@@ -283,19 +286,25 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
         # S-08: h1 page title, h2 per calendar day (all 14, empty ones too),
         # h3 per assignee within the day.
         assignee_groups = {
-            'upcoming': (range(14), {2: 3, 10: 1}),
-            'past': (range(-14, 0), {-3: 2}),
+            'today': ({}, range(14), {2: 3, 10: 1}),
+            'earlier': (self.window(-14), range(-14, 0), {-3: 2}),
         }
-        for view, (offsets, groups) in assignee_groups.items():
+        for window, (params, offsets, groups) in assignee_groups.items():
             headings = ['h1']
             for offset in offsets:
                 headings += ['h2'] + ['h3'] * groups.get(offset, 0)
-            with self.subTest(view=view):
-                response = self.client.get(reverse('entries:index'), {'view': view})
+            with self.subTest(window=window):
+                response = self.client.get(reverse('entries:index'), params)
                 assert_accessible(self, response)
                 html = response.content.decode()
                 main = html[html.index('<main'):html.index('</main>')]
                 self.assertEqual(re.findall(r'<(h[1-6])\b', main), headings)
+                # The calendar nav is a labelled landmark whose current window is
+                # announced only on the window starting today.
+                self.assertEqual(main.count('aria-label="Nawigacja kalendarza"'), 1)
+                self.assertEqual(
+                    main.count('aria-current="page">Dzisiaj</a>'), 1 if window == 'today' else 0
+                )
 
     def test_detail_and_open_delete_disclosure(self):
         entry = self.entry('Zebranie', days=2, assigned_member=self.child)
@@ -306,7 +315,12 @@ class ManagementAuditTests(FamilyFixtureMixin, TestCase):
         request._messages = mock.MagicMock(__iter__=lambda _self: iter(()))
         html = render_to_string(
             'entries/manage_detail.html',
-            {'entry': entry, 'list_mode': 'upcoming', 'delete_open': True},
+            {
+                'entry': entry,
+                'list_start': self.today,
+                'list_query': f'start={self.today.isoformat()}',
+                'delete_open': True,
+            },
             request=request,
         )
         self.assertIn('data-state-part="delete" open', html)

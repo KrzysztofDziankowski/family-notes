@@ -13,8 +13,8 @@ from .test_classification_service import FamilyFixtureMixin
 
 STATES_URL = reverse('entries:states')
 MANAGE_STATES = (
-    'list_upcoming',
-    'list_past',
+    'list_today',
+    'list_earlier',
     'list_empty',
     'detail_manual',
     'detail_eduvulcan',
@@ -57,11 +57,11 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         expectations = {
-            'list_upcoming': ['data-day-group="2026-10-05"', 'data-day-group="2026-10-08"',
-                              'aria-current="page">Nadchodzące<',
-                              '<h2 class="fn-day-heading">Czwartek, 8 października</h2>'],
-            'list_past': ['data-day-group="2026-09-21"', 'aria-current="page">Minione<'],
-            'list_empty': ['>Brak wpisów</p>', 'data-state-part="calendar-upcoming"'],
+            'list_today': ['data-day-group="2026-10-05"', 'data-day-group="2026-10-08"',
+                           'aria-current="page">Dzisiaj<',
+                           '<h2 class="fn-day-heading">Czwartek, 8 października</h2>'],
+            'list_earlier': ['data-day-group="2026-09-21"', 'data-state-part="calendar-nav"'],
+            'list_empty': ['>Brak wpisów</p>', 'data-state-part="calendar"'],
             'detail_manual': ['Ręcznie', 'Utworzono', 'Zmieniono', 'sprawdzian',
                               '<dt>Przedmiot</dt>', 'historia'],
             'detail_eduvulcan': ['EduVulcan', 'kartkówka', '<dt>Przedmiot</dt>', 'matematyka'],
@@ -79,6 +79,11 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
                     self.assertIn(marker, section)
         self.assertNotIn('data-state-part="delete" open', state_html(html, 'detail_manual'))
         self.assertNotIn('name="submission_key"', state_html(html, 'edit'))
+        self.assertNotIn('aria-current', state_html(html, 'list_earlier'))
+        for removed in ('Nadchodzące', 'Minione', 'Rodzaj listy', '2 tygodnie', 'name="view"'):
+            for name in ('list_today', 'list_earlier', 'list_empty', 'delete_open'):
+                with self.subTest(state=name, removed=removed):
+                    self.assertNotIn(removed, state_html(html, name))
 
     @override_settings(DEBUG=True)
     def test_capture_states_still_render(self):
@@ -108,7 +113,7 @@ class ParentAssigneeGalleryTests(FamilyFixtureMixin, TestCase):
     """S-07: the gallery shows a fictional parent as an option and as an assignee."""
 
     @override_settings(DEBUG=True)
-    def test_parent_appears_in_create_options_and_upcoming_list(self):
+    def test_parent_appears_in_create_options_and_today_list(self):
         self.client.force_login(self.parent.user)
         html = self.client.get(STATES_URL).content.decode()
 
@@ -116,7 +121,7 @@ class ParentAssigneeGalleryTests(FamilyFixtureMixin, TestCase):
         for name in ('create', 'invalid'):
             with self.subTest(state=name):
                 self.assertIn(option, state_html(html, name))
-        upcoming = state_html(html, 'list_upcoming')
+        upcoming = state_html(html, 'list_today')
         self.assertIn('Odebrać paczkę z paczkomatu', upcoming)
         # S-08: the assignee is named by the row's sub-heading, not the row.
         group = assignee_group_of(upcoming, 'Odebrać paczkę z paczkomatu')
@@ -150,11 +155,11 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
     """S-08: the gallery lists group by day, then by assignee, for the screenshot gate."""
 
     @override_settings(DEBUG=True)
-    def test_upcoming_state_groups_days_then_children_parent_family(self):
+    def test_today_state_groups_days_then_children_parent_family(self):
         self.client.force_login(self.parent.user)
         html = self.client.get(STATES_URL).content.decode()
 
-        upcoming = state_html(html, 'list_upcoming')
+        upcoming = state_html(html, 'list_today')
         self.assertEqual(
             DAY_PATTERN.findall(upcoming), [f'2026-10-{day:02}' for day in range(5, 19)]
         )
@@ -189,11 +194,11 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('fn-manage-section-title', upcoming)
 
     @override_settings(DEBUG=True)
-    def test_past_and_empty_states_keep_their_shape(self):
+    def test_earlier_and_empty_states_keep_their_shape(self):
         self.client.force_login(self.parent.user)
         html = self.client.get(STATES_URL).content.decode()
 
-        past = state_html(html, 'list_past')
+        past = state_html(html, 'list_earlier')
         self.assertEqual(
             DAY_PATTERN.findall(past),
             [f'2026-09-{day}' for day in range(21, 31)] + [f'2026-10-0{day}' for day in range(1, 5)],
@@ -213,16 +218,21 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         self.client.force_login(self.parent.user)
         html = self.client.get(STATES_URL).content.decode()
 
-        upcoming = state_html(html, 'list_upcoming')
-        past = state_html(html, 'list_past')
+        upcoming = state_html(html, 'list_today')
+        past = state_html(html, 'list_earlier')
         # Mixed fortnight: populated 5, 7, 8 October; the other eleven days are empty.
         self.assertEqual(upcoming.count('>Brak wpisów</p>'), 11)
         self.assertEqual(past.count('>Brak wpisów</p>'), 13)
-        self.assertIn('?view=upcoming&amp;start=2026-10-19">Następne 2 tygodnie</a>', upcoming)
-        self.assertNotIn('Poprzednie 2 tygodnie', upcoming)
-        self.assertIn('?view=past&amp;start=2026-09-07">Poprzednie 2 tygodnie</a>', past)
-        self.assertNotIn('Następne 2 tygodnie', past)
-        self.assertIn('/entries/900002/?view=upcoming&amp;start=2026-10-05"', upcoming)
+        self.assertIn('<a href="/entries/?start=2026-09-21">Wcześniejsze</a>', upcoming)
+        self.assertIn(
+            '<a href="/entries/?start=2026-10-05" aria-current="page">Dzisiaj</a>', upcoming
+        )
+        self.assertIn('<a href="/entries/?start=2026-10-19">Następne</a>', upcoming)
+        self.assertIn('<a href="/entries/?start=2026-09-07">Wcześniejsze</a>', past)
+        self.assertIn('<a href="/entries/?start=2026-10-05">Dzisiaj</a>', past)
+        self.assertIn('<a href="/entries/?start=2026-10-05">Następne</a>', past)
+        self.assertIn('/entries/900002/?start=2026-10-05"', upcoming)
+        self.assertIn('/entries/900006/?start=2026-09-21"', past)
 
     @override_settings(DEBUG=True)
     def test_detail_states_return_to_their_pinned_fortnight(self):
@@ -230,9 +240,9 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         html = self.client.get(STATES_URL).content.decode()
 
         self.assertIn(
-            'href="/entries/?view=upcoming&amp;start=2026-10-05">Wróć do listy</a>',
+            'href="/entries/?start=2026-10-05">Wróć do listy</a>',
             state_html(html, 'detail_manual'),
         )
         delete_open = state_html(html, 'delete_open')
-        self.assertIn('href="/entries/?view=past&amp;start=2026-09-21">Wróć do listy</a>', delete_open)
+        self.assertIn('href="/entries/?start=2026-09-21">Wróć do listy</a>', delete_open)
         self.assertIn('<input type="hidden" name="start" value="2026-09-21">', delete_open)

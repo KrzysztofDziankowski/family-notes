@@ -1,0 +1,12 @@
+{% comment %}
+Calendar window navigation shared by the parent and child calendars.
+Parameters: previous_url, today_url, next_url (all always set) and is_today (true when the
+shown window starts today; "Dzisiaj" then carries aria-current="page").
+{% endcomment %}
+<nav class="fn-calendar-nav" aria-label="Nawigacja kalendarza" data-state-part="calendar-nav">
+    <ul>
+        <li><a href="{{ previous_url }}">Wcześniejsze</a></li>
+        <li><a href="{{ today_url }}"{% if is_today %} aria-current="page"{% endif %}>Dzisiaj</a></li>
+        <li><a href="{{ next_url }}">Następne</a></li>
+    </ul>
+</nav>

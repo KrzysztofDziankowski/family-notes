@@ -497,8 +497,8 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [x] 1.1 Entries tests pass: `uv run python manage.py test entries`
-- [x] 1.2 No "Cała rodzina" left in product code: `grep -rn "Cała rodzina" entries family_access family_notes --include=*.py --include=*.html | grep -v /tests/` returns nothing
+- [x] 1.1 Entries tests pass: `uv run python manage.py test entries` — 3a4ec2f
+- [x] 1.2 No "Cała rodzina" left in product code: `grep -rn "Cała rodzina" entries family_access family_notes --include=*.py --include=*.html | grep -v /tests/` returns nothing — 3a4ec2f
 
 #### Manual
 
@@ -508,9 +508,9 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [ ] 2.1 Entries tests pass: `uv run python manage.py test entries`
-- [ ] 2.2 Django checks pass: `uv run python manage.py check`
-- [ ] 2.3 No list-mode tabs left in the parent calendar: `grep -n "_list_modes\|view=" entries/templates/entries/_manage_list.html entries/templates/entries/_manage_detail.html` returns nothing
+- [x] 2.1 Entries tests pass: `uv run python manage.py test entries`
+- [x] 2.2 Django checks pass: `uv run python manage.py check`
+- [x] 2.3 No list-mode tabs left in the parent calendar: `grep -n "_list_modes\|view=" entries/templates/entries/_manage_list.html entries/templates/entries/_manage_detail.html` returns nothing
 
 #### Manual
 
