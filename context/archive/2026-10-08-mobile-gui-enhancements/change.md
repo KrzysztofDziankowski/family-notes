@@ -1,10 +1,10 @@
 ---
 change_id: mobile-gui-enhancements
 title: Improve phone refresh, landscape layout, and date labels
-status: impl_reviewed
+status: archived
 created: 2026-10-08
-updated: 2026-10-08
-archived_at: null
+updated: 2026-10-10
+archived_at: 2026-10-10T08:28:30Z
 ---
 
 ## Notes
