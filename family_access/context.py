@@ -121,16 +121,16 @@ def remember_family(request, membership, user=None):
 def resolve_family_context(request):
     """The current ``FamilyMember`` of the request user, or ``None`` without one.
 
-    One active membership is selected automatically. A session id that is no
-    longer one of the user's active families is replaced by that automatic
-    choice, or discarded. Ordinary requests never write the session: the
-    selection is recorded at sign-in and by the chooser. Several active
+    One active membership is selected automatically and recorded in the
+    session. A session id that is no longer one of the user's active families
+    is replaced by that automatic choice, or discarded. Several active
     memberships with no valid selection raise ``FamilyContextRequired``.
     """
     membership, count = _lookup(request)
     session = _session(request)
-    if session is not None and SESSION_KEY in session and (
-        membership is None or session.get(SESSION_KEY) != membership.family_id
+    if session is not None and (
+        (membership is not None and session.get(SESSION_KEY) != membership.family_id)
+        or (membership is None and SESSION_KEY in session)
     ):
         membership, count = remember_family(request, membership)
     if membership is not None:

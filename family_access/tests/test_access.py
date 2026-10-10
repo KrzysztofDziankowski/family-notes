@@ -263,8 +263,8 @@ class FamilyContextTests(TestCase):
         self.assertEqual(peek_family_context(request), (self.membership, 1))
         self.assertEqual(resolve_family_context(request), self.membership)
         self.assertEqual(require_family_context(request), self.membership)
-        self.assertEqual(request.session.get(SESSION_KEY), None)
-        self.assertFalse(request.session.modified)
+        self.assertEqual(request.session[SESSION_KEY], self.family.pk)
+        self.assertTrue(request.session.modified)
 
     def test_valid_session_selection_is_used(self):
         request = context_request(self.user, family_id=self.family.pk)
