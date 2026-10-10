@@ -538,6 +538,19 @@ class IdempotencyAndSavedPanelTests(CaptureViewMixin, TestCase):
         self.assertNotEqual(str(new_key), str(key))
         self.assertEqual(Entry.objects.count(), 1)
 
+    def test_saved_panel_shows_general_label_for_unassigned_entry(self):
+        entry = Entry.objects.create(date=datetime.date(2026, 9, 21),
+            family=self.family,
+            entry_type=EntryType.NOTE.value,
+            content='Oddać książkę do biblioteki',
+        )
+
+        response = self.client.get(CAPTURE_URL, {'saved': str(entry.pk)})
+
+        self.assertEqual(response.context['state'], 'saved')
+        self.assertContains(response, '<dt>Dla kogo</dt>')
+        self.assertContains(response, '<dd>Ogólne</dd>', html=True)
+
     def test_saved_panel_for_other_family_entry_leaks_nothing(self):
         foreign = Entry.objects.create(date=datetime.date(2026, 9, 21),
             family=self.other_family,

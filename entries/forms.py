@@ -141,7 +141,7 @@ class EntryFieldsForm(forms.Form):
         label='Dla kogo',
         queryset=FamilyMember.objects.none(),
         required=False,
-        empty_label='Cała rodzina',
+        empty_label='Ogólne',
     )
     school_item = forms.ChoiceField(
         label='Element szkolny',

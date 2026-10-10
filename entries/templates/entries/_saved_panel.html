@@ -20,7 +20,7 @@
                 <dd>{{ entry.time|time:"H:i" }}</dd>
             {% endif %}
             <dt>Dla kogo</dt>
-            <dd>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Cała rodzina{% endif %}</dd>
+            <dd>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Ogólne{% endif %}</dd>
         </dl>
     {% endfor %}
 </section>

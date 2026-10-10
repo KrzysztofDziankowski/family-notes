@@ -169,14 +169,14 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         )
         self.assertEqual(
             HEADING_PATTERN.findall(upcoming),
-            ['Kasia', 'Tymek', 'Marta', 'Cała rodzina', 'Tymek', 'Cała rodzina'],
+            ['Kasia', 'Tymek', 'Marta', 'Ogólne', 'Tymek', 'Ogólne'],
         )
         for text, day, heading in (
             ('Sprawdzian z historii o średniowieczu', 'Dziś, poniedziałek 5 października', 'Kasia'),
             ('Odebrać paczkę z paczkomatu', 'Dziś, poniedziałek 5 października', 'Marta'),
-            ('Zebranie z wychowawczynią', 'Dziś, poniedziałek 5 października', 'Cała rodzina'),
+            ('Zebranie z wychowawczynią', 'Dziś, poniedziałek 5 października', 'Ogólne'),
             ('Wycieczka klasowa do muzeum techniki', 'Środa, 7 października', 'Tymek'),
-            ('Oddać książkę do biblioteki', 'Czwartek, 8 października', 'Cała rodzina'),
+            ('Oddać książkę do biblioteki', 'Czwartek, 8 października', 'Ogólne'),
         ):
             with self.subTest(text=text):
                 self.assertIn(
@@ -200,7 +200,7 @@ class GroupedListGalleryTests(FamilyFixtureMixin, TestCase):
         )
         self.assertEqual(GROUP_PATTERN.findall(past), ['family'])
         self.assertTrue(day_group_of(past, 'data-assignee-group="family"').startswith('data-day-group="2026-09-21"'))
-        self.assertEqual(HEADING_PATTERN.findall(past), ['Cała rodzina'])
+        self.assertEqual(HEADING_PATTERN.findall(past), ['Ogólne'])
         empty = state_html(html, 'list_empty')
         self.assertEqual(
             DAY_PATTERN.findall(empty), [f'2026-10-{day:02}' for day in range(5, 19)]

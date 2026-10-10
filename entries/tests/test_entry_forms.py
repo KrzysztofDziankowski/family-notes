@@ -272,7 +272,7 @@ class ManagedEntryFormTests(FamilyFixtureMixin, TestCase):
                 html = form.as_div()
                 self.assertIn('Brak', html)
                 self.assertIn('sprawdzian', html)
-                self.assertIn('Cała rodzina', html)
+                self.assertIn('Ogólne', html)
 
     def test_create_has_hidden_submission_key_and_edit_does_not(self):
         create = EntryCreateForm(self.parent)

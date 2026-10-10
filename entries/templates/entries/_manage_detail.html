@@ -15,7 +15,7 @@ listy" and the delete redirect return to), delete_open (optional; renders the di
         <dt>Godzina</dt>
         <dd>{% if entry.time %}{{ entry.time|time:"H:i" }}{% else %}Bez godziny{% endif %}</dd>
         <dt>Dla kogo</dt>
-        <dd>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Cała rodzina{% endif %}</dd>
+        <dd>{% if entry.assigned_member %}{{ entry.assigned_member.display_name }}{% else %}Ogólne{% endif %}</dd>
         {% if entry.school_item %}
             <dt>Element szkolny</dt>
             <dd>{{ entry.get_school_item_display }}</dd>

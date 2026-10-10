@@ -497,8 +497,8 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [ ] 1.1 Entries tests pass: `uv run python manage.py test entries`
-- [ ] 1.2 No "Cała rodzina" left in product code: `grep -rn "Cała rodzina" entries family_access family_notes --include=*.py --include=*.html | grep -v /tests/` returns nothing
+- [x] 1.1 Entries tests pass: `uv run python manage.py test entries`
+- [x] 1.2 No "Cała rodzina" left in product code: `grep -rn "Cała rodzina" entries family_access family_notes --include=*.py --include=*.html | grep -v /tests/` returns nothing
 
 #### Manual
 

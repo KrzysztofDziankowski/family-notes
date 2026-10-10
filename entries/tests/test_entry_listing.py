@@ -547,7 +547,7 @@ class EntryRowPartialTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('Michał', self._render(hide_assignee=True))
 
         self.entry.assigned_member = None
-        self.assertIn('Cała rodzina', self._render())
+        self.assertIn('Ogólne', self._render())
 
     def test_optional_edit_link(self):
         html = self._render(edit_url_name='test_edit')

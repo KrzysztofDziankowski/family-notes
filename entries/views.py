@@ -522,7 +522,7 @@ STATES_MEMBERS = (
     ('s2', 900102, 'Tymek', FamilyMember.Role.CHILD),
     ('s3', 900103, STATES_PARENT_NAME, FamilyMember.Role.PARENT),
 )
-STATES_MEMBER_CHOICES = [('', 'Cała rodzina')] + [
+STATES_MEMBER_CHOICES = [('', 'Ogólne')] + [
     (value, name) for value, _pk, name, _role in STATES_MEMBERS
 ]
 # Also the gallery's fictional "today", so the past-date warning is deterministic.
@@ -970,7 +970,7 @@ def _managed_entry_or_404(membership, pk):
         raise Http404 from None
 
 
-FAMILY_GROUP_HEADING = 'Cała rodzina'
+FAMILY_GROUP_HEADING = 'Ogólne'
 
 
 def _assignee_heading(member):

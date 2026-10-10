@@ -939,7 +939,7 @@ class TwoParentManageViewTests(TwoParentFixtureMixin, ManageViewMixin, TestCase)
                 detail = self.client.get(detail_url(entry.pk))
                 self.assertEqual(detail.status_code, 200)
                 self.assertContains(detail, name)
-                self.assertNotContains(detail, 'Cała rodzina')
+                self.assertNotContains(detail, 'Ogólne')
 
     def test_create_and_edit_through_the_views_save_a_parent(self):
         for member in (self.parent, self.second_parent):
@@ -1045,10 +1045,10 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         )
         today = day_html(html, self.today.isoformat())
         self.assertEqual(
-            GROUP_HEADING_PATTERN.findall(today), ['Michał', 'Zosia (nieaktywne konto)', 'Cała rodzina']
+            GROUP_HEADING_PATTERN.findall(today), ['Michał', 'Zosia (nieaktywne konto)', 'Ogólne']
         )
         self.assertEqual(
-            GROUP_HEADING_PATTERN.findall(day_html(html, self.days(10).isoformat())), ['Michał', 'Ewa', 'Cała rodzina']
+            GROUP_HEADING_PATTERN.findall(day_html(html, self.days(10).isoformat())), ['Michał', 'Ewa', 'Ogólne']
         )
 
     def test_same_day_entries_share_one_day_heading_in_child_parent_family_order(self):
@@ -1064,7 +1064,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         self.assertEqual(DAY_PATTERN.findall(html).count(day.isoformat()), 1)
         self.assertEqual(len(DAY_HEADING_PATTERN.findall(block)), 1)
         self.assertEqual(GROUP_PATTERN.findall(block), [self.key(self.child), self.key(self.parent), 'family'])
-        self.assertEqual(GROUP_HEADING_PATTERN.findall(block), ['Michał', 'Ewa', 'Cała rodzina'])
+        self.assertEqual(GROUP_HEADING_PATTERN.findall(block), ['Michał', 'Ewa', 'Ogólne'])
         self.assertEqual(
             [int(pk) for pk in ROW_PATTERN.findall(block)], [child.pk, parent.pk, family.pk]
         )
@@ -1073,7 +1073,7 @@ class GroupedIndexTests(TwoParentFixtureMixin, ManageViewMixin, TestCase):
         html = self.client.get(INDEX_URL).content.decode()
         today = day_html(html, self.today.isoformat())
 
-        self.assertEqual(group_heading(today, 'family'), 'Cała rodzina')
+        self.assertEqual(group_heading(today, 'family'), 'Ogólne')
         self.assertEqual(
             [int(pk) for pk in ROW_PATTERN.findall(group_html(today, 'family'))],
             [self.family_today.pk],

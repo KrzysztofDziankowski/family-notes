@@ -339,7 +339,7 @@ def child_entries(membership):
     """Return the entries an active child may read: only those assigned to them.
 
     ``membership`` is the request's family context. Authorization is checked
-    here, independently of the view. Unassigned ("Cała rodzina") entries,
+    here, independently of the view. Unassigned ("Ogólne") entries,
     other children's entries and other families' entries are never included.
     """
     if not can_read_assigned_child(membership, membership):

@@ -37,7 +37,7 @@ class EntrySection(NamedTuple):
     entries: QuerySet
 
 
-# Group key for entries assigned to no member ("Cała rodzina").
+# Group key for entries assigned to no member ("Ogólne").
 GROUP_FAMILY = 'family'
 
 
