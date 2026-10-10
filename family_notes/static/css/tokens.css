@@ -457,8 +457,8 @@ main[tabindex="-1"]:focus {
   overflow-wrap: anywhere;
 }
 
+/* An empty day keeps the white surface of a day with entries; only the dashed border marks it. */
 .fn-calendar-day--empty {
-  background: var(--fn-color-bg);
   border-style: dashed;
 }
 
