@@ -350,22 +350,50 @@ class ChildAuditTests(FamilyFixtureMixin, TestCase):
         self.client.force_login(self.child.user)
         self.today = timezone.localdate()
 
-    def test_list_upcoming_past_and_empty_and_detail(self):
-        for view in ('upcoming', 'past'):
-            with self.subTest(view=view, empty=True):
-                assert_accessible(self, self.client.get(reverse('entries:child_list'), {'view': view}))
+    def window(self, offset):
+        return {'start': (self.today + datetime.timedelta(days=offset)).isoformat()}
+
+    def test_calendar_today_earlier_and_empty_windows_and_detail(self):
+        url = reverse('entries:child_list')
+        for name, params in {'empty today': {}, 'empty earlier': self.window(-14)}.items():
+            with self.subTest(name):
+                assert_accessible(self, self.client.get(url, params))
         entries = [
             Entry.objects.create(
                 family=self.family,
                 entry_type=EntryType.TODO.value,
                 content=content,
-                date=self.today + datetime.timedelta(days=10 if days is None else days),
+                date=self.today + datetime.timedelta(days=days),
                 assigned_member=self.child,
                 created_by=self.parent,
+                **fields,
             )
-            for content, days in (('Zebranie', 1), ('Kupić blok', None), ('Obiady', -2))
+            for content, days, fields in (
+                ('Zebranie', 1, {}),
+                ('Kupić blok', 1, {}),
+                ('Szczęśliwy numerek: 7', 2,
+                 {'school_item': SchoolItemKind.LUCKY_NUMBER.value}),
+                ('Obiady', -2, {}),
+            )
         ]
-        for view in ('upcoming', 'past'):
-            with self.subTest(view=view):
-                assert_accessible(self, self.client.get(reverse('entries:child_list'), {'view': view}))
+        for window, (params, offset) in {'today': ({}, 0), 'earlier': (self.window(-14), -14)}.items():
+            with self.subTest(window=window):
+                response = self.client.get(url, params)
+                assert_accessible(self, response)
+                html = response.content.decode()
+                main = html[html.index('<main'):html.index('</main>')]
+                # h1 page title and one h2 per calendar day; no assignee h3.
+                self.assertEqual(re.findall(r'<(h[1-6])\b', main), ['h1'] + ['h2'] * 14)
+                self.assertEqual(main.count('aria-label="Nawigacja kalendarza"'), 1)
+                self.assertEqual(
+                    main.count('aria-current="page">Dzisiaj</a>'), 1 if window == 'today' else 0
+                )
+                day_ids = re.findall(r'<h2 class="fn-day-heading" id="([^"]+)"', main)
+                self.assertEqual(len(day_ids), 14)
+                for list_id in re.findall(r'aria-labelledby="([^"]+)"', main):
+                    self.assertIn(list_id, day_ids)
         assert_accessible(self, self.client.get(reverse('entries:child_detail', args=[entries[0].pk])))
+        assert_accessible(
+            self,
+            self.client.get(reverse('entries:child_detail', args=[entries[3].pk]), self.window(-14)),
+        )

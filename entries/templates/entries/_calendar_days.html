@@ -1,0 +1,43 @@
+{% comment %}
+The fourteen day boxes shared by the parent and child calendars.
+Parameters: days, detail_url_name, detail_query, show_groups, and optional id_prefix (keeps heading
+ids unique when a page renders several calendars).
+days: exactly fourteen chronological {key, heading, is_weekend, groups}, one per calendar date
+(key is the ISO date), including dates without entries; is_weekend adds data-weekend to Saturday and
+Sunday boxes (the weekend heading colour); each day's groups are {key, heading, entries}, one per
+assignee (children, parents, then "Ogólne"), never empty. An empty day shows "Brak wpisów".
+With show_groups (the parent calendar) each group gets an h3 and a list whose aria-label
+("Jutro, czwartek 8 października, Kasia") repeats the day and the assignee for assistive technology.
+Without it (the child calendar) the day has one list labelled by its heading (aria-labelledby).
+Rows hide the type, date and assignee: the headings carry them. detail_query (query string without
+"?") is appended to every row link.
+{% endcomment %}
+<div class="fn-calendar" data-state-part="calendar">
+    {% for day in days %}
+    <section class="fn-calendar-day{% if not day.groups %} fn-calendar-day--empty{% endif %}" data-day-group="{{ day.key }}"{% if day.is_weekend %} data-weekend{% endif %}>
+        <h2 class="fn-day-heading"{% if not show_groups %} id="{{ id_prefix }}day-{{ day.key }}"{% endif %}>{{ day.heading }}</h2>
+        {% if not day.groups %}
+        <p class="fn-calendar-empty fn-muted" data-state-part="day-empty">Brak wpisów</p>
+        {% elif show_groups %}
+        {% for group in day.groups %}
+        <section data-assignee-group="{{ group.key }}">
+            <h3 class="fn-manage-subsection-title">{{ group.heading }}</h3>
+            <ul class="fn-entry-list" aria-label="{{ day.heading }}, {{ group.heading }}">
+                {% for entry in group.entries %}
+                    {% include "entries/_entry_row.html" with entry=entry detail_url_name=detail_url_name detail_query=detail_query hide_type=True hide_assignee=True hide_date=True only %}
+                {% endfor %}
+            </ul>
+        </section>
+        {% endfor %}
+        {% else %}
+        <ul class="fn-entry-list" aria-labelledby="{{ id_prefix }}day-{{ day.key }}">
+            {% for group in day.groups %}
+                {% for entry in group.entries %}
+                    {% include "entries/_entry_row.html" with entry=entry detail_url_name=detail_url_name detail_query=detail_query hide_type=True hide_assignee=True hide_date=True only %}
+                {% endfor %}
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+    {% endfor %}
+</div>

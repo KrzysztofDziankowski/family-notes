@@ -508,9 +508,9 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [x] 2.1 Entries tests pass: `uv run python manage.py test entries`
-- [x] 2.2 Django checks pass: `uv run python manage.py check`
-- [x] 2.3 No list-mode tabs left in the parent calendar: `grep -n "_list_modes\|view=" entries/templates/entries/_manage_list.html entries/templates/entries/_manage_detail.html` returns nothing
+- [x] 2.1 Entries tests pass: `uv run python manage.py test entries` — c168e38
+- [x] 2.2 Django checks pass: `uv run python manage.py check` — c168e38
+- [x] 2.3 No list-mode tabs left in the parent calendar: `grep -n "_list_modes\|view=" entries/templates/entries/_manage_list.html entries/templates/entries/_manage_detail.html` returns nothing — c168e38
 
 #### Manual
 
@@ -521,9 +521,9 @@ No schema changes. Old bookmarks with `?view=` keep working and open today's win
 
 #### Automated
 
-- [ ] 3.1 Entries tests pass: `uv run python manage.py test entries`
-- [ ] 3.2 No list-mode symbols remain: `grep -rn "partition_entries\|normalize_list_mode\|LIST_MODES\|_list_modes\|Nadchodzące\|Minione" entries scripts family_notes --include=*.py --include=*.html` returns nothing
-- [ ] 3.3 Full test suite passes: `uv run python manage.py test`
+- [x] 3.1 Entries tests pass: `uv run python manage.py test entries`
+- [x] 3.2 No list-mode symbols remain: `grep -rn "partition_entries\|normalize_list_mode\|LIST_MODES\|_list_modes\|Nadchodzące\|Minione" entries scripts family_notes --include=*.py --include=*.html` returns nothing
+- [x] 3.3 Full test suite passes: `uv run python manage.py test`
 
 #### Manual
 

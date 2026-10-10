@@ -1,4 +1,4 @@
-"""S-03 child routes: list, detail, access matrix and the account entry point."""
+"""S-03 child routes: calendar, detail, access matrix and the account entry point."""
 
 import datetime
 import re
@@ -7,7 +7,6 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from entries.classification.types import EntryType, SchoolItemKind
 from entries.listing import parent_day_heading
@@ -15,28 +14,48 @@ from entries.models import Entry
 from entries.services import save_confirmed_entry
 
 from .test_classification_service import FamilyFixtureMixin, TwoParentFixtureMixin
+from .test_manage_views import DAY_PATTERN, ROW_PATTERN, day_html
 
 LIST_URL = reverse('entries:child_list')
 PARENT_LIST_URL = reverse('entries:index')
 FIXED_TODAY = datetime.date(2026, 9, 28)  # a Monday
 HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading"[^>]*>([^<]*)</h2>')
+NAV_LINK_PATTERN = re.compile(r'<a href="([^"]*)"( aria-current="page")?>([^<]*)</a>')
 FORBIDDEN_HREFS = ('/entries/new/', '/entries/confirm/', 'edit', 'delete')
+DAY = datetime.timedelta(days=1)
 
 
 def detail_url(pk):
     return reverse('entries:child_detail', args=[pk])
 
 
+def days(offset):
+    return FIXED_TODAY + offset * DAY
+
+
+def window(offset):
+    return {'start': days(offset).isoformat()}
+
+
+def nav_html(html):
+    start = html.index('<nav class="fn-calendar-nav"')
+    return html[start:html.index('</nav>', start)]
+
+
 class ChildViewFixtureMixin(FamilyFixtureMixin):
+    """Fixture rows around a fixed ``timezone.localdate`` (Monday 2026-09-28)."""
+
     def setUp(self):
         super().setUp()
-        today = timezone.localdate()
-        self.today = today
+        patcher = mock.patch('entries.views.timezone.localdate', return_value=FIXED_TODAY)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.today = FIXED_TODAY
         self.own_upcoming = self._entry(
             'SENTINEL-OWN-UPCOMING',
             self.child,
             entry_type=EntryType.CALENDAR_EVENT,
-            date=today + datetime.timedelta(days=2),
+            date=days(2),
             time=datetime.time(8, 0),
             school_item=SchoolItemKind.TEST.value,
         )
@@ -45,25 +64,21 @@ class ChildViewFixtureMixin(FamilyFixtureMixin):
             'SENTINEL-OWN-PAST',
             self.child,
             entry_type=EntryType.CALENDAR_EVENT,
-            date=today - datetime.timedelta(days=3),
+            date=days(-3),
             source=Entry.Source.EDUVULCAN,
         )
-        self.unassigned = self._entry(
-            'SENTINEL-UNASSIGNED', None, date=today + datetime.timedelta(days=1)
-        )
-        self.sibling = self._entry(
-            'SENTINEL-SIBLING', self.other_child, date=today + datetime.timedelta(days=1)
-        )
+        self.unassigned = self._entry('SENTINEL-UNASSIGNED', None, date=days(1))
+        self.sibling = self._entry('SENTINEL-SIBLING', self.other_child, date=days(1))
         self.foreign = self._entry(
             'SENTINEL-FOREIGN',
             self.other_family_child,
             family=self.other_family,
-            date=today + datetime.timedelta(days=1),
+            date=days(1),
         )
         self.excluded = (self.unassigned, self.sibling, self.foreign)
 
     def _entry(self, content, member, family=None, entry_type=EntryType.NOTE, **fields):
-        fields.setdefault('date', self.today + datetime.timedelta(days=10))
+        fields.setdefault('date', days(10))
         return Entry.objects.create(
             family=family or self.family,
             entry_type=entry_type.value,
@@ -93,76 +108,126 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
         super().setUp()
         self.client.force_login(self.child.user)
 
-    def assertModeSwitch(self, response, current):
-        """The shared tab switch: both modes linked, only ``current`` marked as the page."""
-        body = response.content.decode()
-        self.assertNotIn('role="group"', body)
-        self.assertNotIn('role="button"', body)
-        self.assertIn('<nav class="fn-tabs" aria-label="Rodzaj listy"', body)
-        links = re.findall(r'<a href="(/entries/mine/[^"]*)"( aria-current="page")?>', body)
-        self.assertEqual(
-            [href for href, _ in links], ['/entries/mine/', '/entries/mine/?view=past']
-        )
-        self.assertEqual([href for href, marker in links if marker], [current])
+    def rows(self, html, offset):
+        return [int(pk) for pk in ROW_PATTERN.findall(day_html(html, days(offset).isoformat()))]
 
-    def test_default_list_shows_upcoming_in_date_order(self):
+    def test_default_window_is_fourteen_days_from_today_with_full_headings(self):
         response = self.client.get(LIST_URL)
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'entries/child_list.html')
         self.assertContains(response, '<h1>Moje wpisy</h1>', html=True)
-        body = response.content.decode()
-        self.assertLess(
-            body.index('SENTINEL-OWN-UPCOMING'), body.index('SENTINEL-OWN-LATER')
+        html = response.content.decode()
+        self.assertEqual(DAY_PATTERN.findall(html), [days(n).isoformat() for n in range(14)])
+        self.assertEqual(
+            HEADING_PATTERN.findall(html), [parent_day_heading(days(n), FIXED_TODAY) for n in range(14)]
         )
+        self.assertEqual(HEADING_PATTERN.findall(html)[0], 'Dziś, poniedziałek 28 września')
+        self.assertEqual(self.rows(html, 2), [self.own_upcoming.pk])
+        self.assertEqual(self.rows(html, 10), [self.own_later.pk])
         self.assertNotContains(response, 'SENTINEL-OWN-PAST')
-        self.assertContains(response, f'href="{detail_url(self.own_upcoming.pk)}"')
-        self.assertRegex(body, r'href="/entries/mine/"\s+aria-current="page"')
-        self.assertModeSwitch(response, current='/entries/mine/')
+        # Every day without an own entry is an empty box.
+        self.assertEqual(html.count('>Brak wpisów</p>'), 12)
+        self.assertEqual(html.count('fn-calendar-day--empty'), 12)
+        self.assertIn('>Brak wpisów</p>', day_html(html, days(1).isoformat()))
+        self.assertIn(f'<section class="fn-calendar-day" data-day-group="{days(2).isoformat()}"', html)
+        self.assertIn(
+            f'<section class="fn-calendar-day fn-calendar-day--empty" data-day-group="{days(1).isoformat()}"',
+            html,
+        )
+        self.assertNotIn('Brak wpisów', day_html(html, days(2).isoformat()))
+
+    def test_only_own_entries_without_assignee_subheadings(self):
+        response = self.client.get(LIST_URL)
+
+        html = response.content.decode()
         self.assertNoExcludedContent(response)
         self.assertReadOnly(response)
-        # The child's own list hides the redundant assignee.
+        self.assertNotIn('<h3', html)
+        self.assertNotIn('data-assignee-group', html)
+        self.assertNotIn('Ogólne', html)
+        # The child's own calendar hides the redundant assignee and the type.
         self.assertNotContains(response, 'Michał</span>')
         self.assertNotContains(response, 'fn-entry-type')
+        self.assertNotContains(response, 'fn-tabs')
 
-    def test_past_mode_lists_past_entries_with_mode_in_links(self):
-        response = self.client.get(LIST_URL, {'view': 'past'})
-
-        self.assertContains(response, 'SENTINEL-OWN-PAST')
-        self.assertNotContains(response, 'fn-entry-type')
-        self.assertNotContains(response, 'SENTINEL-OWN-UPCOMING')
-        self.assertNotContains(response, 'SENTINEL-OWN-LATER')
-        self.assertContains(response, f'href="{detail_url(self.own_past.pk)}?view=past"')
-        self.assertRegex(
-            response.content.decode(), r'href="/entries/mine/\?view=past"\s+aria-current="page"'
+    def test_lucky_number_appears_on_its_day(self):
+        lucky = self._entry(
+            'SENTINEL-LUCKY', self.child, date=days(4),
+            school_item=SchoolItemKind.LUCKY_NUMBER.value, source=Entry.Source.EDUVULCAN,
         )
-        self.assertModeSwitch(response, current='/entries/mine/?view=past')
-        self.assertNoExcludedContent(response)
-        self.assertReadOnly(response)
 
-    def test_unknown_view_falls_back_to_upcoming(self):
-        response = self.client.get(LIST_URL, {'view': '<script>'})
+        html = self.client.get(LIST_URL).content.decode()
 
-        self.assertContains(response, 'SENTINEL-OWN-UPCOMING')
-        self.assertNotContains(response, 'SENTINEL-OWN-PAST')
-        self.assertNotContains(response, '<script>')
+        self.assertEqual(self.rows(html, 4), [lucky.pk])
+        self.assertIn('SENTINEL-LUCKY', day_html(html, days(4).isoformat()))
+        # The parent calendar keeps hiding lucky numbers.
+        self.client.force_login(self.parent.user)
+        self.assertNotContains(self.client.get(PARENT_LIST_URL), 'SENTINEL-LUCKY')
 
-    def test_distinct_empty_states(self):
-        Entry.objects.filter(assigned_member=self.child).delete()
+    def test_navigation_links_today_earlier_and_next_windows(self):
+        today = self.client.get(LIST_URL).content.decode()
+        earlier = self.client.get(LIST_URL, window(-14)).content.decode()
 
-        upcoming = self.client.get(LIST_URL)
-        past = self.client.get(LIST_URL, {'view': 'past'})
+        self.assertIn('aria-label="Nawigacja kalendarza"', today)
+        self.assertEqual(
+            NAV_LINK_PATTERN.findall(nav_html(today)),
+            [
+                (f'{LIST_URL}?start={days(-14).isoformat()}', '', 'Wcześniejsze'),
+                (f'{LIST_URL}?start={days(0).isoformat()}', ' aria-current="page"', 'Dzisiaj'),
+                (f'{LIST_URL}?start={days(14).isoformat()}', '', 'Następne'),
+            ],
+        )
+        self.assertEqual(
+            NAV_LINK_PATTERN.findall(nav_html(earlier)),
+            [
+                (f'{LIST_URL}?start={days(-28).isoformat()}', '', 'Wcześniejsze'),
+                (f'{LIST_URL}?start={days(0).isoformat()}', '', 'Dzisiaj'),
+                (f'{LIST_URL}?start={days(0).isoformat()}', '', 'Następne'),
+            ],
+        )
+        self.assertEqual(DAY_PATTERN.findall(earlier), [days(n).isoformat() for n in range(-14, 0)])
+        self.assertEqual(self.rows(earlier, -3), [self.own_past.pk])
+        self.assertNotIn('SENTINEL-OWN-UPCOMING', earlier)
+        self.assertNotIn('role="group"', today)
+        self.assertNotIn('role="button"', today)
 
-        self.assertContains(upcoming, 'Nie masz żadnych nadchodzących wpisów.')
-        self.assertContains(upcoming, 'data-empty-state="upcoming"')
-        self.assertContains(past, 'Nie masz żadnych minionych wpisów.')
-        self.assertContains(past, 'data-empty-state="past"')
-        for response, mode in ((upcoming, 'upcoming'), (past, 'past')):
-            with self.subTest(mode=mode):
-                self.assertContains(
-                    response, f'<p class="fn-empty fn-muted" data-empty-state="{mode}">'
-                )
-                self.assertNotContains(response, 'class="fn-panel"')
+    def test_next_window_and_windows_crossing_today(self):
+        far = self._entry('SENTINEL-FAR', self.child, date=days(20))
+
+        later = self.client.get(LIST_URL, window(14)).content.decode()
+        crossing = self.client.get(LIST_URL, window(-7)).content.decode()
+
+        self.assertEqual(DAY_PATTERN.findall(later)[0], days(14).isoformat())
+        self.assertEqual(self.rows(later, 20), [far.pk])
+        self.assertEqual(DAY_PATTERN.findall(crossing), [days(n).isoformat() for n in range(-7, 7)])
+        self.assertEqual(self.rows(crossing, -3), [self.own_past.pk])
+        self.assertEqual(self.rows(crossing, 2), [self.own_upcoming.pk])
+
+    def test_entry_links_carry_the_window_start(self):
+        today = self.client.get(LIST_URL)
+        earlier = self.client.get(LIST_URL, window(-14))
+
+        self.assertContains(
+            today, f'href="{detail_url(self.own_upcoming.pk)}?start={days(0).isoformat()}"'
+        )
+        self.assertContains(
+            earlier, f'href="{detail_url(self.own_past.pk)}?start={days(-14).isoformat()}"'
+        )
+
+    def test_invalid_start_and_legacy_view_fall_back_to_today(self):
+        for params in (
+            {'start': '<script>'},
+            {'start': '2026-9-1'},
+            {'start': '0001-01-01'},
+            {'view': 'past'},
+        ):
+            with self.subTest(params=params):
+                response = self.client.get(LIST_URL, params)
+                html = response.content.decode()
+                self.assertEqual(DAY_PATTERN.findall(html)[0], days(0).isoformat())
+                self.assertNotContains(response, '<script>')
+                self.assertNotContains(response, 'SENTINEL-OWN-PAST')
 
     def test_parent_captured_entry_assigned_to_child_appears(self):
         save_confirmed_entry(
@@ -190,139 +255,105 @@ class ChildListTests(ChildViewFixtureMixin, TestCase):
 
 
 class ChildDayHeadingTests(ChildViewFixtureMixin, TestCase):
-    """Day groups under relative headings, with ``timezone.localdate`` fixed."""
+    """Day boxes, their labelled lists and the weekend marker."""
 
     def setUp(self):
         super().setUp()
         Entry.objects.filter(assigned_member=self.child).delete()
-        day = datetime.timedelta(days=1)
         self.today_timed = self._entry(
             'SENTINEL-TODAY', self.child, date=FIXED_TODAY, time=datetime.time(8, 15)
         )
-        self.tomorrow_untimed = self._entry(
-            'SENTINEL-TOMORROW', self.child, date=FIXED_TODAY + day
+        self.today_untimed = self._entry('SENTINEL-TODAY-UNTIMED', self.child, date=FIXED_TODAY)
+        self.today_early = self._entry(
+            'SENTINEL-TODAY-EARLY', self.child, date=FIXED_TODAY, time=datetime.time(7, 0)
         )
-        self.later = self._entry('SENTINEL-LATER', self.child, date=FIXED_TODAY + 7 * day)
+        self.tomorrow_untimed = self._entry('SENTINEL-TOMORROW', self.child, date=days(1))
+        self.later = self._entry('SENTINEL-LATER', self.child, date=days(7))
         self.yesterday = self._entry(
-            'SENTINEL-YESTERDAY', self.child, date=FIXED_TODAY - day, time=datetime.time(9, 0)
+            'SENTINEL-YESTERDAY', self.child, date=days(-1), time=datetime.time(9, 0)
         )
-        self.older = self._entry(
-            'SENTINEL-OLDER', self.child, date=FIXED_TODAY - 10 * day
-        )
-        patcher = mock.patch('entries.views.timezone.localdate', return_value=FIXED_TODAY)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-    def headings(self, response):
-        return HEADING_PATTERN.findall(response.content.decode())
-
-    def test_upcoming_groups_all_dates_under_relative_headings(self):
         self.client.force_login(self.child.user)
 
+    def test_rows_sit_under_their_day_in_time_order_showing_only_the_time(self):
         response = self.client.get(LIST_URL)
+        html = response.content.decode()
 
+        today = day_html(html, FIXED_TODAY.isoformat())
         self.assertEqual(
-            self.headings(response),
-            ['Dziś, poniedziałek 28 września', 'Jutro, wtorek 29 września',
-             'Poniedziałek, 5 października'],
+            [int(pk) for pk in ROW_PATTERN.findall(today)],
+            [self.today_early.pk, self.today_timed.pk, self.today_untimed.pk],
         )
-        body = response.content.decode()
         order = [
-            body.index(marker)
+            html.index(marker)
             for marker in ('>Dziś, poniedziałek 28 września<', 'SENTINEL-TODAY',
                            '>Jutro, wtorek 29 września<', 'SENTINEL-TOMORROW',
                            '>Poniedziałek, 5 października<', 'SENTINEL-LATER')
         ]
         self.assertEqual(order, sorted(order))
-        self.assertEqual(
-            re.findall(r'data-entry-section="(\w+)"', body), ['dated', 'dated', 'dated']
-        )
-        # Rows under a day heading show only the time, never the date.
         self.assertContains(response, '<span>08:15</span>', html=True)
-        self.assertNotIn('września', HEADING_PATTERN.sub('', body))
+        self.assertNotIn('września', HEADING_PATTERN.sub('', html))
+        self.assertNotContains(response, 'SENTINEL-YESTERDAY')
 
-    def test_each_day_list_is_labelled_by_its_visible_heading(self):
-        self.client.force_login(self.child.user)
+    def test_each_day_has_one_list_labelled_by_its_heading(self):
+        for params, offsets in (({}, range(14)), (window(-14), range(-14, 0))):
+            with self.subTest(params=params):
+                html = self.client.get(LIST_URL, params).content.decode()
+                ids = re.findall(r'<h2 class="fn-day-heading" id="([^"]+)"', html)
+                self.assertEqual(ids, [f'day-{days(n).isoformat()}' for n in offsets])
+                labelled = re.findall(r'<ul [^>]*aria-labelledby="([^"]+)"', html)
+                with_rows = [
+                    f'day-{key}' for key in DAY_PATTERN.findall(html)
+                    if 'data-entry-row' in day_html(html, key)
+                ]
+                self.assertEqual(labelled, with_rows)
+                self.assertEqual(len(ids), len(set(ids)))
+                self.assertNotIn('<ul class="fn-entry-list" aria-label=', html)
 
-        for view, keys in (
-            ('upcoming', ['2026-09-28', '2026-09-29', '2026-10-05']),
-            ('past', ['2026-09-27', '2026-09-18']),
-        ):
-            with self.subTest(view=view):
-                body = self.client.get(LIST_URL, {'view': view}).content.decode()
-                ids = re.findall(r'<h2 class="fn-day-heading" id="([^"]+)"', body)
-                self.assertEqual(ids, [f'day-{key}' for key in keys])
-                self.assertEqual(re.findall(r'<ul [^>]*aria-labelledby="([^"]+)"', body), ids)
-
-    def test_only_weekend_headings_carry_the_weekend_marker(self):
-        self._entry('SENTINEL-SATURDAY', self.child, date=FIXED_TODAY + datetime.timedelta(days=5))
-        self.client.force_login(self.child.user)
-
-        for view, weekend_ids in (
-            ('upcoming', ['day-2026-10-03']),
-            ('past', ['day-2026-09-27']),
-        ):
-            with self.subTest(view=view):
-                body = self.client.get(LIST_URL, {'view': view}).content.decode()
+    def test_only_weekend_boxes_carry_the_weekend_marker_in_both_views(self):
+        weekend = [days(n).isoformat() for n in (5, 6, 12, 13)]  # 3-4 and 10-11 October
+        for user, url in ((self.child.user, LIST_URL), (self.parent.user, PARENT_LIST_URL)):
+            with self.subTest(url=url):
+                self.client.force_login(user)
+                html = self.client.get(url).content.decode()
                 self.assertEqual(
-                    re.findall(r'<h2 class="fn-day-heading" id="([^"]+)" data-weekend>', body),
-                    weekend_ids,
+                    re.findall(r'data-day-group="([\w-]+)" data-weekend>', html), weekend
                 )
-                self.assertEqual(body.count('data-weekend'), len(weekend_ids))
+                self.assertEqual(html.count('data-weekend'), len(weekend))
 
-    def test_past_reads_newest_day_first(self):
-        self.client.force_login(self.child.user)
-
-        response = self.client.get(LIST_URL, {'view': 'past'})
-
-        self.assertEqual(
-            self.headings(response), ['Wczoraj, niedziela 27 września', 'Piątek, 18 września']
-        )
-        body = response.content.decode()
-        self.assertLess(body.index('SENTINEL-YESTERDAY'), body.index('SENTINEL-OLDER'))
-        self.assertContains(response, '<span>09:00</span>', html=True)
-        self.assertNotContains(response, 'Bez daty')
-
-    def test_parent_list_uses_full_calendar_day_headings(self):
-        # Owner request 2026-10-05 (S-08): the parent list groups by day like
-        # the child view, so its rows also show only the time. Since
-        # parent-entries-calendar-layout the parent shows a 14-day calendar
-        # whose headings carry the calendar date; the child keeps short ones.
+    def test_parent_list_uses_the_same_full_calendar_day_headings(self):
+        # Owner request 2026-10-10 (child-calendar-view): the child shows the same
+        # 14-day calendar as the parent, with the same full headings.
         Entry.objects.exclude(assigned_member=self.child).delete()
         self.client.force_login(self.parent.user)
-        day = datetime.timedelta(days=1)
 
         response = self.client.get(PARENT_LIST_URL)
-        past = self.client.get(PARENT_LIST_URL, {'start': (FIXED_TODAY - 14 * day).isoformat()})
+        past = self.client.get(PARENT_LIST_URL, window(-14))
 
         self.assertEqual(
-            self.headings(response),
-            [parent_day_heading(FIXED_TODAY + n * day, FIXED_TODAY) for n in range(14)],
+            HEADING_PATTERN.findall(response.content.decode()),
+            [parent_day_heading(days(n), FIXED_TODAY) for n in range(14)],
         )
         self.assertEqual(
-            self.headings(past),
-            [parent_day_heading(FIXED_TODAY + n * day, FIXED_TODAY) for n in range(-14, 0)],
+            HEADING_PATTERN.findall(past.content.decode()),
+            [parent_day_heading(days(n), FIXED_TODAY) for n in range(-14, 0)],
         )
         self.assertEqual(
-            self.headings(response)[:2],
-            ['Dziś, poniedziałek 28 września', 'Jutro, wtorek 29 września'],
+            HEADING_PATTERN.findall(past.content.decode())[-1], 'Wczoraj, niedziela 27 września'
         )
-        self.assertEqual(self.headings(past)[-1], 'Wczoraj, niedziela 27 września')
-        body = response.content.decode()
-        order = [
-            body.index(marker)
-            for marker in ('>Dziś, poniedziałek 28 września<', 'SENTINEL-TODAY',
-                           '>Jutro, wtorek 29 września<', 'SENTINEL-TOMORROW',
-                           '>Poniedziałek, 5 października<', 'SENTINEL-LATER')
-        ]
-        self.assertEqual(order, sorted(order))
-        self.assertContains(response, '<span>08:15</span>', html=True)
+        self.client.force_login(self.child.user)
+        self.assertEqual(
+            HEADING_PATTERN.findall(self.client.get(LIST_URL).content.decode()),
+            HEADING_PATTERN.findall(response.content.decode()),
+        )
 
 
 class ChildDetailTests(ChildViewFixtureMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.client.force_login(self.child.user)
+
+    def back_link(self, start):
+        return f'href="{LIST_URL}?start={start.isoformat()}" data-back-link'
 
     def test_entry_content_is_escaped_in_list_and_detail(self):
         entry = self._entry('<script>alert(1)</script>', self.child)
@@ -347,7 +378,7 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(response, 'Ręcznie')
         for hidden in ('Dodane przez', 'Ewa', 'submission', 'utworzono', 'zmieniono'):
             self.assertNotContains(response, hidden)
-        self.assertContains(response, f'href="{LIST_URL}" data-back-link')
+        self.assertContains(response, self.back_link(days(0)))
         self.assertNoExcludedContent(response)
         self.assertReadOnly(response)
 
@@ -363,19 +394,31 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
         self.assertContains(response, '<dd>Matematyka</dd>', html=True)
         self.assertReadOnly(response)
 
-    def test_eduvulcan_source_and_past_back_link(self):
-        response = self.client.get(detail_url(self.own_past.pk), {'view': 'past'})
+    def test_back_link_returns_to_the_window_the_entry_was_opened_from(self):
+        response = self.client.get(detail_url(self.own_past.pk), window(-7))
 
         self.assertContains(response, 'EduVulcan')
-        self.assertContains(response, f'href="{LIST_URL}?view=past" data-back-link')
+        self.assertContains(response, self.back_link(days(-7)))
 
-    def test_back_link_only_carries_allowlisted_mode(self):
-        response = self.client.get(
-            detail_url(self.own_past.pk), {'view': 'past"><script>x</script>'}
-        )
+    def test_back_link_without_start_returns_to_the_window_containing_the_entry(self):
+        far = self._entry('SENTINEL-FAR', self.child, date=days(20))
+        long_ago = self._entry('SENTINEL-LONG-AGO', self.child, date=days(-15))
+        for entry, start in (
+            (self.own_upcoming, days(0)),
+            (self.own_later, days(0)),
+            (self.own_past, days(-14)),
+            (far, days(14)),
+            (long_ago, days(-28)),
+        ):
+            with self.subTest(entry=entry.content):
+                self.assertContains(self.client.get(detail_url(entry.pk)), self.back_link(start))
 
-        self.assertContains(response, f'href="{LIST_URL}" data-back-link')
-        self.assertNotContains(response, '<script>x')
+    def test_invalid_start_falls_back_to_today(self):
+        for value in ('"><script>x</script>', '2026-9-1', '9999-12-31'):
+            with self.subTest(value=value):
+                response = self.client.get(detail_url(self.own_past.pk), {'start': value})
+                self.assertContains(response, self.back_link(days(0)))
+                self.assertNotContains(response, '<script>x')
 
     def test_note_shows_writing_date_without_time(self):
         response = self.client.get(detail_url(self.own_later.pk))
@@ -400,13 +443,16 @@ class ChildDetailTests(ChildViewFixtureMixin, TestCase):
                 bodies.add(response.content)
         self.assertEqual(len(bodies), 1)
 
-    def test_lucky_number_detail_still_resolves(self):
+    def test_lucky_number_detail_resolves_and_returns_to_its_window(self):
         lucky = self._entry(
             'SENTINEL-LUCKY', self.child, school_item=SchoolItemKind.LUCKY_NUMBER.value
         )
 
-        self.assertEqual(self.client.get(detail_url(lucky.pk)).status_code, 200)
-        self.assertNotContains(self.client.get(LIST_URL), 'SENTINEL-LUCKY')
+        response = self.client.get(detail_url(lucky.pk))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.back_link(days(0)))
+        self.assertContains(self.client.get(LIST_URL), 'SENTINEL-LUCKY')
 
 
 class ChildAccessMatrixTests(ChildViewFixtureMixin, TestCase):
@@ -469,14 +515,14 @@ class TwoParentChildIsolationTests(TwoParentFixtureMixin, ChildViewFixtureMixin,
 
     def setUp(self):
         super().setUp()
-        tomorrow = self.today + datetime.timedelta(days=1)
+        tomorrow = days(1)
         self.for_author = self._entry('SENTINEL-PARENT-AUTHOR', self.parent, date=tomorrow)
         self.for_other_parent = self._entry('SENTINEL-PARENT-OTHER', self.second_parent)
         self.parent_entries = (self.for_author, self.for_other_parent)
 
     def test_no_child_lists_a_parent_assigned_entry(self):
         for child in (self.child, self.other_child):
-            for params in ({}, {'view': 'past'}):
+            for params in ({}, window(-14), window(14)):
                 with self.subTest(child=child.display_name, params=params):
                     self.client.force_login(child.user)
                     response = self.client.get(LIST_URL, params)

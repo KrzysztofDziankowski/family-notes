@@ -1,7 +1,7 @@
 """Parent family entry management views (S-02): routes, index wiring, CRUD and redirects.
 
-Partition/ordering rules themselves are covered by ``test_entry_listing``; these
-tests prove the index renders them through the shared contract.
+The effective-date, heading and grouping helpers themselves are covered by
+``test_entry_listing``; these tests prove the index renders them through the shared contract.
 """
 
 import datetime
@@ -373,8 +373,8 @@ class CalendarPresentationTests(ManageViewMixin, TestCase):
             ],
         )
         for response in (today, earlier):
-            for text in ('Poprzednie 2 tygodnie', 'Następne 2 tygodnie', 'Nadchodzące',
-                         'Minione', 'Rodzaj listy'):
+            for text in ('Poprzednie 2 tygodnie', 'Następne 2 tygodnie', 'Rodzaj listy',
+                         'view=', 'fn-tabs'):
                 with self.subTest(text=text):
                     self.assertNotContains(response, text)
 

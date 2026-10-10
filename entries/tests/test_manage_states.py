@@ -80,7 +80,7 @@ class ManageStatesGalleryTests(FamilyFixtureMixin, TestCase):
         self.assertNotIn('data-state-part="delete" open', state_html(html, 'detail_manual'))
         self.assertNotIn('name="submission_key"', state_html(html, 'edit'))
         self.assertNotIn('aria-current', state_html(html, 'list_earlier'))
-        for removed in ('Nadchodzące', 'Minione', 'Rodzaj listy', '2 tygodnie', 'name="view"'):
+        for removed in ('fn-tabs', 'Rodzaj listy', '2 tygodnie', 'name="view"', 'view='):
             for name in ('list_today', 'list_earlier', 'list_empty', 'delete_open'):
                 with self.subTest(state=name, removed=removed):
                     self.assertNotIn(removed, state_html(html, name))

@@ -10,7 +10,7 @@ Parameters:
   hide_type        -- optional; true hides the entry type label (title only, e.g. the parent list).
   edit_url_name    -- optional; when set, adds an "Edytuj" link reversed with entry.pk.
   detail_query     -- optional; query string (without "?") appended to the detail link,
-                      e.g. "view=past" so the detail page can link back to the same list mode.
+                      e.g. "start=2026-10-05" so the detail page can link back to the same window.
 {% endcomment %}
 <li class="fn-entry-row" data-entry-row="{{ entry.pk }}">
     <a class="fn-entry-link" href="{% url detail_url_name entry.pk %}{% if detail_query %}?{{ detail_query }}{% endif %}">

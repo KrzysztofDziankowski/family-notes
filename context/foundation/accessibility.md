@@ -24,9 +24,9 @@ out of scope.
   connection lost.
 - Enter-to-submit (S-05) in capture, follow-up and „Popraw opis”.
 - Follow-up question: answer and skip.
-- Parent family list (upcoming, past, empty), detail, structured create and edit (valid and
+- Parent family calendar (today window, earlier window, empty), detail, structured create and edit (valid and
   invalid), and the „Usuń wpis” disclosure.
-- Child assigned-entry list (upcoming, past, empty) and detail.
+- Child assigned-entry calendar (today window, earlier window, empty) and detail.
 - Account status (parent, child, unconfigured account).
 - Family member management (S-14): member list (with guard error and notice), display-name
   edit (valid and invalid), and the account page link (`family_access/tests/test_membership_accessibility.py`).

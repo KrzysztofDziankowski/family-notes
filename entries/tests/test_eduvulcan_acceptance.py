@@ -239,9 +239,11 @@ class ConvertedEntryAccessTests(EduVulcanAcceptanceTestCase):
     def test_assigned_child_can_read_it_without_management_access(self):
         self.client.force_login(self.mateusz.user)
 
-        listing = self.client.get(reverse('entries:child_list'), {'view': 'past'})
-        upcoming = self.client.get(reverse('entries:child_list'))
-        self.assertIn('Sprawdzian: Język angielski', listing.content.decode() + upcoming.content.decode())
+        # The window starting on the entry's day always contains it.
+        listing = self.client.get(
+            reverse('entries:child_list'), {'start': self.entry.date.isoformat()}
+        )
+        self.assertContains(listing, 'Sprawdzian: Język angielski')
         detail = self.client.get(reverse('entries:child_detail', args=[self.entry.pk]))
         self.assertContains(detail, 'Sprawdzian: Język angielski')
         self.assertContains(detail, 'EduVulcan')

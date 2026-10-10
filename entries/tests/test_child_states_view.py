@@ -1,6 +1,6 @@
-import datetime
 """S-03 child-view kitchen sink: DEBUG gating, access and synthetic-only rendering."""
 
+import datetime
 import re
 
 from django.contrib.auth import get_user_model
@@ -9,37 +9,39 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
+from entries.listing import parent_day_heading
 from entries.models import Entry
+from entries.views import STATES_DATE
 
 from .test_classification_service import FamilyFixtureMixin
 
 CHILD_STATES_URL = reverse('entries:child_states')
 STATE_NAMES = (
-    'upcoming',
-    'past',
-    'upcoming_empty',
-    'past_empty',
+    'list_today',
+    'list_earlier',
+    'list_empty',
     'detail_manual',
     'detail_eduvulcan',
     'error_forbidden',
 )
-# STATES_DATE is Monday 2026-10-05; each list covers every day-heading kind.
-EXPECTED_DAY_HEADINGS = {
-    'upcoming': [
-        'Dziś, poniedziałek 5 października',
-        'Jutro, wtorek 6 października',
-        'Czwartek',
-        'Poniedziałek, 26 października',
-    ],
-    'past': ['Wczoraj, niedziela 4 października', 'Piątek', 'Środa', 'Sobota, 5 września'],
+# STATES_DATE is Monday 2026-10-05; the earlier window starts 14 days before it.
+EARLIER_START = STATES_DATE - datetime.timedelta(days=14)
+WINDOW_STARTS = {
+    'list_today': STATES_DATE,
+    'list_earlier': EARLIER_START,
+    'list_empty': STATES_DATE,
 }
+HEADING_PATTERN = re.compile(r'<h2 class="fn-day-heading"[^>]*>(.*?)</h2>')
 
 
 def _state_html(html, name):
-    match = re.search(
-        rf'<section data-kitchen-state="{name}">(.*?)</section>', html, re.DOTALL
-    )
-    return match.group(1) if match else ''
+    """One gallery section, up to the next ``data-kitchen-state`` section."""
+    marker = f'<section data-kitchen-state="{name}">'
+    if marker not in html:
+        return ''
+    start = html.index(marker)
+    end = html.find('<section data-kitchen-state="', start + 1)
+    return html[start:end if end != -1 else len(html)]
 
 
 class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
@@ -93,11 +95,11 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
                 self.assertEqual(response.status_code, 200)
                 for name in STATE_NAMES:
                     self.assertContains(response, f'data-kitchen-state="{name}"')
-                self.assertContains(response, 'data-empty-state="upcoming"')
-                self.assertContains(response, 'data-empty-state="past"')
-                self.assertContains(response, 'Nie masz żadnych nadchodzących wpisów.')
-                self.assertContains(response, 'Nie masz żadnych minionych wpisów.')
+                self.assertContains(response, 'Brak wpisów')
+                self.assertContains(response, 'Szczęśliwy numerek')
                 self.assertNotContains(response, 'Bez daty')
+                for removed in ('Nadchodz', 'Minion', 'fn-tabs', 'view='):
+                    self.assertNotContains(response, removed)
                 self.assertContains(response, 'EduVulcan')
                 self.assertContains(response, 'Ręcznie')
                 self.assertContains(response, 'kartkówka')
@@ -112,23 +114,53 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         self.assertEqual(Entry.objects.count(), 1)
 
     @override_settings(DEBUG=True)
-    def test_day_headings_and_error_state_render_per_section(self):
+    def test_list_states_render_fourteen_labelled_days_without_subheadings(self):
         self.client.force_login(self.child.user)
 
         html = self.client.get(CHILD_STATES_URL).content.decode()
 
-        for name, headings in EXPECTED_DAY_HEADINGS.items():
+        for name, start in WINDOW_STARTS.items():
             with self.subTest(state=name):
                 state = _state_html(html, name)
+                days = [start + datetime.timedelta(days=n) for n in range(14)]
                 self.assertEqual(
-                    re.findall(r'<h2 class="fn-day-heading"[^>]*>(.*?)</h2>', state), headings
+                    re.findall(r'data-day-group="([\w-]+)"', state),
+                    [day.isoformat() for day in days],
                 )
+                self.assertEqual(
+                    HEADING_PATTERN.findall(state),
+                    [parent_day_heading(day, STATES_DATE) for day in days],
+                )
+                self.assertNotIn('<h3', state)
                 # Every list is labelled by its own heading; ids are page-unique.
                 ids = re.findall(r'<h2 class="fn-day-heading" id="([^"]+)"', state)
-                self.assertEqual(re.findall(r'aria-labelledby="([^"]+)"', state), ids)
                 self.assertTrue(all(i.startswith(f'{name}-day-') for i in ids))
+                self.assertTrue(
+                    set(re.findall(r'aria-labelledby="([^"]+)"', state)) <= set(ids)
+                )
+                self.assertIn(f'?start={start.isoformat()}', state)
         all_ids = re.findall(r'\bid="([^"]+)"', html)
         self.assertEqual(len(all_ids), len(set(all_ids)))
+
+        today = _state_html(html, 'list_today')
+        self.assertEqual(HEADING_PATTERN.findall(today)[0], 'Dziś, poniedziałek 5 października')
+        self.assertIn('Szczęśliwy numerek', today)
+        self.assertIn('data-day-group="2026-10-17" data-weekend', today)
+        self.assertIn('aria-current="page">Dzisiaj', today)
+        earlier = _state_html(html, 'list_earlier')
+        self.assertEqual(HEADING_PATTERN.findall(earlier)[-1], 'Wczoraj, niedziela 4 października')
+        self.assertIn('Kartkówka z przyrody', earlier)
+        self.assertNotIn('aria-current', earlier)
+        empty = _state_html(html, 'list_empty')
+        self.assertEqual(empty.count('>Brak wpisów</p>'), 14)
+        self.assertNotIn('data-entry-row', empty)
+
+    @override_settings(DEBUG=True)
+    def test_detail_and_error_states(self):
+        self.client.force_login(self.child.user)
+
+        html = self.client.get(CHILD_STATES_URL).content.decode()
+
         error = _state_html(html, 'error_forbidden')
         self.assertIn('fn-panel--danger', error)
         self.assertIn('Brak dostępu', error)
@@ -137,4 +169,8 @@ class ChildStatesKitchenSinkTests(FamilyFixtureMixin, TestCase):
         eduvulcan = _state_html(html, 'detail_eduvulcan')
         self.assertIn('<dt>Przedmiot</dt>', eduvulcan)
         self.assertIn('przyroda', eduvulcan)
-        self.assertNotIn('Przedmiot', _state_html(html, 'detail_manual'))
+        self.assertIn(f'href="/entries/mine/?start={EARLIER_START.isoformat()}" data-back-link', eduvulcan)
+        manual = _state_html(html, 'detail_manual')
+        self.assertNotIn('Przedmiot', manual)
+        self.assertIn(f'href="/entries/mine/?start={STATES_DATE.isoformat()}" data-back-link', manual)
+

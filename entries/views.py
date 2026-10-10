@@ -62,18 +62,8 @@ from .forms import (
     skip_review_form,
 )
 from .listing import (
-    LIST_MODES,
-    PAST,
-    SECTION_DATED,
-    SECTION_PAST,
-    SECTION_UNDATED,
-    UPCOMING,
-    EntrySection,
-    group_by_day,
     is_weekend,
-    normalize_list_mode,
     parent_day_heading,
-    partition_entries,
     split_by_assignee,
     with_effective_date,
 )
@@ -885,9 +875,6 @@ def _use_synthetic_members(form):
 
 # --- Parent family entry management (S-02) ---
 
-LIST_MODE_LABELS = {UPCOMING: 'Nadchodzące', PAST: 'Minione'}
-# Day group of the undated upcoming section, shown last (parent and child lists).
-UNDATED_DAY_HEADING = 'Bez daty'
 CALENDAR_WINDOW_DAYS = 14
 ENTRY_CREATED_MESSAGE = 'Dodano wpis.'
 ENTRY_UPDATED_MESSAGE = 'Zapisano zmiany.'
@@ -963,7 +950,9 @@ def _assignee_heading(member):
 
 
 def _index_days(entries, start, today):
-    """Build all fourteen chronological parent days, including empty dates."""
+    """Build all fourteen chronological calendar days, including empty dates.
+
+    Shared by the parent and child calendars; the child's days hold one group each."""
     rows_by_date = {}
     for entry in entries:
         rows_by_date.setdefault(entry.effective_date, []).append(entry)
@@ -989,13 +978,33 @@ def _index_days(entries, start, today):
     return days
 
 
-def _index_context(entries, today, start=None):
+def _index_context(entries, today, start=None, url_name='entries:index'):
+    """Calendar context for the window starting at ``start`` (today by default);
+    ``url_name`` is the calendar the navigation links point to."""
     start = start or today
     return {
         'days': _index_days(entries, start, today),
         'detail_query': _calendar_query(start),
-        **_calendar_navigation('entries:index', start, today),
+        **_calendar_navigation(url_name, start, today),
     }
+
+
+def _calendar_rows(entries, start, end):
+    """``entries`` with an effective date inside ``start``..``end``, in calendar order."""
+    return list(
+        with_effective_date(entries).filter(effective_date__range=(start, end)).order_by(
+            'effective_date', F('time').asc(nulls_last=True), 'pk'
+        )
+    )
+
+
+def _detail_list_start(request, entry, today):
+    """Window "Wróć do listy" returns to: a valid ``?start``, else the one containing the entry."""
+    requested_start = request.GET.get('start')
+    if not requested_start and entry.effective_date:
+        requested_start = _window_containing(entry.effective_date, today).isoformat()
+    list_start, _ = _calendar_window(requested_start, today)
+    return list_start
 
 
 def _detail_context(entry, list_start, delete_open=False):
@@ -1018,23 +1027,19 @@ def index(request):
     membership = _require_parent(request)
     today = timezone.localdate()
     start, end = _calendar_window(request.GET.get('start'), today)
-    rows = with_effective_date(parent_family_entries(membership)).exclude(
-        school_item=SchoolItemKind.LUCKY_NUMBER.value
-    ).filter(effective_date__range=(start, end)).order_by(
-        'effective_date', F('time').asc(nulls_last=True), 'pk'
+    rows = _calendar_rows(
+        parent_family_entries(membership).exclude(school_item=SchoolItemKind.LUCKY_NUMBER.value),
+        start,
+        end,
     )
-    return render(request, 'entries/manage_index.html', _index_context(list(rows), today, start))
+    return render(request, 'entries/manage_index.html', _index_context(rows, today, start))
 
 
 @require_http_methods(['GET'])
 @login_required
 def detail(request, pk):
     entry = _managed_entry_or_404(_require_parent(request), pk)
-    today = timezone.localdate()
-    requested_start = request.GET.get('start')
-    if not requested_start and entry.effective_date:
-        requested_start = _window_containing(entry.effective_date, today).isoformat()
-    list_start, _ = _calendar_window(requested_start, today)
+    list_start = _detail_list_start(request, entry, timezone.localdate())
     return render(request, 'entries/manage_detail.html', _detail_context(entry, list_start))
 
 
@@ -1291,62 +1296,26 @@ def _manage_state_sections(membership):
 
 # --- Child assigned entry view (S-03) ---
 
-CHILD_EMPTY_MESSAGES = {
-    UPCOMING: 'Nie masz żadnych nadchodzących wpisów.',
-    PAST: 'Nie masz żadnych minionych wpisów.',
-}
+
+def _child_calendar_context(entries, today, start):
+    return _index_context(entries, today, start, url_name='entries:child_list')
 
 
-def _child_list_context(mode, sections, today):
-    """Template context for the child list body; ``sections`` are evaluated here.
-
-    Dated sections become day groups headed relative to ``today``; the undated
-    section is one group under ``UNDATED_DAY_HEADING``. Each group's ``key`` (the
-    ISO date, or ``"undated"``) is unique within the list and names its heading."""
-    child_sections = []
-    for section in sections:
-        entries = list(section.entries)
-        if not entries:
-            continue
-        if section.key == SECTION_UNDATED:
-            groups = [
-                {
-                    'key': SECTION_UNDATED,
-                    'heading': UNDATED_DAY_HEADING,
-                    'is_weekend': False,
-                    'entries': entries,
-                }
-            ]
-        else:
-            groups = [
-                {
-                    'key': rows[0].effective_date.isoformat(),
-                    'heading': heading,
-                    'is_weekend': is_weekend(rows[0].effective_date),
-                    'entries': rows,
-                }
-                for heading, rows in group_by_day(entries, today)
-            ]
-        child_sections.append({'key': section.key, 'groups': groups})
-    return {
-        'mode': mode,
-        'modes': [(key, LIST_MODE_LABELS[key]) for key in LIST_MODES],
-        'detail_query': 'view=past' if mode == PAST else '',
-        'sections': child_sections,
-        'empty_message': CHILD_EMPTY_MESSAGES[mode],
-    }
+def _child_detail_context(entry, list_start):
+    return {'entry': entry, 'list_query': _calendar_query(list_start)}
 
 
 @require_GET
 @login_required
 def child_list(request):
-    """The signed-in child's own entries, upcoming (default) or past."""
+    """The signed-in child's own entries, lucky numbers included, in a 14-day window."""
     entries = child_entries(resolve_family_context(request))
-    mode = normalize_list_mode(request.GET.get('view'))
     today = timezone.localdate()
-    sections = partition_entries(entries, mode, today)
+    start, end = _calendar_window(request.GET.get('start'), today)
     return render(
-        request, 'entries/child_list.html', _child_list_context(mode, sections, today)
+        request,
+        'entries/child_list.html',
+        _child_calendar_context(_calendar_rows(entries, start, end), today, start),
     )
 
 
@@ -1356,11 +1325,8 @@ def child_detail(request, pk):
     """One entry assigned to the signed-in child; any other ID is a plain 404."""
     entries = child_entries(resolve_family_context(request))
     entry = get_object_or_404(with_effective_date(entries), pk=pk)
-    return render(
-        request,
-        'entries/child_detail.html',
-        {'entry': entry, 'back_mode': normalize_list_mode(request.GET.get('view'))},
-    )
+    list_start = _detail_list_start(request, entry, timezone.localdate())
+    return render(request, 'entries/child_detail.html', _child_detail_context(entry, list_start))
 
 
 def _child_states_entry(pk, content, entry_type, *, date=None, time=None, school_item='',
@@ -1392,6 +1358,7 @@ def child_states(request):
     require_family_context(request)
 
     day = datetime.timedelta(days=1)
+    earlier_start = STATES_DATE - CALENDAR_WINDOW_DAYS * day
     test = _child_states_entry(
         9001, 'Sprawdzian z matematyki: ułamki zwykłe i dziesiętne', EntryType.CALENDAR_EVENT,
         date=STATES_DATE, time=datetime.time(8, 0), school_item=SchoolItemKind.TEST.value,
@@ -1422,37 +1389,41 @@ def child_states(request):
     reading = _child_states_entry(
         9007, 'Przeczytać rozdział lektury', EntryType.TODO, date=STATES_DATE + 3 * day,
     )
-    meeting = _child_states_entry(
-        9008, 'Zebranie z rodzicami', EntryType.CALENDAR_EVENT,
-        date=STATES_DATE + 21 * day, time=datetime.time(17, 30),
+    match = _child_states_entry(
+        9008, 'Mecz szkolnej drużyny', EntryType.CALENDAR_EVENT,
+        date=STATES_DATE + 12 * day, time=datetime.time(10, 0),
     )
     homework = _child_states_entry(
         9009, 'Zadanie domowe z angielskiego', EntryType.CALENDAR_EVENT, date=STATES_DATE - day,
     )
-    start = _child_states_entry(
-        9010, 'Rozpoczęcie roku szkolnego', EntryType.CALENDAR_EVENT,
-        date=STATES_DATE - 30 * day, time=datetime.time(9, 0),
+    year_start = _child_states_entry(
+        9010, 'Apel szkolny', EntryType.CALENDAR_EVENT,
+        date=earlier_start, time=datetime.time(9, 0),
+    )
+    lucky = _child_states_entry(
+        9011, 'Szczęśliwy numerek: 7', EntryType.NOTE, date=STATES_DATE + day,
+        school_item=SchoolItemKind.LUCKY_NUMBER.value, source=Entry.Source.EDUVULCAN,
     )
 
-    def list_state(name, label, mode, sections):
-        return {'name': name, 'label': label, 'list': _child_list_context(mode, sections, STATES_DATE)}
+    def list_state(name, label, entries, start=STATES_DATE):
+        return {
+            'name': name,
+            'label': label,
+            'list': _child_calendar_context(entries, STATES_DATE, start),
+        }
 
     sections = [
-        list_state('upcoming', 'Nadchodzące', UPCOMING, [
-            EntrySection(SECTION_DATED, [test, grade, long_note, todo, reading, meeting]),
+        list_state('list_today', 'Bieżące dwa tygodnie', [
+            test, long_note, grade, todo, lucky, reading, match,
         ]),
-        list_state('past', 'Minione', PAST, [
-            EntrySection(SECTION_PAST, [homework, quiz, returned, start]),
-        ]),
-        list_state('upcoming_empty', 'Brak nadchodzących', UPCOMING, [
-            EntrySection(SECTION_DATED, []),
-            EntrySection(SECTION_UNDATED, []),
-        ]),
-        list_state('past_empty', 'Brak minionych', PAST, [EntrySection(SECTION_PAST, [])]),
+        list_state('list_earlier', 'Wcześniejsze dwa tygodnie', [
+            year_start, returned, quiz, homework,
+        ], earlier_start),
+        list_state('list_empty', 'Dwa tygodnie bez wpisów', []),
         {'name': 'detail_manual', 'label': 'Szczegóły wpisu ręcznego',
-         'entry': long_note, 'back_mode': UPCOMING},
+         **_child_detail_context(long_note, STATES_DATE)},
         {'name': 'detail_eduvulcan', 'label': 'Szczegóły wpisu z EduVulcan',
-         'entry': quiz, 'back_mode': PAST},
+         **_child_detail_context(quiz, earlier_start)},
         {'name': 'error_forbidden', 'label': 'Błąd: brak dostępu',
          'error': {'heading': 'Brak dostępu',
                    'message': 'Ta strona nie jest dostępna dla Twojego konta.'}},

@@ -233,9 +233,10 @@ class ChildContextEntriesTests(MixedRoleFixtureMixin, TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def test_child_list_shows_only_entries_assigned_to_this_membership(self):
-        for view in ('upcoming', 'past'):
-            with self.subTest(view):
-                response = self.client.get(reverse('entries:child_list'), {'view': view})
+        earlier = (timezone.localdate() - datetime.timedelta(days=14)).isoformat()
+        for params in ({}, {'start': earlier}):
+            with self.subTest(params=params):
+                response = self.client.get(reverse('entries:child_list'), params)
                 self.assertEqual(response.status_code, 200)
                 for foreign in (A_ONLY, B_SIBLING, B_FAMILY):
                     self.assertNotContains(response, foreign)

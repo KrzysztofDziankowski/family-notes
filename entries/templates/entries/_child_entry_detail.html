@@ -1,7 +1,8 @@
 {% comment %}
 Child entry detail body (S-03), shared by child_detail.html and the child_states gallery.
 Parameters: entry (with the effective_date annotation when loaded from the database),
-back_mode ("upcoming"/"past", already normalized).
+list_query (query string without "?" of the calendar window "Wróć do listy" returns to,
+e.g. "start=2026-10-05").
 {% endcomment %}
 <article class="fn-panel" data-entry-detail="{{ entry.pk }}">
     <dl class="fn-details">
@@ -27,4 +28,4 @@ back_mode ("upcoming"/"past", already normalized).
         <dd>{{ entry.get_source_display }}</dd>
     </dl>
 </article>
-<p><a href="{% url 'entries:child_list' %}{% if back_mode == "past" %}?view=past{% endif %}" data-back-link>Wróć do listy</a></p>
+<p><a href="{% url 'entries:child_list' %}?{{ list_query }}" data-back-link>Wróć do listy</a></p>
