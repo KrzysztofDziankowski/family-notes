@@ -1,10 +1,10 @@
 ---
 change_id: multiple-family-use
 title: Authorized member can use the application across multiple families
-status: impl_reviewed
+status: archived
 created: 2026-10-04
 updated: 2026-10-10
-archived_at: null
+archived_at: 2026-10-10T08:44:18Z
 ---
 
 ## Notes
