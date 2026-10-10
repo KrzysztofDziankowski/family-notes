@@ -1,10 +1,10 @@
 ---
 change_id: child-list-ui
 title: Child list UI
-status: impl_reviewed
+status: archived
 created: 2026-10-04
 updated: 2026-10-10
-archived_at: null
+archived_at: 2026-10-10T08:48:17Z
 ---
 
 ## Notes
