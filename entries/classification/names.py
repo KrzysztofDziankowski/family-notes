@@ -57,7 +57,7 @@ DIMINUTIVES: Mapping[str, FrozenSet[str]] = {
     'maria': frozenset({'marysia', 'maryśka'}),
     'mateusz': frozenset({'mateuszek', 'mati'}),
     'małgorzata': frozenset({'gosia', 'małgosia'}),
-    'michał': frozenset({'michałek', 'misiek'}),
+    'michał': frozenset({'michałek', 'michaś'}),
     'mikołaj': frozenset({'mikołajek', 'miki'}),
     'natalia': frozenset({'nata', 'natka'}),
     'piotr': frozenset({'piotrek', 'piotruś'}),
