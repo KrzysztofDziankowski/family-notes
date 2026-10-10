@@ -1,10 +1,10 @@
 ---
 change_id: family-role-management
 title: Authorized family manager can manage roles in the application
-status: impl_reviewed
+status: archived
 created: 2026-10-04
 updated: 2026-10-10
-archived_at: null
+archived_at: 2026-10-10T08:36:24Z
 ---
 
 ## Notes
