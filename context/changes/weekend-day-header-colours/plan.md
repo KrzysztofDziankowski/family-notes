@@ -223,17 +223,17 @@ None.
 
 #### Manual
 
-- [ ] 1.4 Page source of the parent calendar shows `fn-calendar-day--weekend` on Saturday and Sunday boxes only
+- [x] 1.4 Page source of the parent calendar shows `fn-calendar-day--weekend` on Saturday and Sunday boxes only
 
 ### Phase 2: Weekend token, CSS and contrast
 
 #### Automated
 
-- [x] 2.1 Contrast suite passes, including the new pair: `uv run python manage.py test family_notes.test_tokens_contrast`
-- [x] 2.2 Full test suite passes: `uv run python manage.py test`
+- [x] 2.1 Contrast suite passes, including the new pair: `uv run python manage.py test family_notes.test_tokens_contrast` — 0fd3135
+- [x] 2.2 Full test suite passes: `uv run python manage.py test` — 0fd3135
 
 #### Manual
 
-- [ ] 2.3 Parent calendar: Saturday and Sunday headings show the pale red strip on a phone (one column), a landscape phone and a wide screen (seven columns), including empty weekend days
-- [ ] 2.4 Child upcoming and past lists: weekend headings show the strip; weekday and "Bez daty" headings do not
-- [ ] 2.5 Strip does not look like an error panel and text stays readable
+- [x] 2.3 Parent calendar: Saturday and Sunday headings show the pale red strip on a phone (one column), a landscape phone and a wide screen (seven columns), including empty weekend days
+- [x] 2.4 Child upcoming and past lists: weekend headings show the strip; weekday and "Bez daty" headings do not
+- [x] 2.5 Strip does not look like an error panel and text stays readable
