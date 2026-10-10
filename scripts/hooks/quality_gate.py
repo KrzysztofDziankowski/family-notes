@@ -69,7 +69,10 @@ LITERAL_TEMPLATES = (
         '_child_entry_detail', '_entry_row', '_list_modes',
     )),
 )
-LITERAL_PATTERN = re.compile(r'#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\(|style=|<style')
+LITERAL_PATTERN = re.compile(
+    r'(?<!href=")(?<!href=\')#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|oklch\(|style=|<style',
+    re.IGNORECASE,
+)
 
 
 def literal_template(path):
@@ -89,7 +92,9 @@ def literal_errors(paths, base):
             errors.append(f'{path}: {error}')
             continue
         for number, line in enumerate(lines, 1):
-            match = LITERAL_PATTERN.search(line)
+            # Django's one-line comments are documentation, not rendered markup.
+            rendered = re.sub(r'{#.*?#}', '', line)
+            match = LITERAL_PATTERN.search(rendered)
             if match:
                 errors.append(f'{path}:{number}: literal {match.group(0)!r}; '
                               'use tokens.css classes and variables instead')

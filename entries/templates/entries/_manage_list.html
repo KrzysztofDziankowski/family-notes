@@ -8,7 +8,7 @@ per assignee (children, parents, then "Cała rodzina"), never empty. An empty da
 each list's aria-label ("Jutro, czwartek 8 października, Kasia") repeats both for assistive technology.
 previous_url / next_url move the window by two weeks; the one crossing today is None.
 {% endcomment %}
-{% include "entries/_list_modes.html" with url_name="entries:index" %}
+{% include "entries/_list_modes.html" with modes=modes mode=mode url_name="entries:index" only %}
 <nav class="fn-calendar-nav" aria-label="Nawigacja kalendarza" data-state-part="calendar-nav">
     <ul>
         {% if previous_url %}<li><a href="{{ previous_url }}">Poprzednie 2 tygodnie</a></li>{% endif %}

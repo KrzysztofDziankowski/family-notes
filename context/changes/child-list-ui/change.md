@@ -3,13 +3,18 @@ change_id: child-list-ui
 title: Child list UI
 status: impl_reviewed
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-10
 archived_at: null
 ---
 
 ## Notes
 
 UI change run through `/10x-ui`.
+
+The 404 page intentionally uses a GET link to allauth's logout confirmation
+page. Rendering the usual POST form would add a freshly masked CSRF token and
+break the access contract that missing and foreign entry responses have
+byte-identical bodies.
 
 - **View (one):** child list `/entries/mine/` (`entries/templates/entries/child_list.html`, `_child_list_body.html`, shared `_entry_row.html`), with its drill-down `child_detail` (`_child_entry_detail.html`).
 - **Token source:** `family_notes/static/css/tokens.css` — semantic `--fn-*` tokens mapped onto Pico (`family_notes/static/vendor/pico/pico.min.css`); shared component classes `.fn-*` live in the same file, shared partials in `entries/templates/entries/_*.html`.

@@ -13,6 +13,8 @@ administrator (see family_access.auth_adapters).
 {% block content %}
     <h1>Zaloguj się</h1>
     {% if SOCIALACCOUNT_ENABLED %}
+        {% comment %}Google is the product's configured provider. Add any future
+        provider explicitly here so its Polish button and POST flow are reviewed.{% endcomment %}
         {% provider_login_url 'google' as google_login_url %}
         {% comment %}A POST goes straight to Google; a plain link (GET) would stop on
         allauth's intermediate "Kontynuuj" page.{% endcomment %}

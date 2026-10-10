@@ -42,7 +42,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
   - Tradeoff: Changes an existing access-matrix test, which the plan said must stay unchanged, and weakens "byte-identical" to "identical modulo token".
   - Confidence: MED — the unmasked secret is the same per session, so the leak risk is nil, but it relaxes a guarded test.
   - Blind spot: Whether anything else depends on byte-identical bodies.
-- **Decision**: PENDING
+- **Decision**: FIXED via Fix A — the intentional 404 logout behavior is documented in `change.md`.
 
 ### F2 — Login hard-codes Google instead of allauth's provider list
 
@@ -52,7 +52,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: family_notes/templates/account/login.html:13-17
 - **Detail**: The plan says the page keeps "allauth's other login options exactly as configured". The generic `socialaccount/snippets/login.html` provider list was replaced by a single `{% provider_login_url 'google' %}` button. Google is the only provider today, so nothing is lost now, but a provider added later would be silently hidden.
 - **Fix**: Keep it. Add a one-line comment in `login.html` (and optionally in `change.md`) saying that any new provider must be added here.
-- **Decision**: PENDING
+- **Decision**: FIXED — the Google-only product decision is documented beside the explicit provider button; future providers must be added and reviewed there.
 
 ### F3 — Empty meta paragraph on untimed child rows
 
@@ -62,7 +62,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: entries/templates/entries/_entry_row.html:19-23
 - **Detail**: The plan says the meta line is "omitted otherwise" when `hide_date` is set and there is no time. The child list sets `hide_date` and `hide_assignee` and has no edit link, so an untimed row renders an empty `<p class="fn-entry-meta fn-muted">`. That adds vertical spacing with no content.
 - **Fix**: Wrap the `<p>` in a condition so it renders only when it has a time, a date, an assignee or an edit link.
-- **Decision**: PENDING
+- **Decision**: FIXED — the row now omits the meta paragraph when every meta value is hidden or absent, with a regression assertion in `test_manage_views.py`.
 
 ### F4 — Flash messages not rendered on child/account pages
 
@@ -76,7 +76,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
   - Tradeoff: Touches every page that extends base, so check for double rendering on manage pages.
   - Confidence: MED — the manage pages' own message rendering needs checking.
   - Blind spot: Other pages that render messages inline.
-- **Decision**: PENDING
+- **Decision**: FIXED — later shared-layout work renders messages by default and management pages override the block to avoid duplicates.
 
 ### F5 — AGENTS.md rule is broader than the gate and the error pages
 
@@ -86,7 +86,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: AGENTS.md:39-40; scripts/hooks/quality_gate.py:59-72
 - **Detail**: AGENTS.md bans literal colours and `style=` in all templates, but the hook scans only the 14 allowlisted files, so `_manage_list.html`, `manage_*.html` and `account_status.html` are not checked. "Every Django error page extends the base layout" also does not cover `403_csrf.html` or `400.html`, which still render Django's English defaults. The plan explicitly left 400 and CSRF out of scope.
 - **Fix**: Reword both bullets to match reality: "cleaned templates (see LITERAL_TEMPLATES)" and "403/404/500 pages".
-- **Decision**: PENDING
+- **Decision**: FIXED — the current AGENTS.md wording names cleaned templates and limits the error-page rule to 403/404/500.
 
 ### F6 — Literal regex false-positives on hex-like anchors
 
@@ -96,7 +96,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: scripts/hooks/quality_gate.py:72
 - **Detail**: `#[0-9a-fA-F]{3,8}\b` matches anchors such as `href="#add"`, `#fade` and `#feed` (confirmed for `#add`). It also flags `style=` inside `{# #}` comments. The plan specified this regex, so this is a plan-level gap.
 - **Fix**: Add a negative lookbehind so the pattern does not match after `href="` (or require a CSS-value context).
-- **Decision**: PENDING
+- **Decision**: FIXED — the hook ignores hex-like `href` fragments and Django one-line comments while retaining literal colour checks.
 
 ### F7 — Parent list includes the switch partial without `only`
 
@@ -106,7 +106,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: entries/templates/entries/_manage_list.html:4
 - **Detail**: Every other partial include in this change uses `with … only`. This one passes the whole context into `_list_modes.html`.
 - **Fix**: `{% include "entries/_list_modes.html" with modes=modes mode=mode url_name="entries:index" only %}`.
-- **Decision**: PENDING
+- **Decision**: FIXED — the include now passes `modes`, `mode` and `url_name` explicitly with `only`.
 
 ### F8 — Solid focus ring now applies app-wide
 
@@ -116,7 +116,7 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: family_notes/static/css/tokens.css:58
 - **Detail**: `--pico-primary-focus` changed from the 25% tint to solid accent, so every Pico button and input (capture and manage forms included) now shows a strong focus ring. This is intended, but it is a global visual change.
 - **Fix**: No code change. Cover it in manual check 1.6 (parent list and `/entries/new/`).
-- **Decision**: PENDING
+- **Decision**: ACCEPTED — the stronger app-wide focus ring is intentional and the completed manual accessibility passes cover the shared controls.
 
 ### F9 — 403 copy duplicated; signup link still advertised
 
@@ -126,4 +126,11 @@ Safety checks that passed: GET `/accounts/logout/` only shows the confirm page (
 - **Location**: entries/views.py:854-855, family_notes/templates/403.html:6, family_notes/templates/account/login.html:43
 - **Detail**: The gallery error state repeats the 403 strings that 403.html hardcodes, so changing one copy does not change the other. Separately, login keeps allauth's "zarejestruj się" link. Open signup predates this change and has no adapter restriction, but the new page makes it more visible.
 - **Fix**: Make 403.html pass its heading and message to `_error.html` from the same constants the gallery uses. Decide separately whether self-signup is part of the product, and track that as its own item, not in this change.
-- **Decision**: PENDING
+- **Decision**: ACCEPTED — signup was closed by the dedicated `remove-sign-up-option` change and is regression-tested; the stable 403 copy remains duplicated only between the real error page and DEBUG gallery fixture.
+
+## Triage completion — 2026-10-10
+
+All nine findings were rechecked against the current tree. Seven are fixed,
+including four resolved by later shared UI/authentication work; two low-risk
+observations are accepted as documented above. Focused template, authentication,
+hook and Django verification passed before archive.
